@@ -36,7 +36,7 @@ out/
 ### VS Code ###
 .vscode/
 
-### Festival project ###
+### WKS project ###
 application-local.yml
 .env
 *.log

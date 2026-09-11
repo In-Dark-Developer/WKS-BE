@@ -4,8 +4,8 @@
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/festival
-    username: festival
+    url: jdbc:postgresql://localhost:5432/wks
+    username: wks
     password: ${DB_PASSWORD}
   mail:
     host: smtp.gmail.com

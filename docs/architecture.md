@@ -67,7 +67,7 @@
 
 ```
 com.darkness.wks
-├── FestivalApplication.java
+├── WksApplication.java
 ├── common/                      AGENTS.md ○   3인 합의
 │   ├── response/       ApiResponse, ErrorResponse
 │   ├── exception/      BusinessException, ErrorCode, GlobalExceptionHandler

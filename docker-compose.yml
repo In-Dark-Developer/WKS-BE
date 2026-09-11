@@ -1,15 +1,15 @@
 services:
   postgres:
     image: postgres:16
-    container_name: festival-postgres
+    container_name: wks-postgres
     environment:
-      POSTGRES_DB: festival
-      POSTGRES_USER: festival
+      POSTGRES_DB: wks
+      POSTGRES_USER: wks
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
-      - festival-postgres-data:/var/lib/postgresql/data
+      - wks-postgres-data:/var/lib/postgresql/data
 
 volumes:
-  festival-postgres-data:
+  wks-postgres-data:
