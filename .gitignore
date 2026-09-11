@@ -35,3 +35,9 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Festival project ###
+application-local.yml
+.env
+*.log
+.DS_Store
