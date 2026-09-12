@@ -1,0 +1,68 @@
+package com.darkness.wks.result.dto;
+
+import com.darkness.wks.result.FortuneCategory;
+import com.darkness.wks.result.entity.Reading;
+import com.darkness.wks.result.entity.Result;
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import java.util.List;
+import java.util.UUID;
+
+@Schema(description = "운명 분석 결과")
+public record ResultResponse(
+        @Schema(description = "공유 가능한 UUID v4 결과 ID")
+        UUID resultId,
+
+        @Schema(description = "닉네임", example = "도윤")
+        String nickname,
+
+        DestinyResponse destiny,
+
+        @Schema(description = "결혼운, 자녀운, 연애운 순서")
+        List<FortuneResponse> fortunes,
+
+        @Schema(example = "파란색 팔찌")
+        String luckyItem,
+
+        @Schema(example = "야외 무대")
+        String luckyPlace
+) {
+
+    public static ResultResponse from(Result result, Reading reading) {
+        return new ResultResponse(
+                result.getId(),
+                result.getNickname(),
+                new DestinyResponse(reading.getDestinyTitle(), reading.getDestinyContent()),
+                List.of(
+                        new FortuneResponse(
+                                FortuneCategory.MARRIAGE,
+                                reading.getMarriageGrade(),
+                                reading.getMarriageContent()
+                        ),
+                        new FortuneResponse(
+                                FortuneCategory.CHILDREN,
+                                reading.getChildrenGrade(),
+                                reading.getChildrenContent()
+                        ),
+                        new FortuneResponse(FortuneCategory.LOVE, reading.getLoveGrade(), reading.getLoveContent())
+                ),
+                reading.getLuckyItem(),
+                reading.getLuckyPlace()
+        );
+    }
+
+    @Schema(description = "운명 제목과 설명")
+    public record DestinyResponse(
+            @Schema(example = "깔깔깔깔깔깔깔깔깔") String title,
+            @Schema(example = "당신은 특별한 운명을 타고났습니다.") String description
+    ) {
+    }
+
+    @Schema(description = "항목별 운세")
+    public record FortuneResponse(
+            FortuneCategory category,
+            @Schema(example = "SS+") String grade,
+            @Schema(example = "결혼운의 흐름이 매우 좋습니다.") String content
+    ) {
+    }
+}
