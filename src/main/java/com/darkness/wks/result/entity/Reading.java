@@ -2,57 +2,92 @@ package com.darkness.wks.result.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapsId;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-import com.darkness.wks.saju.ReadingCategory;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
-@Table(name = "reading", uniqueConstraints = @UniqueConstraint(columnNames = {"result_id", "category"}))
+@Table(name = "reading")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Reading {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
-    private Long id;
+    @Column(name = "result_id")
+    private UUID resultId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "result_id", nullable = false)
+    @MapsId
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "result_id")
     private Result result;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "category", length = 20, nullable = false)
-    private ReadingCategory category;
+    @Column(name = "destiny_title", length = 100, nullable = false)
+    private String destinyTitle;
 
-    @Column(name = "score", nullable = false)
-    private Short score;
+    @Column(name = "destiny_content", nullable = false, columnDefinition = "TEXT")
+    private String destinyContent;
 
-    @Column(name = "content", nullable = false, columnDefinition = "TEXT")
-    private String content;
+    @Column(name = "marriage_grade", length = 10, nullable = false)
+    private String marriageGrade;
+
+    @Column(name = "marriage_content", nullable = false, columnDefinition = "TEXT")
+    private String marriageContent;
+
+    @Column(name = "children_grade", length = 10, nullable = false)
+    private String childrenGrade;
+
+    @Column(name = "children_content", nullable = false, columnDefinition = "TEXT")
+    private String childrenContent;
+
+    @Column(name = "love_grade", length = 10, nullable = false)
+    private String loveGrade;
+
+    @Column(name = "love_content", nullable = false, columnDefinition = "TEXT")
+    private String loveContent;
+
+    @Column(name = "lucky_item", length = 100, nullable = false)
+    private String luckyItem;
+
+    @Column(name = "lucky_place", length = 100, nullable = false)
+    private String luckyPlace;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Reading(Result result, ReadingCategory category, Short score, String content) {
+    public Reading(
+            Result result,
+            String destinyTitle,
+            String destinyContent,
+            String marriageGrade,
+            String marriageContent,
+            String childrenGrade,
+            String childrenContent,
+            String loveGrade,
+            String loveContent,
+            String luckyItem,
+            String luckyPlace
+    ) {
         this.result = result;
-        this.category = category;
-        this.score = score;
-        this.content = content;
+        this.destinyTitle = destinyTitle;
+        this.destinyContent = destinyContent;
+        this.marriageGrade = marriageGrade;
+        this.marriageContent = marriageContent;
+        this.childrenGrade = childrenGrade;
+        this.childrenContent = childrenContent;
+        this.loveGrade = loveGrade;
+        this.loveContent = loveContent;
+        this.luckyItem = luckyItem;
+        this.luckyPlace = luckyPlace;
     }
 }

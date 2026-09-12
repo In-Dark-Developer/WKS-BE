@@ -67,7 +67,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 | 필드 | 검증 |
 |---|---|
-| `nickname` | 1~20자, 공백만 불가, 필수 |
+| `nickname` | 1~8자, 공백만 불가, 필수 |
 | `birthDate` | `yyyy-MM-dd`, 1950-01-01 ~ 오늘, 필수 |
 | `birthTime` | `HH:mm` 또는 **null(모름)** |
 | `birthRegion` | 최대 50자 또는 **null(모름)** |
@@ -81,21 +81,24 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "data": {
     "resultId": "3f2a9c1e-....",
     "nickname": "도윤",
-    "pillars": { "year": "임오", "month": "계묘", "day": "갑진", "hour": "신미" },
-    "hourUnknown": false,
-    "readings": [
-      { "category": "LOVE",          "score": 78, "content": "..." },
-      { "category": "WEALTH",        "score": 45, "content": "..." },
-      { "category": "STUDY",         "score": 62, "content": "..." },
-      { "category": "FESTIVAL_ITEM", "score": 88, "content": "..." },
-      { "category": "FORTUNE",       "score": 55, "content": "..." }
-    ]
+    "destiny": {
+      "title": "깔깔깔깔깔깔깔깔깔",
+      "description": "당신은 특별한 운명을 타고났습니다. 앞으로 좋은 흐름을 맞이하게 됩니다."
+    },
+    "fortunes": [
+      { "category": "MARRIAGE", "grade": "SS+", "content": "결혼운에 대한 설명" },
+      { "category": "CHILDREN", "grade": "A+",  "content": "자녀운에 대한 설명" },
+      { "category": "LOVE",     "grade": "C+",  "content": "연애운에 대한 설명" }
+    ],
+    "luckyItem": "파란색 팔찌",
+    "luckyPlace": "야외 무대"
   }
 }
 ```
 
-- `hourUnknown: true` 면 `pillars.hour` 는 `null` (키는 유지한다)
-- `readings` 순서는 **항상 위 순서로 고정.** 프론트가 정렬하지 않아도 되게
+- 화면의 고정 문구인 “당신의 운명은”은 프론트에서 표시한다
+- `fortunes` 순서는 `MARRIAGE` → `CHILDREN` → `LOVE`로 고정한다
+- 사주 팔자는 저장하지만 API 응답에는 노출하지 않는다
 - 공유 URL은 프론트가 조립한다. 백엔드는 `resultId` 만 준다
 
 ---
@@ -115,9 +118,10 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "data": {
     "resultId": "3f2a9c1e-....",
     "nickname": "도윤",
-    "pillars": { "year": "임오", "month": "계묘", "day": "갑진", "hour": "신미" },
-    "hourUnknown": false,
-    "readings": [ ... ],
+    "destiny": { "title": "깔깔깔깔깔깔깔깔깔", "description": "..." },
+    "fortunes": [ ... ],
+    "luckyItem": "파란색 팔찌",
+    "luckyPlace": "야외 무대",
     "compatibilities": [
       { "nickname": "지현", "score": 82, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" },
       { "nickname": "민수", "score": 31, "tier": "BEOT",  "createdAt": "2026-09-11T13:20:00Z" }

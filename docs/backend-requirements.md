@@ -23,7 +23,7 @@
 
 | 담당 | 패키지 |
 |---|---|
-| **은호** | `saju/` — 만세력, 점수, Gemini |
+| **은호** | `saju/` — 만세력, 등급, Gemini |
 | **선우** | `result/`, `compatibility/` — FE 연동 API |
 | **도윤** | `signup/`, `common/`, 인프라 |
 
@@ -106,11 +106,11 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | FR-VL-02 | P0 | 검증은 DTO의 Bean Validation 애노테이션으로 선언 |
 | FR-VL-03 | P0 | 검증 실패는 400 + `INVALID_INPUT` 으로 변환 |
 | FR-VL-04 | P1 | 검증 실패 응답에 **어느 필드가 왜 틀렸는지** 포함 |
-| FR-VL-05 | P1 | 요청 바디 크기를 제한한다 (닉네임 20자 API에 10MB가 들어올 이유가 없다) |
+| FR-VL-05 | P1 | 요청 바디 크기를 제한한다 (닉네임 8자 API에 10MB가 들어올 이유가 없다) |
 
 | 필드 | 규칙 |
 |---|---|
-| `nickname` | 1~20자, 공백만 불가, 필수 |
+| `nickname` | 1~8자, 공백만 불가, 필수 |
 | `birthDate` | `yyyy-MM-dd`, 1950-01-01 ~ 오늘, 필수 |
 | `birthTime` | `HH:mm` 또는 null(모름) |
 | `birthRegion` | 최대 50자 또는 null(모름) |
@@ -154,23 +154,23 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 
 | ID | P | 요구사항 |
 |---|---|---|
-| FR-RD-01 | P0 | 5개 카테고리(`LOVE`/`WEALTH`/`STUDY`/`FESTIVAL_ITEM`/`FORTUNE`) 해석 생성 |
-| FR-RD-02 | P0 | **점수(0~100)는 규칙 기반 코드가 산출.** LLM에 점수를 맡기지 않는다 |
-| FR-RD-03 | P0 | LLM은 점수·팔자를 받아 **보살 톤 문장으로 각색만** 한다 |
-| FR-RD-04 | P0 | 생성 결과를 `reading` 에 저장. `(result_id, category)` UNIQUE |
+| FR-RD-01 | P0 | 운명 제목·설명, 결혼운·자녀운·연애운, 행운 아이템·장소를 생성 |
+| FR-RD-02 | P0 | **등급은 규칙 기반 코드가 산출.** LLM에 등급을 맡기지 않는다 |
+| FR-RD-03 | P0 | LLM은 등급·팔자를 받아 **보살 톤 문장으로 각색만** 한다 |
+| FR-RD-04 | P0 | 생성 결과를 `reading` 에 저장. `result_id` PK로 Result당 1행 |
 | FR-RD-05 | P0 | 저장된 해석이 있으면 **LLM을 호출하지 않고** DB 값 반환 |
 | FR-RD-06 | P0 | LLM 호출에 **타임아웃** 설정. 무한 대기 금지 |
 | FR-RD-07 | P0 | LLM 실패 시 `LLM_UNAVAILABLE` 503. 팔자는 저장해 **재시도 가능**하게 |
 | FR-RD-08 | P1 | 프롬프트는 리소스 파일로 분리. 코드에 문자열로 박지 않는다 |
-| FR-RD-09 | P0 | `FESTIVAL_ITEM` 은 축제장에서 **바로 행동 가능한 결과**(색·장소·행동) |
-| FR-RD-10 | P0 | `ReadingScorer` 는 순수 함수. 같은 팔자는 항상 같은 점수 |
+| FR-RD-09 | P0 | 행운 아이템과 장소는 축제장에서 **바로 활용 가능한 결과**로 생성 |
+| FR-RD-10 | P0 | 등급 산출 로직은 순수 함수. 같은 팔자는 항상 같은 등급 |
 
 ### Gemini 무료 티어 대응 (FR-GM)
 
 | ID | P | 요구사항 |
 |---|---|---|
-| FR-GM-01 | P0 | **프롬프트에 생년월일·시간·지역·닉네임을 넣지 않는다.** 팔자와 점수만 |
-| FR-GM-02 | P0 | **5개 카테고리를 한 번의 호출로 생성**한다. 개별 호출 금지 |
+| FR-GM-01 | P0 | **프롬프트에 생년월일·시간·지역·닉네임을 넣지 않는다.** 팔자와 등급만 |
+| FR-GM-02 | P0 | **전체 운명 콘텐츠를 한 번의 호출로 생성**한다. 개별 호출 금지 |
 | FR-GM-03 | P0 | 응답을 JSON으로 받아 파싱. 필드 누락·파싱 실패 시 `LLM_UNAVAILABLE` |
 | FR-GM-04 | P0 | `429 RESOURCE_EXHAUSTED` → `LLM_UNAVAILABLE` 503으로 변환 |
 | FR-GM-05 | P0 | 재시도는 **1회까지.** 무한 재시도는 한도를 더 빨리 태운다 |
@@ -184,7 +184,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 ### 인수 조건
 
 - 같은 `resultId` 를 10회 조회해도 LLM 호출 **0회**
-- 같은 생년월일시로 두 번 생성 시 **점수 동일**
+- 같은 생년월일시로 두 번 생성 시 **등급 동일**
 - 결과 1건 생성 시 LLM 호출이 **1회** (5회가 아니다)
 - 전송된 프롬프트 문자열에 생년월일·닉네임이 포함되지 않는다 (테스트로 검증)
 - LLM 강제 실패 시 500이 아니라 **503 + `LLM_UNAVAILABLE`**
@@ -197,10 +197,10 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | ID | P | 요구사항 |
 |---|---|---|
 | FR-RS-01 | P0 | `resultId` 는 **UUIDv4**. 순번·추측 가능한 값 금지 |
-| FR-RS-02 | P0 | `POST /api/results` 는 계산→점수→해석→저장 후 201 |
+| FR-RS-02 | P0 | `POST /api/results` 는 계산→등급→해석→저장 후 201 |
 | FR-RS-03 | P0 | `GET /api/results/{id}` 는 LLM 재호출 없이 DB에서 반환 |
 | FR-RS-04 | P0 | 존재하지 않는 id → `RESULT_NOT_FOUND` 404 |
-| FR-RS-05 | P0 | `readings` 는 항상 고정 순서 (LOVE→WEALTH→STUDY→FESTIVAL_ITEM→FORTUNE) |
+| FR-RS-05 | P0 | `fortunes` 는 항상 고정 순서 (MARRIAGE→CHILDREN→LOVE) |
 | FR-RS-06 | P0 | 궁합 목록을 `createdAt` **내림차순**으로 포함 |
 | FR-RS-07 | P0 | Controller는 Entity를 반환하지 않는다 |
 | FR-RS-08 | P1 | 조회는 `@Transactional(readOnly = true)` |
@@ -210,7 +210,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 - 발급된 `resultId` 가 UUID **v4** 형식이다 (버전 비트 확인)
 - 연속 생성한 두 결과의 id가 인접하거나 예측 가능하지 않다
 - 없는 UUID 조회 → 404
-- `readings` 순서가 매 요청 동일
+- `fortunes` 순서가 매 요청 동일
 
 ---
 
@@ -364,11 +364,11 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 
 - [ ] 시간·지역 **모름**으로 결과가 정상 생성
 - [ ] 실제 인물 5명의 팔자가 공개 만세력과 일치
-- [ ] 같은 입력 2회 생성 → 점수 동일
+- [ ] 같은 입력 2회 생성 → 등급 동일
 - [ ] 결과 1건 생성 시 **LLM 호출 1회** (5회가 아니다)
 - [ ] 결과 재조회 시 LLM 호출 0회
 - [ ] **프롬프트에 생년월일·닉네임이 없다**
-- [ ] `readings` 순서가 항상 고정
+- [ ] `fortunes` 순서가 항상 고정
 - [ ] `score(A,B) == score(B,A)`
 - [ ] 같은 궁합 조합 2회 요청 → 200, DB row 1개
 - [ ] 궁합 응답에 상대 생년월일·성별 없음

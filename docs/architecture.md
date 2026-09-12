@@ -75,8 +75,8 @@ com.darkness.wks
 │
 ├── saju/                        AGENTS.md ○   차은호
 │   ├── SajuCalculator.java      생년월일시 → 팔자 (순수)
-│   ├── ReadingScorer.java       팔자 → 점수 (순수, 결정적)
-│   ├── ReadingGenerator.java    점수 → 보살 톤 문장 (LLM)
+│   ├── ReadingScorer.java       팔자 → 등급 (순수, 결정적)
+│   ├── ReadingGenerator.java    등급 → 보살 톤 문장 (LLM)
 │   ├── ReadingCategory.java
 │   └── dto/
 │
@@ -104,7 +104,7 @@ com.darkness.wks
 
 | 담당 | 패키지 | 핵심 과제 |
 |---|---|---|
-| **차은호** | `saju/` | 만세력 라이브러리 선정·연동, 점수 로직, 프롬프트 |
+| **차은호** | `saju/` | 만세력 라이브러리 선정·연동, 등급 로직, 프롬프트 |
 | **최선우** | `result/`, `compatibility/` | FE 연동 API, 궁합, 캐싱 |
 | **곽도윤** | `signup/`, `common/`, 인프라 | 메일·인증, Docker·CI·EC2·보안 |
 
@@ -154,9 +154,9 @@ Spring Security가 필요 없는 이유가 여기 있다. **인증 체인도 세
 
 ---
 
-## 5. DB 스키마 (v1)
+## 5. DB 스키마 (현재)
 
-> Flyway `V1__init.sql` 의 기준. **엔티티가 아니라 이 문서가 원본이다.**
+> Flyway 마이그레이션 적용 후의 기준. **엔티티가 아니라 이 문서가 원본이다.**
 
 ```sql
 CREATE TABLE result (
@@ -174,13 +174,18 @@ CREATE TABLE result (
 );
 
 CREATE TABLE reading (
-    id              BIGSERIAL PRIMARY KEY,
-    result_id       UUID         NOT NULL REFERENCES result(id) ON DELETE CASCADE,
-    category        VARCHAR(20)  NOT NULL,
-    score           SMALLINT     NOT NULL,
-    content         TEXT         NOT NULL,
-    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    UNIQUE (result_id, category)             -- 캐싱의 핵심
+    result_id          UUID         PRIMARY KEY REFERENCES result(id) ON DELETE CASCADE,
+    destiny_title      VARCHAR(100) NOT NULL,
+    destiny_content    TEXT         NOT NULL,
+    marriage_grade     VARCHAR(10)  NOT NULL,
+    marriage_content   TEXT         NOT NULL,
+    children_grade     VARCHAR(10)  NOT NULL,
+    children_content   TEXT         NOT NULL,
+    love_grade         VARCHAR(10)  NOT NULL,
+    love_content       TEXT         NOT NULL,
+    lucky_item         VARCHAR(100) NOT NULL,
+    lucky_place        VARCHAR(100) NOT NULL,
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
 CREATE TABLE compatibility (
@@ -230,17 +235,17 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 ```
 CreateResultRequest
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주
-  → ReadingScorer       카테고리별 0~100점         ← 결정적
-  → ReadingGenerator    점수+팔자 → 보살 톤 문장    ← LLM
+  → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
+  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM
   → ReadingRepository   저장
 ```
 
-**점수는 코드가, 문장은 AI가.** 이 경계가 흐려지면:
-같은 사주에 다른 점수가 나와 신뢰가 깨지고, 테스트가 불가능해지고, 비용과 지연이 늘어난다.
+**등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:
+같은 사주에 다른 등급이 나와 신뢰가 깨지고, 테스트가 불가능해지고, 비용과 지연이 늘어난다.
 
 ### 캐싱
 
-`reading` 의 `(result_id, category)` UNIQUE.
+`reading.result_id`가 PK이므로 Result당 해석은 한 행만 저장한다.
 값이 있으면 **LLM을 호출하지 않는다.** 예외 없음.
 
 ### 시간·지역 모름
@@ -260,7 +265,7 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 무료 티어에서는 프롬프트와 응답이 Google 제품 개선에 사용될 수 있다(사람 검토 포함).
 유료 티어는 사용되지 않는다.
 
-우리 파이프라인은 이미 팔자를 코드로 계산하므로, **LLM에는 팔자와 점수만 보낸다.**
+우리 파이프라인은 이미 팔자를 코드로 계산하므로, **LLM에는 팔자와 등급만 보낸다.**
 생년월일·시간·지역·닉네임을 프롬프트에 넣지 마라. 팔자(`갑진`, `계묘`)만으로는 역산이 사실상 불가능하다.
 
 ```
@@ -277,8 +282,8 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 여기서 터질 가능성이 높다.
 
 대응:
-- 캐싱이 1차 방어선이다. `(result_id, category)` UNIQUE로 재호출을 원천 차단
-- **한 결과에 5개 카테고리를 개별 호출하지 말고, 한 번의 호출로 5개를 함께 생성**한다.
+- 캐싱이 1차 방어선이다. `reading.result_id` PK로 재호출을 원천 차단
+- **운명 콘텐츠를 항목별로 개별 호출하지 말고, 한 번의 호출로 전부 생성**한다.
   호출 수가 1/5로 줄어든다. JSON으로 받아 파싱
 - 429를 `LLM_UNAVAILABLE` 503으로 변환하고, 팔자는 저장해 재시도 가능하게
 - Day 6 부하 테스트에서 **실제 RPM 한도를 확인**한다. 모델·시점에 따라 다르다
