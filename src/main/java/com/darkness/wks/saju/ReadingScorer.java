@@ -18,6 +18,12 @@ public class ReadingScorer {
     private static final int[] SPOUSE_BONUS = {0, 10, 30, 30, 20};
     private static final int[] CHILD_BONUS = {0, 20, 12, 8, 4};
 
+    /** 년·월·일·시 기둥 비중 */
+    private static final double[] PILLAR_WEIGHT = {0.7, 1.3, 1.0, 0.9};
+    private static final double BRANCH_WEIGHT = 0.85;
+    /** 시주 포함 8글자(일간 제외 7자리)의 가중치 총합 */
+    private static final double FULL_WEIGHT = 0.7 + 1.3 + 0.9 + (0.7 + 1.3 + 1.0 + 0.9) * 0.85;
+
     private static final String DOHWA = "자오묘유";
     private static final List<String> HAP = List.of("자축", "인해", "묘술", "진유", "사신", "오미");
     private static final List<String> CHUNG = List.of("자오", "축미", "인신", "묘유", "진술", "사해");
@@ -29,21 +35,25 @@ public class ReadingScorer {
         Element dayMaster = Element.ofStem(pillars.dayPillar().charAt(0));
         char spouseBranch = pillars.dayPillar().charAt(1);
 
-        int[] role = new int[5];
-        int chars = 0;
-        int dohwa = 0;
+        // 기둥별 비중: 월주(월령)가 가장 크고 년주가 가장 작다. 지지는 천간보다 조금 작게.
+        // 가중치가 소수라 십성 합이 촘촘해져 점수 계단이 줄어든다
+        double[] role = new double[5];
+        double weightSum = 0;
+        double dohwa = 0;
         int hap = 0;
         int chung = 0;
-        for (String p : all) {
-            boolean isDay = p.equals(pillars.dayPillar());
+        for (int i = 0; i < all.size(); i++) {
+            String p = all.get(i);
+            double w = PILLAR_WEIGHT[i];
+            boolean isDay = i == 2;
             if (!isDay) {
-                role[relation(dayMaster, Element.ofStem(p.charAt(0)))]++;
-                chars++;
+                role[relation(dayMaster, Element.ofStem(p.charAt(0)))] += w;
+                weightSum += w;
             }
             char branch = p.charAt(1);
-            role[relation(dayMaster, Element.ofBranch(branch))]++;
-            chars++;
-            if (DOHWA.indexOf(branch) >= 0) dohwa++;
+            role[relation(dayMaster, Element.ofBranch(branch))] += w * BRANCH_WEIGHT;
+            weightSum += w * BRANCH_WEIGHT;
+            if (DOHWA.indexOf(branch) >= 0) dohwa += w;
             if (!isDay) {
                 String pair = "" + spouseBranch + branch;
                 String reversed = "" + branch + spouseBranch;
@@ -51,21 +61,21 @@ public class ReadingScorer {
                 if (CHUNG.contains(pair) || CHUNG.contains(reversed)) chung++;
             }
         }
-        double scale = 7.0 / chars; // 시주 없으면 5글자라 7/5 로 보정
+        double scale = FULL_WEIGHT / weightSum; // 시주 없으면 글자가 적으니 같은 총량으로 보정
 
         double jaeGwan = (role[2] + role[3]) * scale; // 재성+관성: 이성·배우자 인연의 크기
-        int love = (int) Math.round(20 + 10 * jaeGwan + 8 * dohwa);
-        int marriage = (int) Math.round(38 + SPOUSE_BONUS[relation(dayMaster, Element.ofBranch(spouseBranch))]
-                + 4 * jaeGwan + 12 * hap - 12 * chung);
-        int children = (int) Math.round(30 + 16 * role[1] * scale);
+        double love = 20 + 10 * jaeGwan + 8 * dohwa;
+        double marriage = 38 + SPOUSE_BONUS[relation(dayMaster, Element.ofBranch(spouseBranch))]
+                + 4 * jaeGwan + 12 * hap - 12 * chung;
+        double children = 30 + 16 * role[1] * scale;
         if (pillars.hourPillar() != null) {
             children += CHILD_BONUS[relation(dayMaster, Element.ofBranch(pillars.hourPillar().charAt(1)))];
         }
 
         Map<ReadingCategory, Integer> result = new EnumMap<>(ReadingCategory.class);
-        result.put(ReadingCategory.MARRIAGE, calibrate(marriage, 68, 0.86));
-        result.put(ReadingCategory.CHILDREN, calibrate(children, 58, 0.78));
-        result.put(ReadingCategory.LOVE, calibrate(love, 60, 0.95));
+        result.put(ReadingCategory.MARRIAGE, calibrate(marriage, 65.7, 0.86));
+        result.put(ReadingCategory.CHILDREN, calibrate(children, 56.7, 0.9));
+        result.put(ReadingCategory.LOVE, calibrate(love, 57.9, 0.95));
         return result;
     }
 
@@ -73,7 +83,7 @@ public class ReadingScorer {
      * 원점수를 중앙값 74(상/하 경계 = A+ 컷), 표준편차 약 14 로 선형 보정한다.
      * ponytail: 1950~2010 고유 팔자 8,225개의 원점수 중앙값·표준편차에서 나온 상수. 가중치를 바꾸면 Stats 로 다시 잰다
      */
-    private static int calibrate(int raw, int median, double scale) {
+    private static int calibrate(double raw, double median, double scale) {
         return clamp((int) Math.round(74 + (raw - median) * scale));
     }
 
