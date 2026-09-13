@@ -95,14 +95,15 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "data": {
     "resultId": "3f2a9c1e-....",
     "nickname": "도윤",
+    "zodiac": "HORSE",
     "destiny": {
       "title": "깔깔깔깔깔깔깔깔깔",
       "description": "당신은 특별한 운명을 타고났습니다. 앞으로 좋은 흐름을 맞이하게 됩니다."
     },
     "fortunes": [
-      { "category": "MARRIAGE", "grade": "SS+", "content": "결혼운에 대한 설명" },
-      { "category": "CHILDREN", "grade": "A+",  "content": "자녀운에 대한 설명" },
-      { "category": "LOVE",     "grade": "C+",  "content": "연애운에 대한 설명" }
+      { "category": "MARRIAGE", "grade": "SS", "content": "결혼운에 대한 설명" },
+      { "category": "CHILDREN", "grade": "A+", "content": "자녀운에 대한 설명" },
+      { "category": "LOVE",     "grade": "B",  "content": "연애운에 대한 설명" }
     ],
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대"
@@ -112,6 +113,9 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 - 화면의 고정 문구인 “당신의 운명은”은 프론트에서 표시한다
 - `fortunes` 순서는 `MARRIAGE` → `CHILDREN` → `LOVE`로 고정한다
+- `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
+  **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
+- `grade` 는 6단계 고정: `SS` `S` `A+` `A` `B+` `B` (높은 순, 2026-09-13 확정)
 - 사주 팔자는 저장하지만 API 응답에는 노출하지 않는다
 - 공유 URL은 프론트가 조립한다. 백엔드는 `resultId` 만 준다
 
@@ -132,6 +136,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "data": {
     "resultId": "3f2a9c1e-....",
     "nickname": "도윤",
+    "zodiac": "HORSE",
     "destiny": { "title": "깔깔깔깔깔깔깔깔깔", "description": "..." },
     "fortunes": [ ... ],
     "luckyItem": "파란색 팔찌",

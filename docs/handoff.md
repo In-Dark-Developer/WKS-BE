@@ -62,6 +62,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-13 | 결과 응답에 `zodiac`(십이간지 enum) 추가. `grade` 6단계 `SS S A+ A B+ B` 확정 | ❌ |
 | 2026-09-13 | `POST /api/results` 요청에서 `birthRegion` 제거 (기획 결정, 시진 입력이라 무의미) | ❌ |
 | 2026-09-13 | `POST /api/results` 요청에 `calendarType`(필수)·`isLeapMonth` 추가 (음력 지원). 시진 가운데 시각 전송·자시 두 칸 분리 규칙 명시 | ❌ |
 | 2026-09-12 | 결과 응답을 운명 제목·설명, 결혼/자녀/연애 등급·설명, 행운 아이템·장소로 변경 | ❌ |
@@ -123,8 +124,9 @@
 - 09-13 Codex 기록의 "lunar-java 불일치"는 무보정 입력 재현이며 위 구조로 해결됨. `docs/lunar-java-validation.md`, `tools/check_lunar.py` 는 탐색용이라 커밋하지 않음
 
 **막힌 것 / 넘기는 것**
-- 기획 결정 대기 1건: 자시 두 칸 분리 (음력 지원·지역 제거는 확정)
+- 기획 결정 대기 1건: 자시 두 칸 분리 (음력 지원·지역 제거·등급 6단계는 확정)
 - 최선우: `CreateResultRequest` 에 `CalendarType calendarType`(saju 패키지 enum)·`Boolean isLeapMonth` 추가, `birthDate` 를 `String` 으로, `birthRegion` 삭제. `BirthDate.parse(...).toSolar()` 결과(양력)를 `analyze()` 와 `Result` 저장에 사용
+- 최선우: 응답에 `zodiac` 추가 — `SajuPillars.zodiac()` (또는 저장된 `year_pillar` 로 `Zodiac.fromYearPillar`). 컬럼 추가 불필요
 - `saju/` 출력 형태 미확정: `ReadingCategory` 5종(점수) vs `result/ResultAnalysisPort` (운명 + 결혼·자녀·연애 등급 + 행운 아이템·장소). 등급 문자열 집합·산출 기준도 미정. 이게 정해져야 `ReadingScorer`·`ReadingGenerator` 착수 가능
 - TR-01 대체: 포스텔러 만세력 2.2 와 7건 대조(입춘 전후·자시·시진 경계·설날) 전부 일치, `SajuCalculatorTest.matchesPosteller` 에 고정. 실제 인물 데이터가 생기면 추가
 
