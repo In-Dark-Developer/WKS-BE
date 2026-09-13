@@ -38,15 +38,15 @@ class SajuResultAnalysisAdapterTest {
         assertThat(r.destiny().title()).isEqualTo("제목");
         assertThat(r.luckyPlace()).isEqualTo("팔정도");
 
-        // 등급은 코드가 정하고 LLM 에는 그 등급이 그대로 전달된다 (FR-RD-02)
+        // 점수는 코드가 정하고, LLM 에는 그 점수의 등급이 그대로 전달된다 (FR-RD-02)
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<ReadingCategory, Grade>> grades = ArgumentCaptor.forClass(Map.class);
         org.mockito.Mockito.verify(generator).generate(any(), grades.capture());
-        assertThat(r.fortunes()).extracting(ResultAnalysisPort.Fortune::grade)
+        assertThat(r.fortunes()).extracting(f -> Grade.of(f.score()))
                 .containsExactly(
-                        grades.getValue().get(ReadingCategory.MARRIAGE).label(),
-                        grades.getValue().get(ReadingCategory.CHILDREN).label(),
-                        grades.getValue().get(ReadingCategory.LOVE).label());
+                        grades.getValue().get(ReadingCategory.MARRIAGE),
+                        grades.getValue().get(ReadingCategory.CHILDREN),
+                        grades.getValue().get(ReadingCategory.LOVE));
     }
 
     @Test

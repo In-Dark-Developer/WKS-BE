@@ -34,8 +34,9 @@ public class SajuResultAnalysisAdapter implements ResultAnalysisPort {
     public AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime) {
         SajuPillars pillars = sajuCalculator.calculate(solarBirthDate, birthTime, null); // 지역 미수집 → 서울 기준
 
+        Map<ReadingCategory, Integer> scores = readingScorer.score(pillars);
         Map<ReadingCategory, Grade> grades = new EnumMap<>(ReadingCategory.class);
-        readingScorer.score(pillars).forEach((category, score) -> grades.put(category, Grade.of(score)));
+        scores.forEach((category, score) -> grades.put(category, Grade.of(score)));
 
         Reading reading = readingGenerator.generate(pillars, grades);
 
@@ -43,16 +44,16 @@ public class SajuResultAnalysisAdapter implements ResultAnalysisPort {
                 pillars,
                 new Destiny(reading.destinyTitle(), reading.destinyDescription()),
                 List.of(
-                        fortune(FortuneCategory.MARRIAGE, ReadingCategory.MARRIAGE, grades, reading),
-                        fortune(FortuneCategory.CHILDREN, ReadingCategory.CHILDREN, grades, reading),
-                        fortune(FortuneCategory.LOVE, ReadingCategory.LOVE, grades, reading)
+                        fortune(FortuneCategory.MARRIAGE, ReadingCategory.MARRIAGE, scores, reading),
+                        fortune(FortuneCategory.CHILDREN, ReadingCategory.CHILDREN, scores, reading),
+                        fortune(FortuneCategory.LOVE, ReadingCategory.LOVE, scores, reading)
                 ),
                 reading.luckyItem(),
                 reading.luckyPlace()
         );
     }
 
-    private static Fortune fortune(FortuneCategory to, ReadingCategory from, Map<ReadingCategory, Grade> grades, Reading reading) {
-        return new Fortune(to, grades.get(from).label(), reading.contents().get(from));
+    private static Fortune fortune(FortuneCategory to, ReadingCategory from, Map<ReadingCategory, Integer> scores, Reading reading) {
+        return new Fortune(to, scores.get(from), reading.contents().get(from));
     }
 }

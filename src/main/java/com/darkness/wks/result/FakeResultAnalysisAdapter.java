@@ -26,9 +26,9 @@ public class FakeResultAnalysisAdapter implements ResultAnalysisPort {
                         "당신은 특별한 운명을 타고났습니다. 앞으로 좋은 흐름을 맞이하게 됩니다."
                 ),
                 List.of(
-                        new Fortune(FortuneCategory.MARRIAGE, "SS", "결혼운의 흐름이 매우 좋습니다."),
-                        new Fortune(FortuneCategory.CHILDREN, "A+", "자녀운에 따뜻한 기운이 있습니다."),
-                        new Fortune(FortuneCategory.LOVE, "C+", "연애에서는 천천히 마음을 확인하세요.")
+                        new Fortune(FortuneCategory.MARRIAGE, 92, "결혼운의 흐름이 매우 좋습니다."),
+                        new Fortune(FortuneCategory.CHILDREN, 70, "자녀운에 따뜻한 기운이 있습니다."),
+                        new Fortune(FortuneCategory.LOVE, 35, "연애에서는 천천히 마음을 확인하세요.")
                 ),
                 "파란색 팔찌",
                 "야외 무대"

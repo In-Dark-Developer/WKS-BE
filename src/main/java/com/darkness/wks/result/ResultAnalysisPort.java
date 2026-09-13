@@ -36,6 +36,7 @@ public interface ResultAnalysisPort {
     record Destiny(String title, String description) {
     }
 
-    record Fortune(FortuneCategory category, String grade, String content) {
+    /** score 는 0~100. 등급은 응답 시 {@code Grade.of(score)} 로 만든다 */
+    record Fortune(FortuneCategory category, int score, String content) {
     }
 }
