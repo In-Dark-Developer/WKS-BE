@@ -87,7 +87,11 @@ public class ReadingScorer {
      * ponytail: 1950~2010 고유 팔자 8,225개의 원점수 중앙값·표준편차에서 나온 상수. 가중치를 바꾸면 Stats 로 다시 잰다
      */
     private static int calibrate(double raw, double median, double scale) {
-        return clamp((int) Math.round(74 + (raw - median) * scale));
+        double v = 74 + (raw - median) * scale;
+        // 양 끝은 잘라내지 않고 부드럽게 눌러 90~100, 0~10 안에 펼친다. 100점에 쌓이는 것 방지
+        if (v > 90) v = 90 + 10 * (1 - Math.exp(-(v - 90) / 12));
+        if (v < 10) v = 10 - 10 * (1 - Math.exp((v - 10) / 12));
+        return clamp((int) Math.round(v));
     }
 
     /** 일간 오행 → 대상 오행의 십성 역할 (0 비겁, 1 식상, 2 재성, 3 관성, 4 인성). 상생 순환에서 몇 칸 뒤인지 */
