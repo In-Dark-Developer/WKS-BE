@@ -19,8 +19,11 @@ import java.util.UUID;
 
 @Schema(description = "운명 분석 결과")
 public record ResultResponse(
-        @Schema(description = "공유 가능한 UUID v4 결과 ID")
+        @Schema(description = "본인 결과 조회용 UUID v4 ID")
         UUID resultId,
+
+        @Schema(description = "친구에게 전달하는 공개 링크 UUID v4 ID")
+        UUID shareId,
 
         @Schema(description = "닉네임", example = "도윤")
         String nickname,
@@ -53,6 +56,7 @@ public record ResultResponse(
                 LocalDate.now(ZoneId.of("Asia/Seoul")));
         return new ResultResponse(
                 result.getId(),
+                result.getShareId(),
                 result.getNickname(),
                 Zodiac.fromYearPillar(result.getYearPillar()),
                 new DestinyResponse(reading.getDestinyTitle(), reading.getDestinyContent()),
