@@ -1,0 +1,9 @@
+.git
+.gradle
+build
+!gradle/wrapper/gradle-wrapper.jar
+.idea
+*.iml
+docs
+*.md
+src/main/resources/application-local.yml

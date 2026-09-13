@@ -39,5 +39,7 @@ out/
 ### WKS project ###
 application-local.yml
 .env
+.env.prod
+.env
 *.log
 .DS_Store

@@ -19,7 +19,7 @@
 |---|---|
 | 릴리즈 D-day | (미정) |
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ❌ |
-| main(프로덕션) 배포 상태 | ❌ 미배포 |
+| main(프로덕션) 배포 상태 | ⚠️ 파이프라인 코드는 준비됨, EC2 인스턴스 없음 (미배포) |
 | `/api/health` (배포 도메인) | ❌ |
 | Flyway 최신 버전 | (없음) |
 | api-spec 프론트 전달 | ❌ 미전달 |
@@ -95,6 +95,39 @@
 ---
 
 ## 기록
+
+### 2026-09-13 (일) · 곽도윤 · 인프라 · Claude Code
+
+**한 일**
+- 배포 파이프라인 초안 구성: `Dockerfile`(멀티스테이지 빌드), `docker-compose.prod.yml`(postgres+app+nginx), `nginx/default.conf`
+- `application-prod.yml` 신설 — base `application.yml`엔 datasource가 아예 없어서(로컬 프로필에만 존재) prod로 그냥 못 띄우는 상태였음. 전부 환경변수 주입으로 처리
+- `.github/workflows/deploy.yml` 추가 — `main` push 시 GHCR로 이미지 빌드/푸시 → **`docker-compose.prod.yml`/`nginx/` 를 scp로 EC2에 동기화** → SSH로 `docker compose pull && up -d` + nginx restart 자동 실행
+  - (처음엔 이미지 배포만 자동화했다가, compose/nginx 파일이 바뀌면 여전히 수동 scp가 필요한 구멍이 있어서 sync 단계 추가함)
+- `.env.prod.example` 추가 (실값은 EC2에서 `.env`로 채우고 git에 안 올림 — 이건 비밀값이라 앞으로도 계속 수동)
+
+**건드린 파일/패키지**
+- `Dockerfile`, `.dockerignore`, `docker-compose.prod.yml`, `nginx/default.conf`, `.env.prod.example`
+- `src/main/resources/application-prod.yml` (신규)
+- `.github/workflows/deploy.yml` (신규)
+- `.gitignore` (`.env`, `.env.prod` 추가)
+
+**다음 사람이 알아야 할 것**
+- EC2에서 실행할 땐 `SPRING_PROFILES_ACTIVE=prod` 필수 (compose 파일에 이미 박아둠)
+- GHCR 이미지가 private면 EC2에서도 `docker login ghcr.io` 필요 — 워크플로에 포함돼 있음
+- nginx는 HTTP(80)만 열어둔 상태. 도메인 정해지면 `nginx/default.conf`의 `server_name` 채우고 certbot으로 443 추가할 것
+
+**막힌 것 / 넘기는 것**
+- **GitHub Secrets 미등록** → `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`, `EC2_APP_DIR` 를 리포지토리 Settings에 등록해야 워크플로가 실제로 돈다
+- **EC2 인스턴스 자체가 아직 없음** → 인스턴스 생성, 보안그룹(80/443/22 오픈), Docker 설치, 최초 1회 `docker-compose.prod.yml`+`nginx/`+`.env` 서버에 배치 필요
+- 프론트 배포 도메인 미확정 → CORS_ALLOWED_ORIGINS/nginx server_name 임시값으로 둠
+
+**문서 변경**
+- `architecture.md`의 기존 인프라 결정(Docker·EC2·nginx·GitHub Actions)은 그대로 유지, 구체 구현만 추가
+
+**프론트에 알려야 할 것**
+- 없음 (API 변경 아님)
+
+---
 
 ### 2026-09-11 (금) · 곽도윤 · 공통 · —
 
