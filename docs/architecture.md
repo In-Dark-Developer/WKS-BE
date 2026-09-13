@@ -308,10 +308,12 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 
 | 점수 | Tier | 표기 |
 |---|---|---|
-| 76~100 | `GUIIN` | 귀인 |
-| 51~75 | `CHALTTEOK` | 찰떡 |
-| 26~50 | `BEOT` | 벗 |
-| 0~25 | `SEUCHIM` | 스침 |
+| 90~100 | `GUIIN` | 귀인 |
+| 75~89 | `CHALTTEOK` | 찰떡 |
+| 61~74 | `BEOT` | 벗 |
+| 0~60 | `SEUCHIM` | 스침 |
+
+2026-09-13 기획 확정. 25점 균등 구간이 아니다.
 
 `CompatibilityCalculator` 는 순수 함수. `score(A,B) == score(B,A)` 가 성립해야 한다.
 

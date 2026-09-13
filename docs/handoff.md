@@ -62,6 +62,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-13 | 궁합 `tier` 구간 변경: 90/75/61 경계 (25점 구간 아님) | ❌ |
 | 2026-09-13 | 결과 응답에 `zodiac`(십이간지 enum) 추가. `grade` 6단계 `SS S A+ A B+ B` 확정 | ❌ |
 | 2026-09-13 | `POST /api/results` 요청에서 `birthRegion` 제거 (기획 결정, 시진 입력이라 무의미) | ❌ |
 | 2026-09-13 | `POST /api/results` 요청에 `calendarType`(필수)·`isLeapMonth` 추가 (음력 지원). 시진 가운데 시각 전송·자시 두 칸 분리 규칙 명시 | ❌ |
@@ -101,6 +102,32 @@
 
 ## 기록
 
+### 2026-09-13 (일) · 차은호 · 문서 (#7, 기획 명세 반영) · Claude Code
+
+**한 일**
+- 프론트 기능명세서(Figma v0.2, 9/13)와 기획 결정을 백엔드 문서에 반영
+- 궁합 Tier 구간 변경 기록: 귀인 90~100 / 찰떡 75~89 / 벗 61~74 / 스침 0~60. **코드(`CompatibilityCalculator`·`CompatibilityService`)는 최선우가 반영**
+
+**건드린 파일/패키지**
+- `docs/api-spec.md` §4, `docs/architecture.md` §7, `docs/backend-requirements.md` FR-CP-03·TR-06·인수 조건, `docs/convention.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것 — 프론트 명세와 어긋나는 것 (팀 결정 필요)**
+- **API 계약 불일치.** 프론트 명세는 `POST /readings`, `GET /shares/{shareId}`, `POST /shares/{shareId}/compatibility`, `GET /me/friends`, `POST /me/threads` 와 응답 타입 `Reading{id, shareId, zodiac, destiny, sections(3), cardGrades, lucky}` 를 쓰고, 원본을 "백엔드 저장소 `docs/api/openapi.yaml`" 이라고 적음. **우리 레포에 그 파일 없음.** 우리 계약은 `docs/api-spec.md` (`/api/results`, `resultId`, `destiny`, `fortunes`). 프론트 Open Question Q3 담당은 `@hairyung2002`. 9/17 전에 한쪽으로 맞춰야 연동 가능
+- **요청 형식.** 프론트는 `birthDate` "숫자 8자리", 우리는 `yyyy-MM-dd`. 시진 선택 UI 인데 전송 규칙(가운데 시각, 자시 두 칸)이 프론트 문서에 없음 → api-spec §2 를 프론트에 공지해야 함
+- **사전신청 수집 항목.** 프론트 FR-10 은 학교 이메일·이름·연락처(인스타/전화)·사진·학과·나이·MBTI·자기소개 를 Must 로 수집. 우리 규칙은 "이름·전화번호는 받지 않는다, 컬럼도 없다". `signup/` 스키마·개인정보 정책 결정 필요 (곽도윤)
+- **범위.** 프론트 Must 에 운명의 실(`/me/threads`), 소개팅 후보 열람(`/matching`), 세션(`/me/*`)이 포함. 우리 1차 범위 "하지 않는 것"에 매칭·로그인 있음. 소개팅 페이지는 축제 당일(9/29) 오픈
+- **일정.** 축제 2026-09-29 ~ 10-01, MVP 마감 9/17
+- 프론트 명세에서 확인된 결정(이미 반영됨): 지역 입력 없음, 등급 B~SS 6단계, 십이간지 캐릭터, 행운 장소는 동국대 안, 닉네임 8자, 성별 남/여
+
+**막힌 것 / 넘기는 것**
+- 최선우: 궁합 Tier 코드 반영 + 경계 테스트(60/61/74/75/89/90)
+- 곽도윤: 계약 불일치(Q3)·사전신청 개인정보·범위 재합의 주도
+
+**문서 변경**
+- 위 5개 파일
+
+**프론트에 알려야 할 것**
+- 없음 (계약 정렬은 별도 논의)
 ### 2026-09-13 (일) · 차은호 · saju/ · Claude Code
 
 **한 일**
