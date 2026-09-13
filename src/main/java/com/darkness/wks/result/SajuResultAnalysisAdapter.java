@@ -8,7 +8,6 @@ import com.darkness.wks.saju.ReadingScorer;
 import com.darkness.wks.saju.SajuCalculator;
 import com.darkness.wks.saju.SajuPillars;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -19,10 +18,8 @@ import java.util.Map;
 
 /**
  * 실제 분석기: SajuCalculator(팔자) → ReadingScorer(점수) → Grade.of(등급) → ReadingGenerator(해석, Gemini 1회).
- * 기본 활성. 프론트 개발용 가짜 분석기를 쓰려면 {@code app.result.fake-analysis-enabled=true}.
  */
 @Component
-@ConditionalOnProperty(name = "app.result.fake-analysis-enabled", havingValue = "false", matchIfMissing = true)
 @RequiredArgsConstructor
 public class SajuResultAnalysisAdapter implements ResultAnalysisPort {
 

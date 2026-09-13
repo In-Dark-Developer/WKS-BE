@@ -38,6 +38,7 @@ public class Result {
     @Column(name = "birth_date", nullable = false)
     private LocalDate birthDate;
 
+    @JdbcTypeCode(SqlTypes.LOCAL_TIME)
     @Column(name = "birth_time")
     private LocalTime birthTime;
 
