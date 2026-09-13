@@ -117,13 +117,12 @@
 
 **다음 사람이 알아야 할 것**
 - 등급 분포(1950~2010 고유 팔자 8,225개): 결혼 SS 13%·B 4%, 자녀 SS 10%·B 16%, 연애 SS 4%·B 8%. 기획이 더 후하게/짜게 원하면 `ReadingScorer` 상수만 조정
-- Gemini 모델명은 `gemini.model` (기본 `gemini-2.5-flash`). 타임아웃은 기존 `gemini.timeout-seconds: 30`
-- **실제 Gemini 호출은 아직 안 해봄** (로컬에 `GOOGLE_API_KEY` 없음). 키 받으면 스모크 1회 필요: 응답 스키마·토큰 수·지연 확인
+- Gemini 모델 `gemini-3.6-flash` (`gemini.model`, 기본값). **`gemini-2.5-flash` 는 신규 키에 404** ("no longer available to new users"). 3.x 는 `thinkingBudget` 400 → `thinkingLevel: MINIMAL` 사용
+- 실제 호출 스모크 완료: 약 3초, 약 770 토큰/건, 응답 스키마 7필드 정상. `GeminiSmokeTest` 는 `GOOGLE_API_KEY` 있을 때만 실행(CI 제외)
 - 최선우 연결 지점: `SajuCalculator.calculate()` → `ReadingScorer.score()` → `ReadingGenerator.generate()`. `Reading.contents()` 는 `EnumMap<ReadingCategory,String>`, 등급은 `Grade.label()` 로 문자열화
 
 **막힌 것 / 넘기는 것**
-- Gemini 스모크 테스트 (키 필요)
-- Day 6 RPM·RPD 실측
+- Day 6 RPM·RPD 실측 (무료 티어 한도가 축제 트래픽에 부족하면 결제 연결 — 곽도윤)
 
 **문서 변경**
 - `docs/handoff.md`

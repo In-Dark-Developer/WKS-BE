@@ -9,6 +9,7 @@ import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
 import com.google.genai.types.Schema;
 import com.google.genai.types.ThinkingConfig;
+import com.google.genai.types.ThinkingLevel;
 import com.google.genai.types.Type;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,7 +52,7 @@ public class ReadingGenerator {
     private final String model;
     private final JsonMapper mapper = JsonMapper.builder().build();
 
-    public ReadingGenerator(Client geminiClient, @Value("${gemini.model:gemini-2.5-flash}") String model) {
+    public ReadingGenerator(Client geminiClient, @Value("${gemini.model:gemini-3.6-flash}") String model) {
         this.geminiClient = geminiClient;
         this.model = model;
     }
@@ -75,7 +76,7 @@ public class ReadingGenerator {
                 .responseMimeType("application/json")
                 .responseSchema(RESPONSE_SCHEMA)
                 .temperature(0.9f)
-                .thinkingConfig(ThinkingConfig.builder().thinkingBudget(0)) // 30초 SLA. 문장 각색에 사고 토큰 불필요
+                .thinkingConfig(ThinkingConfig.builder().thinkingLevel(ThinkingLevel.Known.MINIMAL)) // 30초 SLA. 문장 각색에 사고 토큰 불필요. 3.x 는 thinkingBudget 거부
                 .build());
         log.info("gemini ok. ms={} tokens={}", (System.nanoTime() - start) / 1_000_000,
                 response.usageMetadata().flatMap(u -> u.totalTokenCount()).orElse(-1));

@@ -267,6 +267,9 @@ CreateResultRequest
 
 SDK: `com.google.genai:google-genai` (Gemini Developer API).
 API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
+모델 `gemini-3.6-flash` (설정 `gemini.model`), 타임아웃 30초 (`gemini.timeout-seconds`).
+`gemini-2.5-flash` 는 2026-09 기준 신규 키에 404 ("no longer available to new users").
+3.x 는 `thinkingBudget` 을 거부하므로 `thinkingLevel: MINIMAL` 로 사고 토큰을 줄인다.
 
 > SDK 2.0.0부터 Java 17 이상이 필수다. 우리는 Java 17이라 문제없다.
 
@@ -336,7 +339,6 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 
 | 항목 | 시점 | 담당 |
 |---|---|---|
-| Gemini 모델명·타임아웃 값 | Day 2 | 차은호 |
 | Gemini 무료 티어 RPM·RPD 실측 | Day 6 | 차은호 |
 | 무료 티어 한도 부족 시 결제 계정 연결 여부 | Day 6 | 곽도윤 |
 | 프롬프트 톤 확정 | Day 2 밤 | 차은호 + 기획 |
