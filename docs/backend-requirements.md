@@ -58,7 +58,8 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 |---|---|---|
 | `POST` | `/api/results` | 선우 (계산은 은호) |
 | `GET` | `/api/results/{resultId}` | 선우 |
-| `POST` | `/api/results/{resultId}/compatibility` | 선우 |
+| `GET` | `/api/shares/{shareId}` | 선우 |
+| `POST` | `/api/shares/{shareId}/compatibility` | 선우 |
 | `POST` | `/api/signups` | 도윤 |
 | `POST` | `/api/signups/resend` | 도윤 |
 | `GET` | `/api/signups/verify` | 도윤 |
@@ -197,6 +198,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | ID | P | 요구사항 |
 |---|---|---|
 | FR-RS-01 | P0 | `resultId` 는 **UUIDv4**. 순번·추측 가능한 값 금지 |
+| FR-RS-01A | P0 | 공개 링크는 별도 UUIDv4 `shareId`를 사용하고 공유 응답에 내부 `resultId`를 노출하지 않는다 |
 | FR-RS-02 | P0 | `POST /api/results` 는 계산→등급→해석→저장 후 201 |
 | FR-RS-03 | P0 | `GET /api/results/{id}` 는 LLM 재호출 없이 DB에서 반환 |
 | FR-RS-04 | P0 | 존재하지 않는 id → `RESULT_NOT_FOUND` 404 |
@@ -222,8 +224,8 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | FR-CP-02 | P0 | **`score(A,B) == score(B,A)`** 항상 성립 |
 | FR-CP-03 | P0 | Tier: 90~100 `GUIIN` / 75~89 `CHALTTEOK` / 61~74 `BEOT` / 0~60 `SEUCHIM` (2026-09-13 기획 확정) |
 | FR-CP-04 | P0 | 이미 존재하는 조합은 재계산하지 않고 기존 값을 **200**으로 반환 |
-| FR-CP-05 | P0 | `originId == resultId` → `SELF_COMPATIBILITY` 400 |
-| FR-CP-06 | P0 | 존재하지 않는 `originId` → `RESULT_NOT_FOUND` 404 |
+| FR-CP-05 | P0 | 링크 주인 결과와 `guestResultId`가 같으면 `SELF_COMPATIBILITY` 400 |
+| FR-CP-06 | P0 | 존재하지 않는 `shareId` 또는 `guestResultId` → `RESULT_NOT_FOUND` 404 |
 | FR-CP-07 | P0 | 응답·조회에 **상대의 생년월일·성별·resultId 미포함.** 닉네임과 점수만 |
 | FR-CP-08 | P0 | `CompatibilityCalculator` 는 순수 함수 |
 | FR-CP-09 | P1 | 동시 요청으로 같은 조합이 중복 생성되지 않는다 (UNIQUE + 예외 처리) |

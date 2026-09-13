@@ -5,6 +5,7 @@ import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.compatibility.CompatibilityRepository;
 import com.darkness.wks.result.dto.ResultResponse;
+import com.darkness.wks.result.dto.SharedResultResponse;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,8 @@ class ResultServiceTest {
         ResultResponse response = resultService.getResult(resultId.toString());
 
         assertThat(response.resultId()).isEqualTo(resultId);
+        assertThat(response.shareId()).isEqualTo(result.getShareId());
+        assertThat(response.shareId().version()).isEqualTo(4);
         assertThat(response.nickname()).isEqualTo("도윤");
         assertThat(response.fortunes()).extracting(ResultResponse.FortuneResponse::grade)
                 .containsExactly("SS", "A+", "B");
@@ -69,6 +72,23 @@ class ResultServiceTest {
         assertThatThrownBy(() -> resultService.getResult(resultId.toString()))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESULT_NOT_FOUND));
+    }
+
+    @Test
+    void getsPublicResultByShareIdWithoutExposingIdentifiers() {
+        UUID resultId = UUID.randomUUID();
+        Result result = result(resultId);
+        Reading reading = reading(result);
+        when(resultRepository.findByShareId(result.getShareId())).thenReturn(Optional.of(result));
+        when(readingRepository.findById(resultId)).thenReturn(Optional.of(reading));
+        when(compatibilityRepository.findAllByResultIdOrderByCreatedAtDesc(resultId)).thenReturn(List.of());
+
+        SharedResultResponse response = resultService.getSharedResult(result.getShareId().toString());
+
+        assertThat(response.nickname()).isEqualTo("도윤");
+        assertThat(SharedResultResponse.class.getRecordComponents())
+                .extracting(component -> component.getName())
+                .doesNotContain("resultId", "shareId");
     }
 
     @Test

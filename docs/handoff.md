@@ -21,7 +21,7 @@
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ❌ |
 | main(프로덕션) 배포 상태 | ❌ 미배포 |
 | `/api/health` (배포 도메인) | ❌ |
-| Flyway 최신 버전 | (없음) |
+| Flyway 최신 버전 | V6 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ❌ |
 
@@ -43,6 +43,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
 | V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | PR (#17) |
 | V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR #15 |
 | V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
@@ -65,6 +66,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-13 | 본인용 `resultId`와 공개용 `shareId` 분리. `GET /api/shares/{shareId}`, 궁합 POST 추가 | ❌ |
 | 2026-09-13 | `luckyItem`·`luckyPlace` 가 오늘 기준으로 매일 바뀜 (조회마다 재계산) | ❌ |
 | 2026-09-13 | 궁합 `tier` 구간 변경: 90/75/61 경계 (25점 구간 아님) | ❌ |
 | 2026-09-13 | 결과 응답에 `zodiac`(십이간지 enum) 추가. `grade` 6단계 `SS S A+ A B+ B` 확정 | ❌ |
@@ -105,6 +107,34 @@
 ---
 
 ## 기록
+
+### 2026-09-13 (일) · 최선우 · compatibility/ · Codex
+
+**한 일**
+- 결과 생성 시 본인용 `resultId`와 공개 링크용 `shareId`를 함께 발급
+- `GET /api/shares/{shareId}` 공개 조회와 `POST /api/shares/{shareId}/compatibility` 구현
+- A의 `CompatibilityCalculator`는 호출만 하고 점수 공식은 수정하지 않음
+- 신규 조합 201, 기존 정·역방향 조합 200 및 재계산 방지
+- 점수 Tier 경계(90/75/61), 자기 궁합·UUID·없는 결과 예외 처리
+- Result 행 잠금과 V6 무순서 유니크 인덱스로 동시·역방향 중복 방지
+
+**건드린 파일/패키지**
+- `compatibility/` Controller, Service, Repository, DTO, Tier와 테스트
+- `result/` 공유 Controller·응답·Repository·ResultResponse, `db/migration/V6__add_result_share_id_and_unique_compatibility_pair.sql`
+
+**다음 사람이 알아야 할 것**
+- 친구 결과는 기존 `POST /api/results`로 만들고, 궁합 생성 후 `GET /api/shares/{shareId}`를 재조회하면 전체 친구 목록이 최신순으로 보임
+- 공유 조회 응답은 내부 `resultId`와 `shareId`를 노출하지 않음
+- 궁합 계산기는 A 담당 계약이므로 API 테스트에서는 mock 점수만 사용함
+
+**막힌 것 / 넘기는 것**
+- 로컬 `application-local.yml`의 DB 비밀번호 불일치로 실제 PostgreSQL 기동 검증은 못 했고 전체 단위 테스트는 통과
+
+**문서 변경**
+- `docs/api-spec.md`, `docs/architecture.md`, `docs/backend-requirements.md`, `docs/handoff.md` 갱신
+
+**프론트에 알려야 할 것**
+- path는 링크 주인의 `shareId`, body는 친구의 `guestResultId`. 신규 201, 기존 조합 200
 
 ### 2026-09-13 (일) · 차은호 · saju/ + result/ 등급 컷·운명 제목 (#17) · Claude Code
 

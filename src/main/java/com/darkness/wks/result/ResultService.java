@@ -6,6 +6,7 @@ import com.darkness.wks.compatibility.CompatibilityRepository;
 import com.darkness.wks.compatibility.entity.Compatibility;
 import com.darkness.wks.result.dto.CreateResultRequest;
 import com.darkness.wks.result.dto.ResultResponse;
+import com.darkness.wks.result.dto.SharedResultResponse;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.BirthDate;
@@ -68,6 +69,18 @@ public class ResultService {
         UUID id = parseResultId(resultId);
         Result result = resultRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
+        return getResultResponse(result);
+    }
+
+    public SharedResultResponse getSharedResult(String shareId) {
+        UUID id = parseResultId(shareId);
+        Result result = resultRepository.findByShareId(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
+        return SharedResultResponse.from(getResultResponse(result));
+    }
+
+    private ResultResponse getResultResponse(Result result) {
+        UUID id = result.getId();
         Reading reading = readingRepository.findById(id)
                 .orElseThrow(() -> new IllegalStateException("Reading not found for result: " + id));
         List<Compatibility> compatibilities = compatibilityRepository.findAllByResultIdOrderByCreatedAtDesc(id);

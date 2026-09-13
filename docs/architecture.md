@@ -130,16 +130,16 @@ saju    →  (스프링 컨텍스트)  금지
 
 | 파트 | 방식 |
 |---|---|
-| 사주·궁합 | **인증 없음.** `resultId`(UUIDv4)가 곧 열쇠 |
+| 사주·궁합 | **인증 없음.** 본인용 `resultId`, 공개 링크용 `shareId` 사용 |
 | 사전등록 | 학교 이메일 **매직링크**. 비밀번호·세션 없음 |
 
-### resultId를 열쇠로 쓰는 이유
+### UUID 링크 키를 쓰는 이유
 
 - QR 진입 후 회원가입 화면이 뜨면 절반이 이탈한다
 - 익명이어야 개인정보 부담이 없다
 - 친구 궁합은 "링크를 아는 사람"만 참여하면 되므로 URL 소유 = 권한으로 충분
 
-**보안 요구사항**: `resultId` 는 반드시 **UUIDv4**.
+**보안 요구사항**: `resultId`와 `shareId`는 반드시 **UUIDv4**.
 순번이면 남의 사주 결과를 전부 긁을 수 있다.
 
 ### 매직링크
@@ -162,6 +162,7 @@ Spring Security가 필요 없는 이유가 여기 있다. **인증 체인도 세
 ```sql
 CREATE TABLE result (
     id              UUID PRIMARY KEY,
+    share_id        UUID UNIQUE NOT NULL,
     nickname        VARCHAR(20)  NOT NULL,
     birth_date      DATE         NOT NULL,
     birth_time      TIME,                    -- NULL = 시간 모름
