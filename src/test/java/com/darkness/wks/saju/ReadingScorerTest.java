@@ -35,16 +35,16 @@ class ReadingScorerTest {
     @Test
     void gradeBoundaries() {
         assertThat(Grade.of(100)).isEqualTo(Grade.SS);
-        assertThat(Grade.of(88)).isEqualTo(Grade.SS);
-        assertThat(Grade.of(87)).isEqualTo(Grade.S);
-        assertThat(Grade.of(76)).isEqualTo(Grade.S);
-        assertThat(Grade.of(75)).isEqualTo(Grade.A_PLUS);
-        assertThat(Grade.of(64)).isEqualTo(Grade.A_PLUS);
-        assertThat(Grade.of(63)).isEqualTo(Grade.A);
-        assertThat(Grade.of(52)).isEqualTo(Grade.A);
-        assertThat(Grade.of(51)).isEqualTo(Grade.B_PLUS);
-        assertThat(Grade.of(40)).isEqualTo(Grade.B_PLUS);
-        assertThat(Grade.of(39)).isEqualTo(Grade.B);
+        assertThat(Grade.of(94)).isEqualTo(Grade.SS);
+        assertThat(Grade.of(93)).isEqualTo(Grade.S);
+        assertThat(Grade.of(84)).isEqualTo(Grade.S);
+        assertThat(Grade.of(83)).isEqualTo(Grade.A_PLUS);
+        assertThat(Grade.of(74)).isEqualTo(Grade.A_PLUS);
+        assertThat(Grade.of(73)).isEqualTo(Grade.A);
+        assertThat(Grade.of(64)).isEqualTo(Grade.A);
+        assertThat(Grade.of(63)).isEqualTo(Grade.B_PLUS);
+        assertThat(Grade.of(52)).isEqualTo(Grade.B_PLUS);
+        assertThat(Grade.of(51)).isEqualTo(Grade.B);
         assertThat(Grade.of(0)).isEqualTo(Grade.B);
     }
 }

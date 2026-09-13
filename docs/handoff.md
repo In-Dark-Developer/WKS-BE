@@ -21,7 +21,7 @@
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ❌ |
 | main(프로덕션) 배포 상태 | ❌ 미배포 |
 | `/api/health` (배포 도메인) | ❌ |
-| Flyway 최신 버전 | V5 |
+| Flyway 최신 버전 | V6 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ❌ |
 
@@ -43,8 +43,9 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V5 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
-| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR (#14) |
+| V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
+| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | PR (#17) |
+| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR #15 |
 | V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
 | V1 | 곽도윤 | init schema (5개 테이블) | 예정 |
@@ -115,11 +116,11 @@
 - A의 `CompatibilityCalculator`는 호출만 하고 점수 공식은 수정하지 않음
 - 신규 조합 201, 기존 정·역방향 조합 200 및 재계산 방지
 - 점수 Tier 경계(90/75/61), 자기 궁합·UUID·없는 결과 예외 처리
-- Result 행 잠금과 V5 무순서 유니크 인덱스로 동시·역방향 중복 방지
+- Result 행 잠금과 V6 무순서 유니크 인덱스로 동시·역방향 중복 방지
 
 **건드린 파일/패키지**
 - `compatibility/` Controller, Service, Repository, DTO, Tier와 테스트
-- `result/` 공유 Controller·응답·Repository·ResultResponse, `db/migration/V5__add_result_share_id_and_unique_compatibility_pair.sql`
+- `result/` 공유 Controller·응답·Repository·ResultResponse, `db/migration/V6__add_result_share_id_and_unique_compatibility_pair.sql`
 
 **다음 사람이 알아야 할 것**
 - 친구 결과는 기존 `POST /api/results`로 만들고, 궁합 생성 후 `GET /api/shares/{shareId}`를 재조회하면 전체 친구 목록이 최신순으로 보임
@@ -130,10 +131,41 @@
 - 로컬 `application-local.yml`의 DB 비밀번호 불일치로 실제 PostgreSQL 기동 검증은 못 했고 전체 단위 테스트는 통과
 
 **문서 변경**
-- 기존 `docs/api-spec.md` 명세와 동일하여 변경 없음. `docs/handoff.md`만 갱신
+- `docs/api-spec.md`, `docs/architecture.md`, `docs/backend-requirements.md`, `docs/handoff.md` 갱신
 
 **프론트에 알려야 할 것**
 - path는 링크 주인의 `shareId`, body는 친구의 `guestResultId`. 신규 201, 기존 조합 200
+
+### 2026-09-13 (일) · 차은호 · saju/ + result/ 등급 컷·운명 제목 (#17) · Claude Code
+
+**한 일**
+- 등급 컷을 기획 확정값으로: SS 94 / S 84 / A+ 74 / A 64 / B+ 52 (`Grade.of`)
+- `ReadingScorer` 에 기둥 가중치(년 0.7·월 1.3·일 1.0·시 0.9, 지지 0.85) 적용 → 십성 합이 소수가 되어 점수 계단이 줄어듦 (점수 종류 결혼 57→66, 자녀 26→43, 연애 39→59). 이어서 카테고리별 선형 보정(중앙값 74, 표준편차 약 14). 자녀 식에 시주 천간 관계 보너스와 인성 감점을 추가해 재료를 늘림(같은 점수에 9% 몰리던 것이 3~4% 이하로, 100점 잘림 9.5%→5.6%). 1950~2010 고유 팔자 8,225개 기준 분포: 보정 후 양 끝은 잘라내지 않고 90~100·0~10 구간에 지수적으로 눌러 펼침(100점 몰림 0%). 결혼 SS 5%·B 5%, 자녀 SS 9%·B 2%, 연애 SS 6%·B 4%. 상/하 각 약 50/50, 운명 8조합 각 8~19%. 분포 그래프는 `~/Workspace/WKS-BE-analysis/score-distribution.html` (레포 밖)
+- 운명 제목 8종을 코드 표로: `DestinyTitle.of(m, c, l)` — 결혼·자녀·연애 상(A+ 이상)/하 조합. 제목은 `resources/destiny-titles.txt` (**임시값, 영채 확정 후 교체**)
+- `destinyTitle` 을 Gemini 스키마에서 제거. `reading.destiny_title` 삭제(V5). 조회 시 점수로 계산
+- 결혼·자녀·연애 문장을 기획 요구대로 **8~10문장**(문장마다 `\n`)으로. 스모크: 약 450자/항목, 9.2초, 1,432토큰/건 (이전 3초·850토큰). 30초 SLA 안. 비용 약 3원/건
+- 읽기 쉽게 프롬프트 조정: 짧은 문장, 사주 용어·팔자 글자 금지, 어미 다양화, 축제 행동 조언 제외(기획). **이 버전은 스모크 못 돌림 — 아래 한도 초과**
+- **무료 티어 한도 실측 (Day 6 항목 조기 확인)**: `429 RESOURCE_EXHAUSTED ... generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash`. 오늘 호출 약 18건 만에 막힘 → **무료 티어는 하루 20건 수준**. 축제 트래픽 불가. 결제 연결(Tier 1) 필수 — 곽도윤. 429 는 재시도 안 하도록 수정
+- 테스트 54건
+
+**건드린 파일/패키지**
+- `saju/`: `Grade`, `ReadingScorer`, `DestinyTitle`(신규), `Reading`, `ReadingGenerator`, 프롬프트, `destiny-titles.txt`
+- `result/`(최선우 리뷰): `ResultAnalysisPort`(`Destiny` 레코드 제거 → `destinyDescription`), 어댑터 2개, `ResultService`, `entity/Reading`, `dto/ResultResponse`, V5
+
+**다음 사람이 알아야 할 것**
+- 이제 저장되는 해석 텍스트는 운명 설명 + 결혼·자녀·연애 문장 4개뿐. 제목·등급·행운은 전부 점수·날짜에서 계산
+- 등급 컷이나 제목 문구를 바꿔도 마이그레이션 없음. `Grade.of` 또는 `destiny-titles.txt` 만
+- 가중치를 바꾸면 보정 상수(`calibrate` 의 중앙값·scale)도 다시 잰다. 측정 스크립트는 scratch 라 없음 — 그리드로 원점수 중앙값·표준편차 재계산하면 됨
+
+**막힌 것 / 넘기는 것**
+- 영채: 운명 제목 8개 문구
+- 최선우: `result/` 변경 리뷰 (PR 은 #15 위에 쌓임)
+
+**문서 변경**
+- `docs/api-spec.md` §2 (등급 컷·제목 8종), `docs/architecture.md` §5·§6, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (필드 구조 동일)
 
 ### 2026-09-13 (일) · 차은호 · saju/ + result/ 오늘의 행운 (#14) · Claude Code
 

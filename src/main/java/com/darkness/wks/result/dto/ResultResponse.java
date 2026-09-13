@@ -6,6 +6,7 @@ import com.darkness.wks.result.FortuneCategory;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.DailyLucky;
+import com.darkness.wks.saju.DestinyTitle;
 import com.darkness.wks.saju.Grade;
 import com.darkness.wks.saju.SajuPillars;
 import com.darkness.wks.saju.Zodiac;
@@ -59,7 +60,9 @@ public record ResultResponse(
                 result.getShareId(),
                 result.getNickname(),
                 Zodiac.fromYearPillar(result.getYearPillar()),
-                new DestinyResponse(reading.getDestinyTitle(), reading.getDestinyContent()),
+                new DestinyResponse(
+                        DestinyTitle.of(reading.getMarriageScore(), reading.getChildrenScore(), reading.getLoveScore()),
+                        reading.getDestinyContent()),
                 List.of(
                         new FortuneResponse(
                                 FortuneCategory.MARRIAGE,
@@ -83,7 +86,7 @@ public record ResultResponse(
 
     @Schema(description = "운명 제목과 설명")
     public record DestinyResponse(
-            @Schema(example = "깔깔깔깔깔깔깔깔깔") String title,
+            @Schema(description = "결혼·자녀·연애 상/하 조합 8종 중 하나", example = "사랑이 앞서 걷는 길") String title,
             @Schema(example = "당신은 특별한 운명을 타고났습니다.") String description
     ) {
     }

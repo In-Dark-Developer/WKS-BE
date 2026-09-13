@@ -52,8 +52,7 @@ public class ResultService {
         ResultAnalysisPort.Fortune love = analysis.fortune(FortuneCategory.LOVE);
         Reading reading = new Reading(
                 result,
-                analysis.destiny().title(),
-                analysis.destiny().description(),
+                analysis.destinyDescription(),
                 marriage.score(),
                 marriage.content(),
                 children.score(),

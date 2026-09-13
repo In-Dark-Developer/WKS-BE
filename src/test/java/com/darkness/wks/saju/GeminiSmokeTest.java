@@ -29,7 +29,6 @@ class GeminiSmokeTest {
                 Map.of(ReadingCategory.MARRIAGE, Grade.SS, ReadingCategory.CHILDREN, Grade.A_PLUS, ReadingCategory.LOVE, Grade.B));
 
         System.out.println(r);
-        assertThat(r.destinyTitle()).isNotBlank();
         assertThat(r.destinyDescription()).isNotBlank();
         assertThat(r.contents()).containsKeys(ReadingCategory.MARRIAGE, ReadingCategory.CHILDREN, ReadingCategory.LOVE);
     }

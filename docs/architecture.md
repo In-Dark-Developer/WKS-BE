@@ -177,8 +177,7 @@ CREATE TABLE result (
 
 CREATE TABLE reading (
     result_id          UUID         PRIMARY KEY REFERENCES result(id) ON DELETE CASCADE,
-    destiny_title      VARCHAR(100) NOT NULL,
-    destiny_content    TEXT         NOT NULL,
+    destiny_content    TEXT         NOT NULL,   -- 운명 제목은 저장하지 않는다. 점수 상/하 조합 8종으로 조회 시 계산 (saju/DestinyTitle)
     marriage_score     SMALLINT     NOT NULL,   -- 0~100. 등급은 응답 시 Grade.of(score)
     marriage_content   TEXT         NOT NULL,
     children_score     SMALLINT     NOT NULL,
@@ -238,7 +237,8 @@ CreateResultRequest
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
   → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
-  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명·결혼·자녀·연애 문장만)
+  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명 설명·결혼·자녀·연애 문장만)
+  → DestinyTitle        조회 시: 점수 상/하 조합 → 운명 제목 8종   ← 코드 표
   → ReadingRepository   저장
   → DailyLucky          조회 시: 일간 vs 오늘 일진 천간(십성) → 행운 오행 → 아이템·장소   ← 코드, 매일 변경
 ```

@@ -128,13 +128,12 @@ class ResultServiceTest {
     private Reading reading(Result result) {
         return new Reading(
                 result,
-                "운명 제목",
                 "운명 설명",
-                90,
+                95, // SS (컷 94)
                 "결혼운 설명",
-                70,
+                75, // A+ (컷 74)
                 "자녀운 설명",
-                30,
+                30, // B
                 "연애운 설명"
         );
     }
