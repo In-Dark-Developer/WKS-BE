@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 public class ReadingGenerator {
 
     private static final List<String> FIELDS =
-            List.of("destinyTitle", "destinyDescription", "marriage", "children", "love");
+            List.of("destinyDescription", "marriage", "children", "love");
     private static final String SYSTEM_PROMPT = loadResource("prompts/reading-system.txt");
     private static final Schema RESPONSE_SCHEMA = Schema.builder()
             .type(Type.Known.OBJECT)
@@ -110,7 +110,7 @@ public class ReadingGenerator {
         contents.put(ReadingCategory.MARRIAGE, m.get("marriage"));
         contents.put(ReadingCategory.CHILDREN, m.get("children"));
         contents.put(ReadingCategory.LOVE, m.get("love"));
-        return new Reading(m.get("destinyTitle"), m.get("destinyDescription"), contents);
+        return new Reading(m.get("destinyDescription"), contents);
     }
 
     private static String loadResource(String path) {

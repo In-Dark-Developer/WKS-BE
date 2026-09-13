@@ -39,7 +39,7 @@ public class SajuResultAnalysisAdapter implements ResultAnalysisPort {
 
         return new AnalysisResult(
                 pillars,
-                new Destiny(reading.destinyTitle(), reading.destinyDescription()),
+                reading.destinyDescription(),
                 List.of(
                         fortune(FortuneCategory.MARRIAGE, ReadingCategory.MARRIAGE, scores, reading),
                         fortune(FortuneCategory.CHILDREN, ReadingCategory.CHILDREN, scores, reading),

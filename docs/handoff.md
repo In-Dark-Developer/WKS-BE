@@ -43,7 +43,8 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR (#14) |
+| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | PR (#17) |
+| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR #15 |
 | V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
 | V1 | 곽도윤 | init schema (5개 테이블) | 예정 |
@@ -104,6 +105,34 @@
 ---
 
 ## 기록
+
+### 2026-09-13 (일) · 차은호 · saju/ + result/ 등급 컷·운명 제목 (#17) · Claude Code
+
+**한 일**
+- 등급 컷을 기획 확정값으로: SS 94 / S 84 / A+ 74 / A 64 / B+ 52 (`Grade.of`)
+- `ReadingScorer` 출력을 카테고리별 선형 보정(중앙값 74, 표준편차 약 14)해 새 컷에서 등급이 고르게 나오도록 함. 1950~2010 고유 팔자 8,225개 기준 분포: 결혼 SS 8%·B 5%, 자녀 SS 12%·B 0%(원점수가 계단식이라 최하 등급 없음), 연애 SS 10%·B 3%. 상/하 는 각 카테고리 약 50/50, 운명 8조합 각 7~21%
+- 운명 제목 8종을 코드 표로: `DestinyTitle.of(m, c, l)` — 결혼·자녀·연애 상(A+ 이상)/하 조합. 제목은 `resources/destiny-titles.txt` (**임시값, 영채 확정 후 교체**)
+- `destinyTitle` 을 Gemini 스키마에서 제거. `reading.destiny_title` 삭제(V5). 조회 시 점수로 계산
+- 테스트 54건
+
+**건드린 파일/패키지**
+- `saju/`: `Grade`, `ReadingScorer`, `DestinyTitle`(신규), `Reading`, `ReadingGenerator`, 프롬프트, `destiny-titles.txt`
+- `result/`(최선우 리뷰): `ResultAnalysisPort`(`Destiny` 레코드 제거 → `destinyDescription`), 어댑터 2개, `ResultService`, `entity/Reading`, `dto/ResultResponse`, V5
+
+**다음 사람이 알아야 할 것**
+- 이제 저장되는 해석 텍스트는 운명 설명 + 결혼·자녀·연애 문장 4개뿐. 제목·등급·행운은 전부 점수·날짜에서 계산
+- 등급 컷이나 제목 문구를 바꿔도 마이그레이션 없음. `Grade.of` 또는 `destiny-titles.txt` 만
+- 가중치를 바꾸면 보정 상수(`calibrate` 의 중앙값·scale)도 다시 잰다. 측정 스크립트는 scratch 라 없음 — 그리드로 원점수 중앙값·표준편차 재계산하면 됨
+
+**막힌 것 / 넘기는 것**
+- 영채: 운명 제목 8개 문구
+- 최선우: `result/` 변경 리뷰 (PR 은 #15 위에 쌓임)
+
+**문서 변경**
+- `docs/api-spec.md` §2 (등급 컷·제목 8종), `docs/architecture.md` §5·§6, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (필드 구조 동일)
 
 ### 2026-09-13 (일) · 차은호 · saju/ + result/ 오늘의 행운 (#14) · Claude Code
 

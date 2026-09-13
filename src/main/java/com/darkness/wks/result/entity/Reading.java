@@ -31,9 +31,6 @@ public class Reading {
     @JoinColumn(name = "result_id")
     private Result result;
 
-    @Column(name = "destiny_title", length = 100, nullable = false)
-    private String destinyTitle;
-
     @Column(name = "destiny_content", nullable = false, columnDefinition = "TEXT")
     private String destinyContent;
 
@@ -61,7 +58,6 @@ public class Reading {
 
     public Reading(
             Result result,
-            String destinyTitle,
             String destinyContent,
             int marriageScore,
             String marriageContent,
@@ -71,7 +67,6 @@ public class Reading {
             String loveContent
     ) {
         this.result = result;
-        this.destinyTitle = destinyTitle;
         this.destinyContent = destinyContent;
         this.marriageScore = (short) marriageScore;
         this.marriageContent = marriageContent;

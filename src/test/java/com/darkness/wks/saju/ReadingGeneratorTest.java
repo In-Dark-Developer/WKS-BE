@@ -29,15 +29,15 @@ class ReadingGeneratorTest {
     @Test
     void parsesCompleteJson() {
         Reading r = new ReadingGenerator(null, "m").parse("""
-                {"destinyTitle":"달빛 실","destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애"}""");
-        assertThat(r.destinyTitle()).isEqualTo("달빛 실");
+                {"destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애"}""");
+        assertThat(r.destinyDescription()).isEqualTo("설명");
         assertThat(r.contents()).containsEntry(ReadingCategory.LOVE, "연애");
     }
 
     @Test
     void rejectsMissingFieldOrBrokenJson() {
         ReadingGenerator g = new ReadingGenerator(null, "m");
-        assertThatThrownBy(() -> g.parse("{\"destinyTitle\":\"x\"}")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> g.parse("{\"destinyDescription\":\"x\"}")).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> g.parse("not json")).isInstanceOf(RuntimeException.class);
         assertThatThrownBy(() -> g.parse(null)).isInstanceOf(IllegalStateException.class);
     }
