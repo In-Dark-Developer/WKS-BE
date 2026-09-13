@@ -63,10 +63,18 @@ public class ReadingScorer {
         }
 
         Map<ReadingCategory, Integer> result = new EnumMap<>(ReadingCategory.class);
-        result.put(ReadingCategory.MARRIAGE, clamp(marriage));
-        result.put(ReadingCategory.CHILDREN, clamp(children));
-        result.put(ReadingCategory.LOVE, clamp(love));
+        result.put(ReadingCategory.MARRIAGE, calibrate(marriage, 68, 0.86));
+        result.put(ReadingCategory.CHILDREN, calibrate(children, 58, 0.78));
+        result.put(ReadingCategory.LOVE, calibrate(love, 60, 0.95));
         return result;
+    }
+
+    /**
+     * 원점수를 중앙값 74(상/하 경계 = A+ 컷), 표준편차 약 14 로 선형 보정한다.
+     * ponytail: 1950~2010 고유 팔자 8,225개의 원점수 중앙값·표준편차에서 나온 상수. 가중치를 바꾸면 Stats 로 다시 잰다
+     */
+    private static int calibrate(int raw, int median, double scale) {
+        return clamp((int) Math.round(74 + (raw - median) * scale));
     }
 
     /** 일간 오행 → 대상 오행의 십성 역할 (0 비겁, 1 식상, 2 재성, 3 관성, 4 인성). 상생 순환에서 몇 칸 뒤인지 */

@@ -3,6 +3,7 @@ package com.darkness.wks.saju;
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.google.genai.Client;
+import com.google.genai.errors.ApiException;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
@@ -38,7 +39,7 @@ import java.util.stream.Collectors;
 public class ReadingGenerator {
 
     private static final List<String> FIELDS =
-            List.of("destinyTitle", "destinyDescription", "marriage", "children", "love");
+            List.of("destinyDescription", "marriage", "children", "love");
     private static final String SYSTEM_PROMPT = loadResource("prompts/reading-system.txt");
     private static final Schema RESPONSE_SCHEMA = Schema.builder()
             .type(Type.Known.OBJECT)
@@ -64,6 +65,9 @@ public class ReadingGenerator {
                 return call(prompt);
             } catch (RuntimeException e) { // SDK 예외(ApiException·GenAiIOException)·Jackson·필드 누락 전부 unchecked
                 log.warn("gemini failed. attempt={} type={} message={}", attempt, e.getClass().getSimpleName(), e.getMessage());
+                if (e instanceof ApiException api && api.code() == 429) {
+                    break; // 한도 초과는 바로 재시도해도 실패하고 한도만 더 태운다 (FR-GM-04)
+                }
             }
         }
         throw new BusinessException(ErrorCode.LLM_UNAVAILABLE);
@@ -110,7 +114,7 @@ public class ReadingGenerator {
         contents.put(ReadingCategory.MARRIAGE, m.get("marriage"));
         contents.put(ReadingCategory.CHILDREN, m.get("children"));
         contents.put(ReadingCategory.LOVE, m.get("love"));
-        return new Reading(m.get("destinyTitle"), m.get("destinyDescription"), contents);
+        return new Reading(m.get("destinyDescription"), contents);
     }
 
     private static String loadResource(String path) {

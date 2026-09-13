@@ -19,7 +19,7 @@ public interface ResultAnalysisPort {
 
     record AnalysisResult(
             SajuPillars pillars,
-            Destiny destiny,
+            String destinyDescription,
             List<Fortune> fortunes
     ) {
 
@@ -29,9 +29,6 @@ public interface ResultAnalysisPort {
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("Missing fortune: " + category));
         }
-    }
-
-    record Destiny(String title, String description) {
     }
 
     /** score 는 0~100. 등급은 응답 시 {@code Grade.of(score)} 로 만든다 */
