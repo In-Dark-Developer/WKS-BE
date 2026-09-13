@@ -110,7 +110,7 @@
 - `gradlew` 실행 권한 추가 (기존 644 라 `./gradlew` 실행 불가였음)
 
 **건드린 파일/패키지**
-- `saju/SajuCalculator.java`, `saju/KoreanLunarCalendar.java`, 테스트 2개
+- `saju/SajuCalculator.java`, `saju/KoreanLunarCalendar.java`, `saju/BirthDate.java`, `saju/CalendarType.java`, 테스트 3개
 - `build.gradle` (의존성 1줄), `gradlew` (파일 모드), `docs/architecture.md`, `docs/handoff.md`
 
 **다음 사람이 알아야 할 것**
@@ -123,7 +123,7 @@
 
 **막힌 것 / 넘기는 것**
 - 기획 결정 대기 2건: 자시 두 칸 분리, 지역 입력 유지 여부 (음력은 확정)
-- 최선우: `CreateResultRequest` 에 `calendarType`·`isLeapMonth` 추가 + `LUNAR` 면 `KoreanLunarCalendar.toSolar()` 로 변환 후 `analyze()` 호출
+- 최선우: `CreateResultRequest` 에 `CalendarType calendarType`(saju 패키지 enum)·`Boolean isLeapMonth` 추가, `birthDate` 를 `String` 으로. `BirthDate.parse(...).toSolar()` 결과(양력)를 `analyze()` 와 `Result` 저장에 사용
 - `saju/` 출력 형태 미확정: `ReadingCategory` 5종(점수) vs `result/ResultAnalysisPort` (운명 + 결혼·자녀·연애 등급 + 행운 아이템·장소). 등급 문자열 집합·산출 기준도 미정. 이게 정해져야 `ReadingScorer`·`ReadingGenerator` 착수 가능
 - TR-01 대체: 포스텔러 만세력 2.2 와 7건 대조(입춘 전후·자시·시진 경계·설날) 전부 일치, `SajuCalculatorTest.matchesPosteller` 에 고정. 실제 인물 데이터가 생기면 추가
 
@@ -136,7 +136,8 @@
 - **자시는 두 칸으로 분리 요청**: `자시 00:00~01:30` → `00:45`, `자시 23:30~24:00` → `23:45`. 자정을 걸쳐서 날짜+자시만으로는 새벽/밤 구분이 안 되고, 둘은 일주가 하루 다름
 - 시진 단위 입력이면 `birthRegion` 은 결과에 영향 없음(지역 보정 −24~−34분이 칸 경계에 안 닿음). 프론트에서 빼도 됨, nullable 이라 백엔드 변경 없음
 - `birthTime: null` = 시간 모름, 3주 계산
-- **음력 지원 확정(9/13 기획)**. api-spec §2 에 `calendarType`·`isLeapMonth` 추가함. `CreateResultRequest` 필드 추가와 `KoreanLunarCalendar.toSolar()` 호출은 최선우(`result/`) 작업. `IllegalArgumentException` → `INVALID_INPUT` 매핑 필요
+- **음력 지원 확정(9/13 기획)**. api-spec §2 에 `calendarType`·`isLeapMonth` 추가함. 변환은 `saju/BirthDate` 가 맡는다:
+  `BirthDate.parse(calendarType, "yyyy-MM-dd", isLeapMonth).toSolar()` → 양력 `LocalDate`. 음력 2월 30일처럼 `LocalDate` 로 못 담는 날짜가 있어 **DTO 의 `birthDate` 는 `String` 이어야 한다**. 잘못된 날짜·윤달은 `IllegalArgumentException` → `INVALID_INPUT` 매핑 필요
 - 알려진 한계: 절입 순간이 선택 칸 안에 걸리면 월주가 옆 값 (약 1/700). 분 단위 입력 없인 어느 서비스든 동일
 
 ### 2026-09-13 (일) · 차은호 · saju/ 도입 검증 · Codex
