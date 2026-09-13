@@ -35,6 +35,7 @@
 | Migration | Flyway (`ddl-auto: validate`) |
 | Mail | Spring Mail (SMTP) |
 | LLM | **Gemini Flash** via `com.google.genai:google-genai` (무료 티어) |
+| 만세력 | `cn.6tail:lunar` (MIT) + 한국 음력표 `saju/KoreanLunarCalendar` |
 | API Docs | **springdoc-openapi 3.1.1** |
 | Monitoring | Actuator |
 | Test | JUnit5, Mockito, Testcontainers |
@@ -234,7 +235,8 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 
 ```
 CreateResultRequest
-  → SajuCalculator      절기·진태양시 보정 → 팔자 4주
+  → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
+  → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
   → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
   → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM
   → ReadingRepository   저장
@@ -251,7 +253,15 @@ CreateResultRequest
 ### 시간·지역 모름
 
 - `birth_time` NULL → 시주 생략, 3주로 해석. 응답에 `hourUnknown: true`
-- `birth_region` NULL → 서울 기준(경도 127°) 진태양시 보정
+- 출생 지역은 받지 않는다(9/13 기획 결정, 시진 단위 입력이라 무의미). `birth_region` 은 항상 NULL 이고 서울 경도(126.978°) 기준으로 진태양시 보정한다. `SajuCalculator` 는 지역 파라미터를 남겨 두었으므로 분 단위 입력으로 바뀌면 그대로 살릴 수 있다
+- `birth_time` NULL → 정오 기준으로 연·월·일주 판정
+- 진태양시 23시(자시 시작) 이후는 다음날 일주·시주로 본다 — 포스텔러 기본값과 동일. 균시차·과거 표준시·서머타임은 보정하지 않는다
+
+### 만세력 — lunar-java
+
+`cn.6tail:lunar` 는 **GMT+8 벽시계 기준**이다. 절기(연주·월주)는 KST−1h 로 넣어 판정하고,
+일주·시주는 출생지 진태양시로 따로 계산한다. **음력은 중국 기준이라 쓰지 않는다** —
+한국 음력 변환은 `KoreanLunarCalendar`(KASI 표, 1940~2030) 가 맡는다.
 
 ### LLM 연동 — Gemini Flash 무료 티어
 
@@ -324,7 +334,6 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 
 | 항목 | 시점 | 담당 |
 |---|---|---|
-| 만세력 라이브러리 (MIT/Apache) | **Day 1** | 차은호 |
 | Gemini 모델명·타임아웃 값 | Day 2 | 차은호 |
 | Gemini 무료 티어 RPM·RPD 실측 | Day 6 | 차은호 |
 | 무료 티어 한도 부족 시 결제 계정 연결 여부 | Day 6 | 곽도윤 |

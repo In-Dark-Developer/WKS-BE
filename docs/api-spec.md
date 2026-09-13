@@ -58,9 +58,10 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ```json
 {
   "nickname": "도윤",
+  "calendarType": "SOLAR",
   "birthDate": "2002-03-14",
+  "isLeapMonth": false,
   "birthTime": "14:30",
-  "birthRegion": "서울",
   "gender": "MALE"
 }
 ```
@@ -68,10 +69,23 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | 필드 | 검증 |
 |---|---|
 | `nickname` | 1~8자, 공백만 불가, 필수 |
-| `birthDate` | `yyyy-MM-dd`, 1950-01-01 ~ 오늘, 필수 |
+| `calendarType` | `SOLAR` \| `LUNAR`, 필수 |
+| `birthDate` | `yyyy-MM-dd`, 1950-01-01 ~ 오늘, 필수. `LUNAR` 면 음력 날짜 |
+| `isLeapMonth` | boolean. `LUNAR` 이고 윤달이면 `true`. 생략 시 `false`. `SOLAR` 면 무시 |
 | `birthTime` | `HH:mm` 또는 **null(모름)** |
-| `birthRegion` | 최대 50자 또는 **null(모름)** |
 | `gender` | `MALE` \| `FEMALE`, 필수 |
+
+**음력 입력**
+
+- 서버가 한국 음력(한국천문연구원 기준)으로 양력 변환 후 계산·저장한다. 응답과 저장값은 항상 양력
+- 존재하지 않는 음력 날짜(그 달에 없는 30일, 그 해에 없는 윤달) → 400 `INVALID_INPUT`
+
+**시간 입력 (프론트 시진 선택 UI 기준)**
+
+- 시진(2시간 단위)을 고르면 그 칸의 **가운데 시각**을 보낸다. 예: 묘시 05:30~07:30 → `"06:30"`
+- **자시는 두 칸으로 나눈다**: `자시 00:00~01:30` → `"00:45"`, `자시 23:30~24:00` → `"23:45"`.
+  자정을 걸치는 칸이라 날짜만으로는 새벽/밤 구분이 안 되고, 둘은 사주가 다르다
+- 출생 지역은 받지 않는다 (9/13 기획 결정). 시진 단위 입력이라 지역 시차 보정이 결과에 영향이 없다. 서버는 서울 경도 기준으로 계산한다
 
 **Response 201**
 
@@ -81,14 +95,15 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "data": {
     "resultId": "3f2a9c1e-....",
     "nickname": "도윤",
+    "zodiac": "HORSE",
     "destiny": {
       "title": "깔깔깔깔깔깔깔깔깔",
       "description": "당신은 특별한 운명을 타고났습니다. 앞으로 좋은 흐름을 맞이하게 됩니다."
     },
     "fortunes": [
-      { "category": "MARRIAGE", "grade": "SS+", "content": "결혼운에 대한 설명" },
-      { "category": "CHILDREN", "grade": "A+",  "content": "자녀운에 대한 설명" },
-      { "category": "LOVE",     "grade": "C+",  "content": "연애운에 대한 설명" }
+      { "category": "MARRIAGE", "grade": "SS", "content": "결혼운에 대한 설명" },
+      { "category": "CHILDREN", "grade": "A+", "content": "자녀운에 대한 설명" },
+      { "category": "LOVE",     "grade": "B",  "content": "연애운에 대한 설명" }
     ],
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대"
@@ -98,6 +113,9 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 - 화면의 고정 문구인 “당신의 운명은”은 프론트에서 표시한다
 - `fortunes` 순서는 `MARRIAGE` → `CHILDREN` → `LOVE`로 고정한다
+- `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
+  **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
+- `grade` 는 6단계 고정: `SS` `S` `A+` `A` `B+` `B` (높은 순, 2026-09-13 확정)
 - 사주 팔자는 저장하지만 API 응답에는 노출하지 않는다
 - 공유 URL은 프론트가 조립한다. 백엔드는 `resultId` 만 준다
 
@@ -118,6 +136,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "data": {
     "resultId": "3f2a9c1e-....",
     "nickname": "도윤",
+    "zodiac": "HORSE",
     "destiny": { "title": "깔깔깔깔깔깔깔깔깔", "description": "..." },
     "fortunes": [ ... ],
     "luckyItem": "파란색 팔찌",
