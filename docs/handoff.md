@@ -103,6 +103,30 @@
 
 ## 기록
 
+### 2026-09-13 (일) · 차은호 · saju/ 행운 오행 (#12) · Claude Code
+
+**한 일**
+- `Element` enum 추가: 천간·지지 → 오행, `Element.lacking(pillars)` = 팔자에서 가장 적은 오행(용신 근사). 결정적
+- 프롬프트에 "행운 오행: 토 (색: 황색·갈색)" 힌트 추가. Gemini 는 그 오행의 색·소재·장소 안에서 아이템·장소를 고름
+- `ReadingScorer` 의 오행 표를 `Element` 로 통합 (점수 변화 없음, 분포 재측정 동일)
+- 스모크: 행운 오행 토 → 아이템 "약과", 장소 "후문 언덕". 이전엔 3건 연속 "정각원"·청색 편향
+
+**건드린 파일/패키지**
+- `saju/Element.java`(신규), `saju/ReadingScorer.java`, `saju/ReadingGenerator.java`, `resources/prompts/reading-system.txt`, 테스트
+
+**다음 사람이 알아야 할 것**
+- 행운 오행은 "부족 오행 보충" 관행. 정통 용신(신강·신약 판단)은 유파별로 달라 채택 안 함
+- 응답에 행운 오행은 안 나감. 프론트가 "수 기운이 부족해서 파란색" 같은 문구를 원하면 `ResultResponse` 에 필드 추가만 하면 됨 (`Element.lacking(pillars)`)
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
+
 ### 2026-09-13 (일) · 차은호 · result/ 연결 초안 (#10, 최선우 리뷰용) · Claude Code
 
 **한 일**
