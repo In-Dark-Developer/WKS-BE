@@ -35,6 +35,7 @@
 | Migration | Flyway (`ddl-auto: validate`) |
 | Mail | Spring Mail (SMTP) |
 | LLM | **Gemini Flash** via `com.google.genai:google-genai` (무료 티어) |
+| 만세력 | `cn.6tail:lunar` (MIT) + 한국 음력표 `saju/KoreanLunarCalendar` |
 | API Docs | **springdoc-openapi 3.1.1** |
 | Monitoring | Actuator |
 | Test | JUnit5, Mockito, Testcontainers |
@@ -75,8 +76,8 @@ com.darkness.wks
 │
 ├── saju/                        AGENTS.md ○   차은호
 │   ├── SajuCalculator.java      생년월일시 → 팔자 (순수)
-│   ├── ReadingScorer.java       팔자 → 점수 (순수, 결정적)
-│   ├── ReadingGenerator.java    점수 → 보살 톤 문장 (LLM)
+│   ├── ReadingScorer.java       팔자 → 등급 (순수, 결정적)
+│   ├── ReadingGenerator.java    등급 → 보살 톤 문장 (LLM)
 │   ├── ReadingCategory.java
 │   └── dto/
 │
@@ -104,7 +105,7 @@ com.darkness.wks
 
 | 담당 | 패키지 | 핵심 과제 |
 |---|---|---|
-| **차은호** | `saju/` | 만세력 라이브러리 선정·연동, 점수 로직, 프롬프트 |
+| **차은호** | `saju/` | 만세력 라이브러리 선정·연동, 등급 로직, 프롬프트 |
 | **최선우** | `result/`, `compatibility/` | FE 연동 API, 궁합, 캐싱 |
 | **곽도윤** | `signup/`, `common/`, 인프라 | 메일·인증, Docker·CI·EC2·보안 |
 
@@ -129,16 +130,16 @@ saju    →  (스프링 컨텍스트)  금지
 
 | 파트 | 방식 |
 |---|---|
-| 사주·궁합 | **인증 없음.** `resultId`(UUIDv4)가 곧 열쇠 |
+| 사주·궁합 | **인증 없음.** 본인용 `resultId`, 공개 링크용 `shareId` 사용 |
 | 사전등록 | 학교 이메일 **매직링크**. 비밀번호·세션 없음 |
 
-### resultId를 열쇠로 쓰는 이유
+### UUID 링크 키를 쓰는 이유
 
 - QR 진입 후 회원가입 화면이 뜨면 절반이 이탈한다
 - 익명이어야 개인정보 부담이 없다
 - 친구 궁합은 "링크를 아는 사람"만 참여하면 되므로 URL 소유 = 권한으로 충분
 
-**보안 요구사항**: `resultId` 는 반드시 **UUIDv4**.
+**보안 요구사항**: `resultId`와 `shareId`는 반드시 **UUIDv4**.
 순번이면 남의 사주 결과를 전부 긁을 수 있다.
 
 ### 매직링크
@@ -154,13 +155,14 @@ Spring Security가 필요 없는 이유가 여기 있다. **인증 체인도 세
 
 ---
 
-## 5. DB 스키마 (v1)
+## 5. DB 스키마 (현재)
 
-> Flyway `V1__init.sql` 의 기준. **엔티티가 아니라 이 문서가 원본이다.**
+> Flyway 마이그레이션 적용 후의 기준. **엔티티가 아니라 이 문서가 원본이다.**
 
 ```sql
 CREATE TABLE result (
     id              UUID PRIMARY KEY,
+    share_id        UUID UNIQUE NOT NULL,
     nickname        VARCHAR(20)  NOT NULL,
     birth_date      DATE         NOT NULL,
     birth_time      TIME,                    -- NULL = 시간 모름
@@ -174,13 +176,16 @@ CREATE TABLE result (
 );
 
 CREATE TABLE reading (
-    id              BIGSERIAL PRIMARY KEY,
-    result_id       UUID         NOT NULL REFERENCES result(id) ON DELETE CASCADE,
-    category        VARCHAR(20)  NOT NULL,
-    score           SMALLINT     NOT NULL,
-    content         TEXT         NOT NULL,
-    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    UNIQUE (result_id, category)             -- 캐싱의 핵심
+    result_id          UUID         PRIMARY KEY REFERENCES result(id) ON DELETE CASCADE,
+    destiny_content    TEXT         NOT NULL,   -- 운명 제목은 저장하지 않는다. 점수 상/하 조합 8종으로 조회 시 계산 (saju/DestinyTitle)
+    marriage_score     SMALLINT     NOT NULL,   -- 0~100. 등급은 응답 시 Grade.of(score)
+    marriage_content   TEXT         NOT NULL,
+    children_score     SMALLINT     NOT NULL,
+    children_content   TEXT         NOT NULL,
+    love_score         SMALLINT     NOT NULL,
+    love_content       TEXT         NOT NULL,
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
+    -- 행운 아이템·장소는 저장하지 않는다. 조회 시 팔자 + 오늘 일진으로 계산 (saju/DailyLucky)
 );
 
 CREATE TABLE compatibility (
@@ -229,29 +234,43 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 
 ```
 CreateResultRequest
-  → SajuCalculator      절기·진태양시 보정 → 팔자 4주
-  → ReadingScorer       카테고리별 0~100점         ← 결정적
-  → ReadingGenerator    점수+팔자 → 보살 톤 문장    ← LLM
+  → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
+  → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
+  → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
+  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명 설명·결혼·자녀·연애 문장만)
+  → DestinyTitle        조회 시: 점수 상/하 조합 → 운명 제목 8종   ← 코드 표
   → ReadingRepository   저장
+  → DailyLucky          조회 시: 일간 vs 오늘 일진 천간(십성) → 행운 오행 → 아이템·장소   ← 코드, 매일 변경
 ```
 
-**점수는 코드가, 문장은 AI가.** 이 경계가 흐려지면:
-같은 사주에 다른 점수가 나와 신뢰가 깨지고, 테스트가 불가능해지고, 비용과 지연이 늘어난다.
+**등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:
+같은 사주에 다른 등급이 나와 신뢰가 깨지고, 테스트가 불가능해지고, 비용과 지연이 늘어난다.
 
 ### 캐싱
 
-`reading` 의 `(result_id, category)` UNIQUE.
+`reading.result_id`가 PK이므로 Result당 해석은 한 행만 저장한다.
 값이 있으면 **LLM을 호출하지 않는다.** 예외 없음.
 
 ### 시간·지역 모름
 
 - `birth_time` NULL → 시주 생략, 3주로 해석. 응답에 `hourUnknown: true`
-- `birth_region` NULL → 서울 기준(경도 127°) 진태양시 보정
+- 출생 지역은 받지 않는다(9/13 기획 결정, 시진 단위 입력이라 무의미). `birth_region` 은 항상 NULL 이고 서울 경도(126.978°) 기준으로 진태양시 보정한다. `SajuCalculator` 는 지역 파라미터를 남겨 두었으므로 분 단위 입력으로 바뀌면 그대로 살릴 수 있다
+- `birth_time` NULL → 정오 기준으로 연·월·일주 판정
+- 진태양시 23시(자시 시작) 이후는 다음날 일주·시주로 본다 — 포스텔러 기본값과 동일. 균시차·과거 표준시·서머타임은 보정하지 않는다
+
+### 만세력 — lunar-java
+
+`cn.6tail:lunar` 는 **GMT+8 벽시계 기준**이다. 절기(연주·월주)는 KST−1h 로 넣어 판정하고,
+일주·시주는 출생지 진태양시로 따로 계산한다. **음력은 중국 기준이라 쓰지 않는다** —
+한국 음력 변환은 `KoreanLunarCalendar`(KASI 표, 1940~2030) 가 맡는다.
 
 ### LLM 연동 — Gemini Flash 무료 티어
 
 SDK: `com.google.genai:google-genai` (Gemini Developer API).
 API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
+모델 `gemini-3.6-flash` (설정 `gemini.model`), 타임아웃 30초 (`gemini.timeout-seconds`).
+`gemini-2.5-flash` 는 2026-09 기준 신규 키에 404 ("no longer available to new users").
+3.x 는 `thinkingBudget` 을 거부하므로 `thinkingLevel: MINIMAL` 로 사고 토큰을 줄인다.
 
 > SDK 2.0.0부터 Java 17 이상이 필수다. 우리는 Java 17이라 문제없다.
 
@@ -260,7 +279,7 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 무료 티어에서는 프롬프트와 응답이 Google 제품 개선에 사용될 수 있다(사람 검토 포함).
 유료 티어는 사용되지 않는다.
 
-우리 파이프라인은 이미 팔자를 코드로 계산하므로, **LLM에는 팔자와 점수만 보낸다.**
+우리 파이프라인은 이미 팔자를 코드로 계산하므로, **LLM에는 팔자와 등급만 보낸다.**
 생년월일·시간·지역·닉네임을 프롬프트에 넣지 마라. 팔자(`갑진`, `계묘`)만으로는 역산이 사실상 불가능하다.
 
 ```
@@ -277,8 +296,8 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 여기서 터질 가능성이 높다.
 
 대응:
-- 캐싱이 1차 방어선이다. `(result_id, category)` UNIQUE로 재호출을 원천 차단
-- **한 결과에 5개 카테고리를 개별 호출하지 말고, 한 번의 호출로 5개를 함께 생성**한다.
+- 캐싱이 1차 방어선이다. `reading.result_id` PK로 재호출을 원천 차단
+- **운명 콘텐츠를 항목별로 개별 호출하지 말고, 한 번의 호출로 전부 생성**한다.
   호출 수가 1/5로 줄어든다. JSON으로 받아 파싱
 - 429를 `LLM_UNAVAILABLE` 503으로 변환하고, 팔자는 저장해 재시도 가능하게
 - Day 6 부하 테스트에서 **실제 RPM 한도를 확인**한다. 모델·시점에 따라 다르다
@@ -293,10 +312,12 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 
 | 점수 | Tier | 표기 |
 |---|---|---|
-| 76~100 | `GUIIN` | 귀인 |
-| 51~75 | `CHALTTEOK` | 찰떡 |
-| 26~50 | `BEOT` | 벗 |
-| 0~25 | `SEUCHIM` | 스침 |
+| 90~100 | `GUIIN` | 귀인 |
+| 75~89 | `CHALTTEOK` | 찰떡 |
+| 61~74 | `BEOT` | 벗 |
+| 0~60 | `SEUCHIM` | 스침 |
+
+2026-09-13 기획 확정. 25점 균등 구간이 아니다.
 
 `CompatibilityCalculator` 는 순수 함수. `score(A,B) == score(B,A)` 가 성립해야 한다.
 
@@ -319,8 +340,6 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 
 | 항목 | 시점 | 담당 |
 |---|---|---|
-| 만세력 라이브러리 (MIT/Apache) | **Day 1** | 차은호 |
-| Gemini 모델명·타임아웃 값 | Day 2 | 차은호 |
 | Gemini 무료 티어 RPM·RPD 실측 | Day 6 | 차은호 |
 | 무료 티어 한도 부족 시 결제 계정 연결 여부 | Day 6 | 곽도윤 |
 | 프롬프트 톤 확정 | Day 2 밤 | 차은호 + 기획 |

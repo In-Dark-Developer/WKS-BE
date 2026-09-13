@@ -58,20 +58,34 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ```json
 {
   "nickname": "도윤",
+  "calendarType": "SOLAR",
   "birthDate": "2002-03-14",
+  "isLeapMonth": false,
   "birthTime": "14:30",
-  "birthRegion": "서울",
   "gender": "MALE"
 }
 ```
 
 | 필드 | 검증 |
 |---|---|
-| `nickname` | 1~20자, 공백만 불가, 필수 |
-| `birthDate` | `yyyy-MM-dd`, 1950-01-01 ~ 오늘, 필수 |
+| `nickname` | 1~8자, 공백만 불가, 필수 |
+| `calendarType` | `SOLAR` \| `LUNAR`, 필수 |
+| `birthDate` | `yyyy-MM-dd`, 1950-01-01 ~ 오늘, 필수. `LUNAR` 면 음력 날짜 |
+| `isLeapMonth` | boolean. `LUNAR` 이고 윤달이면 `true`. 생략 시 `false`. `SOLAR` 면 무시 |
 | `birthTime` | `HH:mm` 또는 **null(모름)** |
-| `birthRegion` | 최대 50자 또는 **null(모름)** |
 | `gender` | `MALE` \| `FEMALE`, 필수 |
+
+**음력 입력**
+
+- 서버가 한국 음력(한국천문연구원 기준)으로 양력 변환 후 계산·저장한다. 응답과 저장값은 항상 양력
+- 존재하지 않는 음력 날짜(그 달에 없는 30일, 그 해에 없는 윤달) → 400 `INVALID_INPUT`
+
+**시간 입력 (프론트 시진 선택 UI 기준)**
+
+- 시진(2시간 단위)을 고르면 그 칸의 **가운데 시각**을 보낸다. 예: 묘시 05:30~07:30 → `"06:30"`
+- **자시는 두 칸으로 나눈다**: `자시 00:00~01:30` → `"00:45"`, `자시 23:30~24:00` → `"23:45"`.
+  자정을 걸치는 칸이라 날짜만으로는 새벽/밤 구분이 안 되고, 둘은 사주가 다르다
+- 출생 지역은 받지 않는다 (9/13 기획 결정). 시진 단위 입력이라 지역 시차 보정이 결과에 영향이 없다. 서버는 서울 경도 기준으로 계산한다
 
 **Response 201**
 
@@ -80,23 +94,34 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "success": true,
   "data": {
     "resultId": "3f2a9c1e-....",
+    "shareId": "7b91d26f-....",
     "nickname": "도윤",
-    "pillars": { "year": "임오", "month": "계묘", "day": "갑진", "hour": "신미" },
-    "hourUnknown": false,
-    "readings": [
-      { "category": "LOVE",          "score": 78, "content": "..." },
-      { "category": "WEALTH",        "score": 45, "content": "..." },
-      { "category": "STUDY",         "score": 62, "content": "..." },
-      { "category": "FESTIVAL_ITEM", "score": 88, "content": "..." },
-      { "category": "FORTUNE",       "score": 55, "content": "..." }
-    ]
+    "zodiac": "HORSE",
+    "destiny": {
+      "title": "깔깔깔깔깔깔깔깔깔",
+      "description": "당신은 특별한 운명을 타고났습니다. 앞으로 좋은 흐름을 맞이하게 됩니다."
+    },
+    "fortunes": [
+      { "category": "MARRIAGE", "grade": "SS", "content": "결혼운에 대한 설명" },
+      { "category": "CHILDREN", "grade": "A+", "content": "자녀운에 대한 설명" },
+      { "category": "LOVE",     "grade": "B",  "content": "연애운에 대한 설명" }
+    ],
+    "luckyItem": "파란색 팔찌",
+    "luckyPlace": "야외 무대",
+    "compatibilities": []
   }
 }
 ```
 
-- `hourUnknown: true` 면 `pillars.hour` 는 `null` (키는 유지한다)
-- `readings` 순서는 **항상 위 순서로 고정.** 프론트가 정렬하지 않아도 되게
-- 공유 URL은 프론트가 조립한다. 백엔드는 `resultId` 만 준다
+- 화면의 고정 문구인 “당신의 운명은”은 프론트에서 표시한다
+- `fortunes` 순서는 `MARRIAGE` → `CHILDREN` → `LOVE`로 고정한다
+- `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
+  **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
+- `grade` 는 6단계 고정: `SS` 94~100 · `S` 84~93 · `A+` 74~83 · `A` 64~73 · `B+` 52~63 · `B` 0~51 (점수 기준, 2026-09-13 기획 확정)
+- `destiny.title` 은 8종 고정: 결혼·자녀·연애 각각 상(`SS`/`S`/`A+`)·하(`A`/`B+`/`B`) 조합 2×2×2. 제목 문구는 기획(영채) 확정 전 임시값. 점수로 계산하므로 저장하지 않는다
+- `luckyItem`·`luckyPlace` 는 **오늘의 행운 아이템·장소**. 내 일간과 오늘 일진(日辰)의 관계(십성)로 행운 오행을 정하고 그 오행의 풀에서 고른다. 오행은 이틀 주기, 아이템·장소는 **매일 바뀐다**. 저장하지 않고 조회 시점에 계산하므로 `POST` 응답과 다음 날 `GET` 응답이 다를 수 있다. 장소는 동국대 캠퍼스 안
+- 사주 팔자는 저장하지만 API 응답에는 노출하지 않는다
+- 본인 결과 조회에는 `resultId`, 친구 공유 URL에는 `shareId`를 사용한다
 
 ---
 
@@ -104,7 +129,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ### `GET /api/results/{resultId}`
 
-재방문·공유 링크 진입. **LLM 재호출 없이 DB에서 반환.**
+본인 결과 재방문. **LLM 재호출 없이 DB에서 반환.**
 가장 트래픽이 몰리는 엔드포인트다.
 
 **Response 200**
@@ -114,13 +139,16 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "success": true,
   "data": {
     "resultId": "3f2a9c1e-....",
+    "shareId": "7b91d26f-....",
     "nickname": "도윤",
-    "pillars": { "year": "임오", "month": "계묘", "day": "갑진", "hour": "신미" },
-    "hourUnknown": false,
-    "readings": [ ... ],
+    "zodiac": "HORSE",
+    "destiny": { "title": "깔깔깔깔깔깔깔깔깔", "description": "..." },
+    "fortunes": [ ... ],
+    "luckyItem": "파란색 팔찌",
+    "luckyPlace": "야외 무대",
     "compatibilities": [
-      { "nickname": "지현", "score": 82, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" },
-      { "nickname": "민수", "score": 31, "tier": "BEOT",  "createdAt": "2026-09-11T13:20:00Z" }
+      { "nickname": "민수", "score": 31, "tier": "SEUCHIM",  "createdAt": "2026-09-11T13:20:00Z" },
+      { "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" }
     ]
   }
 }
@@ -129,19 +157,24 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - `compatibilities` 는 `createdAt` 내림차순
 - **상대의 생년월일·성별·resultId 는 내려보내지 않는다.** 닉네임과 점수만
 
+### `GET /api/shares/{shareId}`
+
+친구가 공유 링크로 진입할 때 링크 주인의 공개 결과와 궁합 지도를 조회한다.
+응답 구조는 결과 조회와 같지만 내부 식별자인 `resultId`와 공개 키인 `shareId`는 포함하지 않는다.
+
 ---
 
 ## 4. 친구 궁합
 
-### `POST /api/results/{resultId}/compatibility`
+### `POST /api/shares/{shareId}/compatibility`
 
-친구가 `?ref={originId}` 로 들어와 자기 사주를 본 직후 호출.
-`{resultId}` = 친구 본인의 결과, `originId` = 링크 주인.
+친구가 공유 링크에서 자기 정보를 `POST /api/results`로 입력한 직후 호출한다.
+`{shareId}` = 링크 주인의 공개 ID, `guestResultId` = 친구가 방금 생성한 결과 ID.
 
 **Request**
 
 ```json
-{ "originId": "3f2a9c1e-...." }
+{ "guestResultId": "3f2a9c1e-...." }
 ```
 
 **Response 201**
@@ -150,7 +183,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 {
   "success": true,
   "data": {
-    "score": 82,
+    "score": 92,
     "tier": "GUIIN",
     "originNickname": "도윤",
     "guestNickname": "지현"
@@ -158,9 +191,10 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 }
 ```
 
-- `originId == resultId` → `SELF_COMPATIBILITY` 400
+- `shareId`의 링크 주인 결과와 `guestResultId`가 같으면 `SELF_COMPATIBILITY` 400
 - 이미 있는 조합이면 기존 값을 그대로 **200**으로 반환. 재계산하지 않는다
 - `score(A,B) == score(B,A)` 보장
+- `tier` 구간 (2026-09-13 기획 확정, 25점 구간 아님): `GUIIN` 90~100 · `CHALTTEOK` 75~89 · `BEOT` 61~74 · `SEUCHIM` 0~60
 
 ---
 

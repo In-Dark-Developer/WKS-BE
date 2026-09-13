@@ -32,12 +32,16 @@ public class Result {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
+    @Column(name = "share_id", updatable = false, nullable = false, unique = true)
+    private UUID shareId = UUID.randomUUID();
+
     @Column(name = "nickname", length = 20, nullable = false)
     private String nickname;
 
     @Column(name = "birth_date", nullable = false)
     private LocalDate birthDate;
 
+    @JdbcTypeCode(SqlTypes.LOCAL_TIME)
     @Column(name = "birth_time")
     private LocalTime birthTime;
 
