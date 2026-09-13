@@ -3,6 +3,7 @@ package com.darkness.wks.result.dto;
 import com.darkness.wks.result.FortuneCategory;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.saju.Zodiac;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -15,6 +16,9 @@ public record ResultResponse(
 
         @Schema(description = "닉네임", example = "도윤")
         String nickname,
+
+        @Schema(description = "십이간지 띠. 입춘 기준이라 양력 연도와 다를 수 있다", example = "HORSE")
+        Zodiac zodiac,
 
         DestinyResponse destiny,
 
@@ -32,6 +36,7 @@ public record ResultResponse(
         return new ResultResponse(
                 result.getId(),
                 result.getNickname(),
+                Zodiac.fromYearPillar(result.getYearPillar()),
                 new DestinyResponse(reading.getDestinyTitle(), reading.getDestinyContent()),
                 List.of(
                         new FortuneResponse(

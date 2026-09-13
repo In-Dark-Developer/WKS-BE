@@ -11,7 +11,11 @@ import java.util.List;
  */
 public interface ResultAnalysisPort {
 
-    AnalysisResult analyze(LocalDate birthDate, LocalTime birthTime, String birthRegion);
+    /**
+     * @param solarBirthDate 양력 생년월일. 음력 입력은 호출 전에 {@code BirthDate.parse(...).toSolar()} 로 변환한다
+     * @param birthTime      null 이면 시간 모름
+     */
+    AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime);
 
     record AnalysisResult(
             SajuPillars pillars,

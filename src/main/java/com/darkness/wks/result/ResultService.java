@@ -1,12 +1,17 @@
 package com.darkness.wks.result;
 
+import com.darkness.wks.common.exception.BusinessException;
+import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.result.dto.CreateResultRequest;
 import com.darkness.wks.result.dto.ResultResponse;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.saju.BirthDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -17,19 +22,18 @@ public class ResultService {
     private final ReadingRepository readingRepository;
     private final ResultAnalysisPort resultAnalysisPort;
 
+    private static final LocalDate MIN_BIRTH_DATE = LocalDate.of(1950, 1, 1);
+
     @Transactional
     public ResultResponse createResult(CreateResultRequest request) {
-        ResultAnalysisPort.AnalysisResult analysis = resultAnalysisPort.analyze(
-                request.birthDate(),
-                request.birthTime(),
-                request.birthRegion()
-        );
+        LocalDate birthDate = toSolar(request);
+        ResultAnalysisPort.AnalysisResult analysis = resultAnalysisPort.analyze(birthDate, request.birthTime());
 
         Result result = resultRepository.save(new Result(
                 request.nickname(),
-                request.birthDate(),
+                birthDate,
                 request.birthTime(),
-                request.birthRegion(),
+                null, // 출생 지역은 받지 않는다 (api-spec §2, 2026-09-13)
                 request.gender(),
                 analysis.pillars().yearPillar(),
                 analysis.pillars().monthPillar(),
@@ -56,5 +60,19 @@ public class ResultService {
         readingRepository.save(reading);
 
         return ResultResponse.from(result, reading);
+    }
+
+    /** 음력이면 양력으로 변환. 없는 날짜·윤달, 1950-01-01 ~ 오늘 범위 밖이면 INVALID_INPUT */
+    private static LocalDate toSolar(CreateResultRequest request) {
+        LocalDate solar;
+        try {
+            solar = BirthDate.parse(request.calendarType(), request.birthDate(), request.leapMonth()).toSolar();
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        if (solar.isBefore(MIN_BIRTH_DATE) || solar.isAfter(LocalDate.now())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return solar;
     }
 }

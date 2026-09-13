@@ -15,8 +15,7 @@ class FakeResultAnalysisAdapterTest {
     void returnsFortunesInApiOrder() {
         ResultAnalysisPort.AnalysisResult result = adapter.analyze(
                 LocalDate.of(2002, 3, 14),
-                LocalTime.of(14, 30),
-                "서울"
+                LocalTime.of(14, 30)
         );
 
         assertThat(result.fortunes())
@@ -32,7 +31,6 @@ class FakeResultAnalysisAdapterTest {
     void omitsHourPillarWhenBirthTimeIsUnknown() {
         ResultAnalysisPort.AnalysisResult result = adapter.analyze(
                 LocalDate.of(2002, 3, 14),
-                null,
                 null
         );
 

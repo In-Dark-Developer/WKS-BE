@@ -12,11 +12,11 @@ import java.util.List;
  * A 모듈 연동 전 프론트엔드 개발에 사용하는 임시 분석 결과다.
  */
 @Component
-@ConditionalOnProperty(name = "app.result.fake-analysis-enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "app.result.fake-analysis-enabled", havingValue = "true")
 public class FakeResultAnalysisAdapter implements ResultAnalysisPort {
 
     @Override
-    public AnalysisResult analyze(LocalDate birthDate, LocalTime birthTime, String birthRegion) {
+    public AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime) {
         SajuPillars pillars = new SajuPillars("임오", "계묘", "갑진", birthTime == null ? null : "신미");
 
         return new AnalysisResult(
