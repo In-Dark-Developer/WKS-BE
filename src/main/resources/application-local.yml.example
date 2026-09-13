@@ -1,0 +1,23 @@
+# 이 파일을 application-local.yml 로 복사한 뒤 실제 값을 채워서 사용하세요.
+# application-local.yml 은 .gitignore 에 등록되어 있어 커밋되지 않습니다.
+# 아래 ${...} 값은 환경변수로 주입하거나, 로컬 전용이라면 이 파일에서 직접 값을 채워도 됩니다.
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/wks
+    username: wks
+    password: ${DB_PASSWORD}
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+gemini:
+  api-key: ${GOOGLE_API_KEY}

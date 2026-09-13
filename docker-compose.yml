@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: wks-postgres
+    environment:
+      POSTGRES_DB: wks
+      POSTGRES_USER: wks
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - wks-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  wks-postgres-data:
