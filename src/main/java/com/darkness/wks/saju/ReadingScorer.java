@@ -5,10 +5,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 팔자 → 결혼·자녀·연애 등급. 순수 함수, 같은 팔자는 항상 같은 등급 (FR-RD-02, FR-RD-10).
+ * 팔자 → 결혼·자녀·연애 점수(0~100). 순수 함수, 같은 팔자는 항상 같은 점수 (FR-RD-02, FR-RD-10).
+ * 등급 변환은 호출 측(API 계층)이 {@link Grade#of} 로 한다.
  * <p>
- * 일간(日干) 기준 십성 분포, 일지(배우자궁)·시지(자녀궁)의 역할, 일지 합·충, 도화살로 0~100점을 만들고
- * {@link Grade#of} 로 등급화한다. 원국(8글자 전체) 기준이며 대운·세운은 보지 않는다.
+ * 일간(日干) 기준 십성 분포, 일지(배우자궁)·시지(자녀궁)의 역할, 일지 합·충, 도화살로 점수를 만든다.
+ * 원국(8글자 전체) 기준이며 대운·세운은 보지 않는다.
  * ponytail: 명리 개론 수준의 단순 가중치. 등급 분포를 바꾸려면 아래 상수만 손댄다.
  */
 public class ReadingScorer {
@@ -28,7 +29,7 @@ public class ReadingScorer {
     private static final List<String> HAP = List.of("자축", "인해", "묘술", "진유", "사신", "오미");
     private static final List<String> CHUNG = List.of("자오", "축미", "인신", "묘유", "진술", "사해");
 
-    public Map<ReadingCategory, Grade> score(SajuPillars pillars) {
+    public Map<ReadingCategory, Integer> score(SajuPillars pillars) {
         List<String> all = pillars.hourPillar() == null
                 ? List.of(pillars.yearPillar(), pillars.monthPillar(), pillars.dayPillar())
                 : List.of(pillars.yearPillar(), pillars.monthPillar(), pillars.dayPillar(), pillars.hourPillar());
@@ -68,10 +69,10 @@ public class ReadingScorer {
             children += CHILD_BONUS[relation(dayMaster, BRANCH_ELEMENT[BRANCHES.indexOf(pillars.hourPillar().charAt(1))])];
         }
 
-        Map<ReadingCategory, Grade> result = new EnumMap<>(ReadingCategory.class);
-        result.put(ReadingCategory.MARRIAGE, Grade.of(clamp(marriage)));
-        result.put(ReadingCategory.CHILDREN, Grade.of(clamp(children)));
-        result.put(ReadingCategory.LOVE, Grade.of(clamp(love)));
+        Map<ReadingCategory, Integer> result = new EnumMap<>(ReadingCategory.class);
+        result.put(ReadingCategory.MARRIAGE, clamp(marriage));
+        result.put(ReadingCategory.CHILDREN, clamp(children));
+        result.put(ReadingCategory.LOVE, clamp(love));
         return result;
     }
 

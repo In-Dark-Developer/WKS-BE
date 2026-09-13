@@ -11,7 +11,7 @@ class ReadingScorerTest {
     private final ReadingScorer scorer = new ReadingScorer();
 
     @Test
-    void sameInputSameGrades() {
+    void sameInputSameScores() {
         SajuPillars p = new SajuPillars("임오", "계묘", "신사", "을미");
         assertThat(scorer.score(p)).isEqualTo(scorer.score(p));
         assertThat(scorer.score(p)).containsOnlyKeys(ReadingCategory.MARRIAGE, ReadingCategory.CHILDREN, ReadingCategory.LOVE);
@@ -19,17 +19,17 @@ class ReadingScorerTest {
 
     @Test
     void worksWithoutHourPillar() {
-        Map<ReadingCategory, Grade> g = scorer.score(new SajuPillars("경진", "기축", "무술", null));
+        Map<ReadingCategory, Integer> g = scorer.score(new SajuPillars("경진", "기축", "무술", null));
         assertThat(g).hasSize(3);
-        assertThat(g.values()).doesNotContainNull();
+        assertThat(g.values()).allMatch(v -> v >= 0 && v <= 100);
     }
 
     @Test
-    void spouseBranchRelationMovesMarriageGrade() {
-        // 일간 갑(목): 일지 진(토) = 재성 → 보너스 25. 일지 인(목) = 비겁 → 보너스 5
-        Grade jae = scorer.score(new SajuPillars("임오", "계묘", "갑진", "신미")).get(ReadingCategory.MARRIAGE);
-        Grade bi = scorer.score(new SajuPillars("임오", "계묘", "갑인", "신미")).get(ReadingCategory.MARRIAGE);
-        assertThat(jae.ordinal()).isLessThan(bi.ordinal()); // ordinal 작을수록 높은 등급
+    void spouseBranchRelationMovesMarriageScore() {
+        // 일간 갑(목): 일지 진(토) = 재성 → 보너스 30. 일지 인(목) = 비겁 → 보너스 0
+        int jae = scorer.score(new SajuPillars("임오", "계묘", "갑진", "신미")).get(ReadingCategory.MARRIAGE);
+        int bi = scorer.score(new SajuPillars("임오", "계묘", "갑인", "신미")).get(ReadingCategory.MARRIAGE);
+        assertThat(jae).isGreaterThan(bi);
     }
 
     @Test
