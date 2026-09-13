@@ -93,6 +93,8 @@ public class ReadingGenerator {
         for (ReadingCategory c : ReadingCategory.values()) {
             sb.append("\n").append(c.korean()).append(" 등급: ").append(grades.get(c).label());
         }
+        Element lucky = Element.lacking(p); // 팔자에 가장 부족한 오행 = 행운 오행
+        sb.append("\n행운 오행: ").append(lucky.korean()).append(" (색: ").append(lucky.colors()).append(")");
         return sb.toString();
     }
 

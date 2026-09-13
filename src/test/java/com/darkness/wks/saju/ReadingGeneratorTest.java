@@ -16,7 +16,7 @@ class ReadingGeneratorTest {
     @Test
     void promptContainsOnlyPillarsAndGrades() {
         String prompt = ReadingGenerator.buildPrompt(new SajuPillars("임오", "계묘", "신사", "을미"), GRADES);
-        assertThat(prompt).isEqualTo("년주 임오, 월주 계묘, 일주 신사, 시주 을미\n결혼운 등급: SS\n자녀운 등급: A+\n연애운 등급: B");
+        assertThat(prompt).isEqualTo("년주 임오, 월주 계묘, 일주 신사, 시주 을미\n결혼운 등급: SS\n자녀운 등급: A+\n연애운 등급: B\n행운 오행: 토 (색: 황색·갈색)");
         assertThat(prompt).doesNotContainPattern("\\d{4}"); // 생년 등 숫자 정보 없음 (TR-03)
     }
 
