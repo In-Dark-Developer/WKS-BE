@@ -44,9 +44,7 @@ public class SajuResultAnalysisAdapter implements ResultAnalysisPort {
                         fortune(FortuneCategory.MARRIAGE, ReadingCategory.MARRIAGE, scores, reading),
                         fortune(FortuneCategory.CHILDREN, ReadingCategory.CHILDREN, scores, reading),
                         fortune(FortuneCategory.LOVE, ReadingCategory.LOVE, scores, reading)
-                ),
-                reading.luckyItem(),
-                reading.luckyPlace()
+                )
         );
     }
 

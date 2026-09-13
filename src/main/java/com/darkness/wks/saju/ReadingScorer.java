@@ -14,13 +14,6 @@ import java.util.Map;
  */
 public class ReadingScorer {
 
-    private static final String STEMS = "갑을병정무기경신임계";
-    private static final String BRANCHES = "자축인묘진사오미신유술해";
-
-    /** 오행 인덱스: 0 목, 1 화, 2 토, 3 금, 4 수. 상생은 +1, 상극은 +2 (mod 5) */
-    private static final int[] STEM_ELEMENT = {0, 0, 1, 1, 2, 2, 3, 3, 4, 4};
-    private static final int[] BRANCH_ELEMENT = {4, 2, 0, 0, 2, 1, 1, 2, 3, 3, 2, 4};
-
     /** 십성 역할 인덱스: 0 비겁, 1 식상, 2 재성, 3 관성, 4 인성 */
     private static final int[] SPOUSE_BONUS = {0, 10, 30, 30, 20};
     private static final int[] CHILD_BONUS = {0, 20, 12, 8, 4};
@@ -33,7 +26,7 @@ public class ReadingScorer {
         List<String> all = pillars.hourPillar() == null
                 ? List.of(pillars.yearPillar(), pillars.monthPillar(), pillars.dayPillar())
                 : List.of(pillars.yearPillar(), pillars.monthPillar(), pillars.dayPillar(), pillars.hourPillar());
-        int dayMaster = STEM_ELEMENT[STEMS.indexOf(pillars.dayPillar().charAt(0))];
+        Element dayMaster = Element.ofStem(pillars.dayPillar().charAt(0));
         char spouseBranch = pillars.dayPillar().charAt(1);
 
         int[] role = new int[5];
@@ -44,11 +37,11 @@ public class ReadingScorer {
         for (String p : all) {
             boolean isDay = p.equals(pillars.dayPillar());
             if (!isDay) {
-                role[relation(dayMaster, STEM_ELEMENT[STEMS.indexOf(p.charAt(0))])]++;
+                role[relation(dayMaster, Element.ofStem(p.charAt(0)))]++;
                 chars++;
             }
             char branch = p.charAt(1);
-            role[relation(dayMaster, BRANCH_ELEMENT[BRANCHES.indexOf(branch)])]++;
+            role[relation(dayMaster, Element.ofBranch(branch))]++;
             chars++;
             if (DOHWA.indexOf(branch) >= 0) dohwa++;
             if (!isDay) {
@@ -62,11 +55,11 @@ public class ReadingScorer {
 
         double jaeGwan = (role[2] + role[3]) * scale; // 재성+관성: 이성·배우자 인연의 크기
         int love = (int) Math.round(20 + 10 * jaeGwan + 8 * dohwa);
-        int marriage = (int) Math.round(38 + SPOUSE_BONUS[relation(dayMaster, BRANCH_ELEMENT[BRANCHES.indexOf(spouseBranch)])]
+        int marriage = (int) Math.round(38 + SPOUSE_BONUS[relation(dayMaster, Element.ofBranch(spouseBranch))]
                 + 4 * jaeGwan + 12 * hap - 12 * chung);
         int children = (int) Math.round(30 + 16 * role[1] * scale);
         if (pillars.hourPillar() != null) {
-            children += CHILD_BONUS[relation(dayMaster, BRANCH_ELEMENT[BRANCHES.indexOf(pillars.hourPillar().charAt(1))])];
+            children += CHILD_BONUS[relation(dayMaster, Element.ofBranch(pillars.hourPillar().charAt(1)))];
         }
 
         Map<ReadingCategory, Integer> result = new EnumMap<>(ReadingCategory.class);
@@ -76,9 +69,9 @@ public class ReadingScorer {
         return result;
     }
 
-    /** 일간 오행 → 대상 오행의 십성 역할 (0 비겁, 1 식상, 2 재성, 3 관성, 4 인성) */
-    private static int relation(int dayMaster, int target) {
-        return switch ((target - dayMaster + 5) % 5) {
+    /** 일간 오행 → 대상 오행의 십성 역할 (0 비겁, 1 식상, 2 재성, 3 관성, 4 인성). 상생 순환에서 몇 칸 뒤인지 */
+    private static int relation(Element dayMaster, Element target) {
+        return switch ((target.ordinal() - dayMaster.ordinal() + 5) % 5) {
             case 0 -> 0; // 같은 오행
             case 1 -> 1; // 내가 생함
             case 2 -> 2; // 내가 극함

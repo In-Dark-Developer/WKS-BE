@@ -43,7 +43,8 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | PR #11 |
+| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR (#14) |
+| V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
 | V1 | 곽도윤 | init schema (5개 테이블) | 예정 |
 
@@ -63,6 +64,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-13 | `luckyItem`·`luckyPlace` 가 오늘 기준으로 매일 바뀜 (조회마다 재계산) | ❌ |
 | 2026-09-13 | 궁합 `tier` 구간 변경: 90/75/61 경계 (25점 구간 아님) | ❌ |
 | 2026-09-13 | 결과 응답에 `zodiac`(십이간지 enum) 추가. `grade` 6단계 `SS S A+ A B+ B` 확정 | ❌ |
 | 2026-09-13 | `POST /api/results` 요청에서 `birthRegion` 제거 (기획 결정, 시진 입력이라 무의미) | ❌ |
@@ -102,6 +104,61 @@
 ---
 
 ## 기록
+
+### 2026-09-13 (일) · 차은호 · saju/ + result/ 오늘의 행운 (#14) · Claude Code
+
+**한 일**
+- 행운 아이템·장소를 LLM 에서 빼고 코드로: `DailyLucky.of(pillars, today)`. **내 일간 vs 오늘 일진 천간의 관계(십성)** 로 행운 오행 결정(비겁→식상, 식상→재성, 재성→관성, 관성→인성, 인성→비겁) → 오행별 풀에서 (일주 번호 + 일진 번호) 로 선택. 오행은 이틀 주기(천간 오행이 둘씩 같음), 아이템·장소는 매일. 사람마다 다르고 결정적
+- 풀은 `resources/lucky/items.txt`, `places.txt` (`오행=항목|항목`). **임시값. 기획이 실제 물건·실제 장소로 교체**
+- `Element` enum (오행, `luckyAgainst` 관계 대응), `ReadingScorer` 오행 표 통합. #12 의 "부족 오행 채우기" 는 일진이 의미 없어 폐기
+- `ReadingGenerator` 스키마·프롬프트에서 `luckyItem`·`luckyPlace` 제거 → 출력 토큰 감소
+- `result/`: `reading.lucky_*` 컬럼 삭제(V4), `ResultResponse.from()` 에서 KST 오늘 기준으로 계산. `ResultAnalysisPort.AnalysisResult` 에서 lucky 제거
+- 테스트 52건
+
+**건드린 파일/패키지**
+- `saju/`: `DailyLucky`(신규), `Element`(신규), `Reading`, `ReadingGenerator`, `ReadingScorer`, `SajuCalculator`(toKorean 공개), 프롬프트, 리소스 2개
+- `result/`(최선우 리뷰): `ResultAnalysisPort`, `SajuResultAnalysisAdapter`, `FakeResultAnalysisAdapter`, `ResultService`, `entity/Reading`, `dto/ResultResponse`, V4
+
+**다음 사람이 알아야 할 것**
+- `POST` 응답과 다음 날 `GET` 응답의 `luckyItem`·`luckyPlace` 가 다르다. 의도된 동작 (api-spec 명시)
+- 일진은 lunar-java `getDayInGanZhi()` (GMT+8 기준이지만 날짜 단위라 KST 와 동일). 오늘 날짜는 `Asia/Seoul`
+- 풀 항목 수가 달라도 됨. 오행별 최소 1개 없으면 기동 시 실패
+- 오하아사식 "별자리 순위" 는 채택 안 함 (공식 API 없음, 별자리 기준이라 사주와 무관)
+- 관계에 음양을 더하면 십성 10개(정재일·편재일…)로 "오늘 유형" 문구를 매일 다르게 만들 수 있음. 응답 필드 추가라 프론트 합의 후
+
+**막힌 것 / 넘기는 것**
+- 기획: `lucky/items.txt`·`places.txt` 실제 목록
+- 최선우: `result/` 변경 리뷰
+
+**문서 변경**
+- `docs/api-spec.md` §2 (lucky 의미), `docs/architecture.md` §5·§6, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `luckyItem`·`luckyPlace` 가 매일 바뀜. 캐시하지 말 것
+
+### 2026-09-13 (일) · 차은호 · saju/ 행운 오행 (#12) · Claude Code
+
+**한 일**
+- `Element` enum 추가: 천간·지지 → 오행, `Element.lacking(pillars)` = 팔자에서 가장 적은 오행(용신 근사). 결정적
+- 프롬프트에 "행운 오행: 토 (색: 황색·갈색)" 힌트 추가. Gemini 는 그 오행의 색·소재·장소 안에서 아이템·장소를 고름
+- `ReadingScorer` 의 오행 표를 `Element` 로 통합 (점수 변화 없음, 분포 재측정 동일)
+- 스모크: 행운 오행 토 → 아이템 "약과", 장소 "후문 언덕". 이전엔 3건 연속 "정각원"·청색 편향
+
+**건드린 파일/패키지**
+- `saju/Element.java`(신규), `saju/ReadingScorer.java`, `saju/ReadingGenerator.java`, `resources/prompts/reading-system.txt`, 테스트
+
+**다음 사람이 알아야 할 것**
+- 행운 오행은 "부족 오행 보충" 관행. 정통 용신(신강·신약 판단)은 유파별로 달라 채택 안 함
+- 응답에 행운 오행은 안 나감. 프론트가 "수 기운이 부족해서 파란색" 같은 문구를 원하면 `ResultResponse` 에 필드 추가만 하면 됨 (`Element.lacking(pillars)`)
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
 
 ### 2026-09-13 (일) · 차은호 · result/ 연결 초안 (#10, 최선우 리뷰용) · Claude Code
 

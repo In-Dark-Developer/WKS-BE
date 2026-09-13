@@ -29,11 +29,9 @@ class ReadingGeneratorTest {
     @Test
     void parsesCompleteJson() {
         Reading r = new ReadingGenerator(null, "m").parse("""
-                {"destinyTitle":"달빛 실","destinyDescription":"설명","marriage":"결혼","children":"자녀",
-                 "love":"연애","luckyItem":"솜사탕","luckyPlace":"팔정도 앞"}""");
+                {"destinyTitle":"달빛 실","destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애"}""");
         assertThat(r.destinyTitle()).isEqualTo("달빛 실");
         assertThat(r.contents()).containsEntry(ReadingCategory.LOVE, "연애");
-        assertThat(r.luckyPlace()).isEqualTo("팔정도 앞");
     }
 
     @Test

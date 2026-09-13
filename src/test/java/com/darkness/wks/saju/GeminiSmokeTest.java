@@ -32,7 +32,5 @@ class GeminiSmokeTest {
         assertThat(r.destinyTitle()).isNotBlank();
         assertThat(r.destinyDescription()).isNotBlank();
         assertThat(r.contents()).containsKeys(ReadingCategory.MARRIAGE, ReadingCategory.CHILDREN, ReadingCategory.LOVE);
-        assertThat(r.luckyItem()).isNotBlank();
-        assertThat(r.luckyPlace()).isNotBlank();
     }
 }

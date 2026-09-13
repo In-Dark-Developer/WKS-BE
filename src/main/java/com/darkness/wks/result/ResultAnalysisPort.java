@@ -20,9 +20,7 @@ public interface ResultAnalysisPort {
     record AnalysisResult(
             SajuPillars pillars,
             Destiny destiny,
-            List<Fortune> fortunes,
-            String luckyItem,
-            String luckyPlace
+            List<Fortune> fortunes
     ) {
 
         public Fortune fortune(FortuneCategory category) {

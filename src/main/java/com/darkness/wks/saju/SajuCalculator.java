@@ -86,7 +86,7 @@ public class SajuCalculator {
         return SEOUL_LONGITUDE;
     }
 
-    private static String toKorean(String ganZhi) {
+    static String toKorean(String ganZhi) {
         return "" + GAN_KO.charAt(GAN.indexOf(ganZhi.charAt(0))) + ZHI_KO.charAt(ZHI.indexOf(ganZhi.charAt(1)));
     }
 }

@@ -117,6 +117,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
   **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
 - `grade` 는 6단계 고정: `SS` `S` `A+` `A` `B+` `B` (높은 순, 2026-09-13 확정)
+- `luckyItem`·`luckyPlace` 는 **오늘의 행운 아이템·장소**. 내 일간과 오늘 일진(日辰)의 관계(십성)로 행운 오행을 정하고 그 오행의 풀에서 고른다. 오행은 이틀 주기, 아이템·장소는 **매일 바뀐다**. 저장하지 않고 조회 시점에 계산하므로 `POST` 응답과 다음 날 `GET` 응답이 다를 수 있다. 장소는 동국대 캠퍼스 안
 - 사주 팔자는 저장하지만 API 응답에는 노출하지 않는다
 - 공유 URL은 프론트가 조립한다. 백엔드는 `resultId` 만 준다
 

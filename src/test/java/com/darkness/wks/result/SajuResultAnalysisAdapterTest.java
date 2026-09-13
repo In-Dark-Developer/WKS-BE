@@ -25,8 +25,7 @@ class SajuResultAnalysisAdapterTest {
         ReadingGenerator generator = mock(ReadingGenerator.class);
         when(generator.generate(any(), any())).thenReturn(new Reading(
                 "제목", "설명",
-                Map.of(ReadingCategory.MARRIAGE, "결혼", ReadingCategory.CHILDREN, "자녀", ReadingCategory.LOVE, "연애"),
-                "솜사탕", "팔정도"));
+                Map.of(ReadingCategory.MARRIAGE, "결혼", ReadingCategory.CHILDREN, "자녀", ReadingCategory.LOVE, "연애")));
         SajuResultAnalysisAdapter adapter = new SajuResultAnalysisAdapter(generator);
 
         ResultAnalysisPort.AnalysisResult r = adapter.analyze(LocalDate.of(2002, 3, 14), LocalTime.of(14, 30));
@@ -36,7 +35,6 @@ class SajuResultAnalysisAdapterTest {
                 .containsExactly(FortuneCategory.MARRIAGE, FortuneCategory.CHILDREN, FortuneCategory.LOVE);
         assertThat(r.fortune(FortuneCategory.LOVE).content()).isEqualTo("연애");
         assertThat(r.destiny().title()).isEqualTo("제목");
-        assertThat(r.luckyPlace()).isEqualTo("팔정도");
 
         // 점수는 코드가 정하고, LLM 에는 그 점수의 등급이 그대로 전달된다 (FR-RD-02)
         @SuppressWarnings("unchecked")
@@ -53,7 +51,7 @@ class SajuResultAnalysisAdapterTest {
     void unknownTimeHasNoHourPillar() {
         ReadingGenerator generator = mock(ReadingGenerator.class);
         when(generator.generate(any(), any())).thenReturn(new Reading("t", "d",
-                Map.of(ReadingCategory.MARRIAGE, "a", ReadingCategory.CHILDREN, "b", ReadingCategory.LOVE, "c"), "i", "p"));
+                Map.of(ReadingCategory.MARRIAGE, "a", ReadingCategory.CHILDREN, "b", ReadingCategory.LOVE, "c")));
 
         ResultAnalysisPort.AnalysisResult r = new SajuResultAnalysisAdapter(generator)
                 .analyze(LocalDate.of(2002, 3, 14), null);

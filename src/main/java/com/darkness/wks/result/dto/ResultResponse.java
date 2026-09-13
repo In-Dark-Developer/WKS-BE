@@ -5,11 +5,15 @@ import com.darkness.wks.compatibility.entity.CompatibilityTier;
 import com.darkness.wks.result.FortuneCategory;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.saju.DailyLucky;
 import com.darkness.wks.saju.Grade;
+import com.darkness.wks.saju.SajuPillars;
 import com.darkness.wks.saju.Zodiac;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,10 +33,10 @@ public record ResultResponse(
         @Schema(description = "결혼운, 자녀운, 연애운 순서")
         List<FortuneResponse> fortunes,
 
-        @Schema(example = "파란색 팔찌")
+        @Schema(description = "오늘의 행운 아이템. 팔자 + 오늘 일진으로 계산, 매일 바뀜", example = "파란 부채")
         String luckyItem,
 
-        @Schema(example = "야외 무대")
+        @Schema(description = "오늘의 행운 장소(동국대 안). 매일 바뀜", example = "팔정도 앞")
         String luckyPlace,
 
         @Schema(description = "생성 시 빈 배열, 조회 시 createdAt 내림차순")
@@ -44,6 +48,9 @@ public record ResultResponse(
     }
 
     public static ResultResponse from(Result result, Reading reading, List<Compatibility> compatibilities) {
+        DailyLucky lucky = DailyLucky.of(
+                new SajuPillars(result.getYearPillar(), result.getMonthPillar(), result.getDayPillar(), result.getHourPillar()),
+                LocalDate.now(ZoneId.of("Asia/Seoul")));
         return new ResultResponse(
                 result.getId(),
                 result.getNickname(),
@@ -62,8 +69,8 @@ public record ResultResponse(
                         ),
                         new FortuneResponse(FortuneCategory.LOVE, Grade.of(reading.getLoveScore()).label(), reading.getLoveContent())
                 ),
-                reading.getLuckyItem(),
-                reading.getLuckyPlace(),
+                lucky.item(),
+                lucky.place(),
                 compatibilities.stream()
                         .map(compatibility -> CompatibilityResponse.from(compatibility, result))
                         .toList()
