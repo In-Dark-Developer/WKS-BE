@@ -17,6 +17,13 @@ public class ReadingScorer {
     /** 십성 역할 인덱스: 0 비겁, 1 식상, 2 재성, 3 관성, 4 인성 */
     private static final int[] SPOUSE_BONUS = {0, 10, 30, 30, 20};
     private static final int[] CHILD_BONUS = {0, 20, 12, 8, 4};
+    private static final int[] CHILD_STEM_BONUS = {2, 10, 6, 4, 0};
+
+    /** 년·월·일·시 기둥 비중 */
+    private static final double[] PILLAR_WEIGHT = {0.7, 1.3, 1.0, 0.9};
+    private static final double BRANCH_WEIGHT = 0.85;
+    /** 시주 포함 8글자(일간 제외 7자리)의 가중치 총합 */
+    private static final double FULL_WEIGHT = 0.7 + 1.3 + 0.9 + (0.7 + 1.3 + 1.0 + 0.9) * 0.85;
 
     private static final String DOHWA = "자오묘유";
     private static final List<String> HAP = List.of("자축", "인해", "묘술", "진유", "사신", "오미");
@@ -29,21 +36,25 @@ public class ReadingScorer {
         Element dayMaster = Element.ofStem(pillars.dayPillar().charAt(0));
         char spouseBranch = pillars.dayPillar().charAt(1);
 
-        int[] role = new int[5];
-        int chars = 0;
-        int dohwa = 0;
+        // 기둥별 비중: 월주(월령)가 가장 크고 년주가 가장 작다. 지지는 천간보다 조금 작게.
+        // 가중치가 소수라 십성 합이 촘촘해져 점수 계단이 줄어든다
+        double[] role = new double[5];
+        double weightSum = 0;
+        double dohwa = 0;
         int hap = 0;
         int chung = 0;
-        for (String p : all) {
-            boolean isDay = p.equals(pillars.dayPillar());
+        for (int i = 0; i < all.size(); i++) {
+            String p = all.get(i);
+            double w = PILLAR_WEIGHT[i];
+            boolean isDay = i == 2;
             if (!isDay) {
-                role[relation(dayMaster, Element.ofStem(p.charAt(0)))]++;
-                chars++;
+                role[relation(dayMaster, Element.ofStem(p.charAt(0)))] += w;
+                weightSum += w;
             }
             char branch = p.charAt(1);
-            role[relation(dayMaster, Element.ofBranch(branch))]++;
-            chars++;
-            if (DOHWA.indexOf(branch) >= 0) dohwa++;
+            role[relation(dayMaster, Element.ofBranch(branch))] += w * BRANCH_WEIGHT;
+            weightSum += w * BRANCH_WEIGHT;
+            if (DOHWA.indexOf(branch) >= 0) dohwa += w;
             if (!isDay) {
                 String pair = "" + spouseBranch + branch;
                 String reversed = "" + branch + spouseBranch;
@@ -51,21 +62,23 @@ public class ReadingScorer {
                 if (CHUNG.contains(pair) || CHUNG.contains(reversed)) chung++;
             }
         }
-        double scale = 7.0 / chars; // 시주 없으면 5글자라 7/5 로 보정
+        double scale = FULL_WEIGHT / weightSum; // 시주 없으면 글자가 적으니 같은 총량으로 보정
 
         double jaeGwan = (role[2] + role[3]) * scale; // 재성+관성: 이성·배우자 인연의 크기
-        int love = (int) Math.round(20 + 10 * jaeGwan + 8 * dohwa);
-        int marriage = (int) Math.round(38 + SPOUSE_BONUS[relation(dayMaster, Element.ofBranch(spouseBranch))]
-                + 4 * jaeGwan + 12 * hap - 12 * chung);
-        int children = (int) Math.round(30 + 16 * role[1] * scale);
+        double love = 20 + 10 * jaeGwan + 8 * dohwa;
+        double marriage = 38 + SPOUSE_BONUS[relation(dayMaster, Element.ofBranch(spouseBranch))]
+                + 4 * jaeGwan + 12 * hap - 12 * chung;
+        // 자녀: 식상(자식 기운)이 많을수록, 인성(식상을 누르는 기운)이 많을수록 감점. 시주는 지지(자녀궁)·천간 둘 다 본다
+        double children = 30 + 12 * role[1] * scale - 4 * role[4] * scale;
         if (pillars.hourPillar() != null) {
-            children += CHILD_BONUS[relation(dayMaster, Element.ofBranch(pillars.hourPillar().charAt(1)))];
+            children += CHILD_BONUS[relation(dayMaster, Element.ofBranch(pillars.hourPillar().charAt(1)))]
+                    + CHILD_STEM_BONUS[relation(dayMaster, Element.ofStem(pillars.hourPillar().charAt(0)))];
         }
 
         Map<ReadingCategory, Integer> result = new EnumMap<>(ReadingCategory.class);
-        result.put(ReadingCategory.MARRIAGE, calibrate(marriage, 68, 0.86));
-        result.put(ReadingCategory.CHILDREN, calibrate(children, 58, 0.78));
-        result.put(ReadingCategory.LOVE, calibrate(love, 60, 0.95));
+        result.put(ReadingCategory.MARRIAGE, calibrate(marriage, 65.7, 0.86));
+        result.put(ReadingCategory.CHILDREN, calibrate(children, 51, 0.76));
+        result.put(ReadingCategory.LOVE, calibrate(love, 57.9, 0.95));
         return result;
     }
 
@@ -73,8 +86,12 @@ public class ReadingScorer {
      * 원점수를 중앙값 74(상/하 경계 = A+ 컷), 표준편차 약 14 로 선형 보정한다.
      * ponytail: 1950~2010 고유 팔자 8,225개의 원점수 중앙값·표준편차에서 나온 상수. 가중치를 바꾸면 Stats 로 다시 잰다
      */
-    private static int calibrate(int raw, int median, double scale) {
-        return clamp((int) Math.round(74 + (raw - median) * scale));
+    private static int calibrate(double raw, double median, double scale) {
+        double v = 74 + (raw - median) * scale;
+        // 양 끝은 잘라내지 않고 부드럽게 눌러 90~100, 0~10 안에 펼친다. 100점에 쌓이는 것 방지
+        if (v > 90) v = 90 + 10 * (1 - Math.exp(-(v - 90) / 12));
+        if (v < 10) v = 10 - 10 * (1 - Math.exp((v - 10) / 12));
+        return clamp((int) Math.round(v));
     }
 
     /** 일간 오행 → 대상 오행의 십성 역할 (0 비겁, 1 식상, 2 재성, 3 관성, 4 인성). 상생 순환에서 몇 칸 뒤인지 */
