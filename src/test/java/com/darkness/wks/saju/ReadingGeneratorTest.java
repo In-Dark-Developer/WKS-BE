@@ -16,7 +16,7 @@ class ReadingGeneratorTest {
     @Test
     void promptContainsOnlyPillarsAndGrades() {
         String prompt = ReadingGenerator.buildPrompt(new SajuPillars("임오", "계묘", "신사", "을미"), GRADES);
-        assertThat(prompt).isEqualTo("년주 임오, 월주 계묘, 일주 신사, 시주 을미\n결혼운 등급: SS\n자녀운 등급: A+\n연애운 등급: B\n행운 오행: 토 (색: 황색·갈색)");
+        assertThat(prompt).isEqualTo("년주 임오, 월주 계묘, 일주 신사, 시주 을미\n결혼운 등급: SS\n자녀운 등급: A+\n연애운 등급: B");
         assertThat(prompt).doesNotContainPattern("\\d{4}"); // 생년 등 숫자 정보 없음 (TR-03)
     }
 
@@ -29,11 +29,9 @@ class ReadingGeneratorTest {
     @Test
     void parsesCompleteJson() {
         Reading r = new ReadingGenerator(null, "m").parse("""
-                {"destinyTitle":"달빛 실","destinyDescription":"설명","marriage":"결혼","children":"자녀",
-                 "love":"연애","luckyItem":"솜사탕","luckyPlace":"팔정도 앞"}""");
+                {"destinyTitle":"달빛 실","destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애"}""");
         assertThat(r.destinyTitle()).isEqualTo("달빛 실");
         assertThat(r.contents()).containsEntry(ReadingCategory.LOVE, "연애");
-        assertThat(r.luckyPlace()).isEqualTo("팔정도 앞");
     }
 
     @Test

@@ -55,12 +55,6 @@ public class Reading {
     @Column(name = "love_content", nullable = false, columnDefinition = "TEXT")
     private String loveContent;
 
-    @Column(name = "lucky_item", length = 100, nullable = false)
-    private String luckyItem;
-
-    @Column(name = "lucky_place", length = 100, nullable = false)
-    private String luckyPlace;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -74,9 +68,7 @@ public class Reading {
             int childrenScore,
             String childrenContent,
             int loveScore,
-            String loveContent,
-            String luckyItem,
-            String luckyPlace
+            String loveContent
     ) {
         this.result = result;
         this.destinyTitle = destinyTitle;
@@ -87,7 +79,5 @@ public class Reading {
         this.childrenContent = childrenContent;
         this.loveScore = (short) loveScore;
         this.loveContent = loveContent;
-        this.luckyItem = luckyItem;
-        this.luckyPlace = luckyPlace;
     }
 }

@@ -58,9 +58,7 @@ public class ResultService {
                 children.score(),
                 children.content(),
                 love.score(),
-                love.content(),
-                analysis.luckyItem(),
-                analysis.luckyPlace()
+                love.content()
         );
         readingRepository.save(reading);
 

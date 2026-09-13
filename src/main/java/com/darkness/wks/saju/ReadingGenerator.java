@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 public class ReadingGenerator {
 
     private static final List<String> FIELDS =
-            List.of("destinyTitle", "destinyDescription", "marriage", "children", "love", "luckyItem", "luckyPlace");
+            List.of("destinyTitle", "destinyDescription", "marriage", "children", "love");
     private static final String SYSTEM_PROMPT = loadResource("prompts/reading-system.txt");
     private static final Schema RESPONSE_SCHEMA = Schema.builder()
             .type(Type.Known.OBJECT)
@@ -93,8 +93,6 @@ public class ReadingGenerator {
         for (ReadingCategory c : ReadingCategory.values()) {
             sb.append("\n").append(c.korean()).append(" 등급: ").append(grades.get(c).label());
         }
-        Element lucky = Element.lacking(p); // 팔자에 가장 부족한 오행 = 행운 오행
-        sb.append("\n행운 오행: ").append(lucky.korean()).append(" (색: ").append(lucky.colors()).append(")");
         return sb.toString();
     }
 
@@ -112,7 +110,7 @@ public class ReadingGenerator {
         contents.put(ReadingCategory.MARRIAGE, m.get("marriage"));
         contents.put(ReadingCategory.CHILDREN, m.get("children"));
         contents.put(ReadingCategory.LOVE, m.get("love"));
-        return new Reading(m.get("destinyTitle"), m.get("destinyDescription"), contents, m.get("luckyItem"), m.get("luckyPlace"));
+        return new Reading(m.get("destinyTitle"), m.get("destinyDescription"), contents);
     }
 
     private static String loadResource(String path) {

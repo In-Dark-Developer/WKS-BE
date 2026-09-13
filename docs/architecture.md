@@ -184,9 +184,8 @@ CREATE TABLE reading (
     children_content   TEXT         NOT NULL,
     love_score         SMALLINT     NOT NULL,
     love_content       TEXT         NOT NULL,
-    lucky_item         VARCHAR(100) NOT NULL,
-    lucky_place        VARCHAR(100) NOT NULL,
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
+    -- 행운 아이템·장소는 저장하지 않는다. 조회 시 팔자 + 오늘 일진으로 계산 (saju/DailyLucky)
 );
 
 CREATE TABLE compatibility (
@@ -238,8 +237,9 @@ CreateResultRequest
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
   → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
-  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM
+  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명·결혼·자녀·연애 문장만)
   → ReadingRepository   저장
+  → DailyLucky          조회 시: 팔자 + 오늘 일진 → 오늘의 행운 오행·아이템·장소   ← 코드, 매일 변경
 ```
 
 **등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:

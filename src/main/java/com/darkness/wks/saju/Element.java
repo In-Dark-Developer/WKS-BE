@@ -42,13 +42,15 @@ public enum Element {
     }
 
     /**
-     * 팔자에서 가장 적게 나온 오행 = 용신 근사. 행운 아이템·장소의 기준.
+     * 팔자(+ 추가 간지, 예: 오늘 일진)에서 가장 적게 나온 오행 = 용신 근사. 행운 아이템·장소의 기준.
      * 동률이면 목→화→토→금→수 순서에서 앞선 것. 결정적.
      */
-    public static Element lacking(SajuPillars p) {
+    public static Element lacking(SajuPillars p, String... extraGanji) {
         int[] count = new int[values().length];
-        for (String pillar : List.of(p.yearPillar(), p.monthPillar(), p.dayPillar(), p.hourPillar() == null ? "" : p.hourPillar())) {
-            if (pillar.isEmpty()) continue;
+        List<String> all = new java.util.ArrayList<>(List.of(p.yearPillar(), p.monthPillar(), p.dayPillar()));
+        if (p.hourPillar() != null) all.add(p.hourPillar());
+        all.addAll(List.of(extraGanji));
+        for (String pillar : all) {
             count[ofStem(pillar.charAt(0)).ordinal()]++;
             count[ofBranch(pillar.charAt(1)).ordinal()]++;
         }

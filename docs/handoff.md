@@ -43,7 +43,8 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | PR #11 |
+| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR (#14) |
+| V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
 | V1 | 곽도윤 | init schema (5개 테이블) | 예정 |
 
@@ -63,6 +64,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-13 | `luckyItem`·`luckyPlace` 가 오늘 기준으로 매일 바뀜 (조회마다 재계산) | ❌ |
 | 2026-09-13 | 궁합 `tier` 구간 변경: 90/75/61 경계 (25점 구간 아님) | ❌ |
 | 2026-09-13 | 결과 응답에 `zodiac`(십이간지 enum) 추가. `grade` 6단계 `SS S A+ A B+ B` 확정 | ❌ |
 | 2026-09-13 | `POST /api/results` 요청에서 `birthRegion` 제거 (기획 결정, 시진 입력이라 무의미) | ❌ |
@@ -102,6 +104,36 @@
 ---
 
 ## 기록
+
+### 2026-09-13 (일) · 차은호 · saju/ + result/ 오늘의 행운 (#14) · Claude Code
+
+**한 일**
+- 행운 아이템·장소를 LLM 에서 빼고 코드로: `DailyLucky.of(pillars, today)`. 팔자 8글자 + 오늘 일진 2글자 중 가장 부족한 오행 → 오행별 풀에서 (일주 번호 + 일진 번호) 로 선택. 매일 바뀌고 사람마다 다르고 결정적
+- 풀은 `resources/lucky/items.txt`, `places.txt` (`오행=항목|항목`). **임시값. 기획이 실제 물건·실제 장소로 교체**
+- `Element` enum (오행, 부족 오행 산출), `ReadingScorer` 오행 표 통합 (#12 에서 가져옴)
+- `ReadingGenerator` 스키마·프롬프트에서 `luckyItem`·`luckyPlace` 제거 → 출력 토큰 감소
+- `result/`: `reading.lucky_*` 컬럼 삭제(V4), `ResultResponse.from()` 에서 KST 오늘 기준으로 계산. `ResultAnalysisPort.AnalysisResult` 에서 lucky 제거
+- 테스트 52건
+
+**건드린 파일/패키지**
+- `saju/`: `DailyLucky`(신규), `Element`(신규), `Reading`, `ReadingGenerator`, `ReadingScorer`, `SajuCalculator`(toKorean 공개), 프롬프트, 리소스 2개
+- `result/`(최선우 리뷰): `ResultAnalysisPort`, `SajuResultAnalysisAdapter`, `FakeResultAnalysisAdapter`, `ResultService`, `entity/Reading`, `dto/ResultResponse`, V4
+
+**다음 사람이 알아야 할 것**
+- `POST` 응답과 다음 날 `GET` 응답의 `luckyItem`·`luckyPlace` 가 다르다. 의도된 동작 (api-spec 명시)
+- 일진은 lunar-java `getDayInGanZhi()` (GMT+8 기준이지만 날짜 단위라 KST 와 동일). 오늘 날짜는 `Asia/Seoul`
+- 풀 항목 수가 달라도 됨. 오행별 최소 1개 없으면 기동 시 실패
+- 오하아사식 "별자리 순위" 는 채택 안 함 (공식 API 없음, 별자리 기준이라 사주와 무관)
+
+**막힌 것 / 넘기는 것**
+- 기획: `lucky/items.txt`·`places.txt` 실제 목록
+- 최선우: `result/` 변경 리뷰
+
+**문서 변경**
+- `docs/api-spec.md` §2 (lucky 의미), `docs/architecture.md` §5·§6, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `luckyItem`·`luckyPlace` 가 매일 바뀜. 캐시하지 말 것
 
 ### 2026-09-13 (일) · 차은호 · saju/ 행운 오행 (#12) · Claude Code
 
