@@ -220,7 +220,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 |---|---|---|
 | FR-CP-01 | P0 | 두 `Result` 의 궁합 점수(0~100)와 Tier 산출 |
 | FR-CP-02 | P0 | **`score(A,B) == score(B,A)`** 항상 성립 |
-| FR-CP-03 | P0 | Tier: 76~100 `GUIIN` / 51~75 `CHALTTEOK` / 26~50 `BEOT` / 0~25 `SEUCHIM` |
+| FR-CP-03 | P0 | Tier: 90~100 `GUIIN` / 75~89 `CHALTTEOK` / 61~74 `BEOT` / 0~60 `SEUCHIM` (2026-09-13 기획 확정) |
 | FR-CP-04 | P0 | 이미 존재하는 조합은 재계산하지 않고 기존 값을 **200**으로 반환 |
 | FR-CP-05 | P0 | `originId == resultId` → `SELF_COMPATIBILITY` 400 |
 | FR-CP-06 | P0 | 존재하지 않는 `originId` → `RESULT_NOT_FOUND` 404 |
@@ -233,7 +233,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 - A→B, B→A 점수 동일 (**자동 테스트로 강제**)
 - 같은 조합 2회 요청 → 두 번째 200, 점수 동일, DB row 1개
 - 궁합 응답 JSON에 `birthDate`, `birthTime`, `gender` 키가 없다
-- 경계값 25/26/50/51/75/76에서 Tier가 정확히 나뉜다
+- 경계값 60/61/74/75/89/90에서 Tier가 정확히 나뉜다
 
 ---
 
@@ -343,7 +343,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | TR-03 | P0 | 은호 | **프롬프트에 개인정보 미포함** 검증 | 무료 티어 데이터 사용 리스크 |
 | TR-04 | P0 | 선우 | 궁합 대칭성 `score(A,B)==score(B,A)` | 깨지면 유저가 즉시 알아챈다 |
 | TR-05 | P0 | 선우 | 해석 캐싱 — 재조회 시 LLM 호출 0회 | 비용·한도 직결 |
-| TR-06 | P1 | 선우 | Tier 경계값 25/26/50/51/75/76 | off-by-one 빈발 |
+| TR-06 | P1 | 선우 | Tier 경계값 60/61/74/75/89/90 | off-by-one 빈발 |
 | TR-07 | P1 | 도윤 | SMTP 실패 시 signup 유지 | 성비 데이터 손실 방지 |
 
 ### 환경 규칙

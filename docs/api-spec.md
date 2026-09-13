@@ -142,7 +142,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": [
-      { "nickname": "지현", "score": 82, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" },
+      { "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" },
       { "nickname": "민수", "score": 31, "tier": "BEOT",  "createdAt": "2026-09-11T13:20:00Z" }
     ]
   }
@@ -173,7 +173,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 {
   "success": true,
   "data": {
-    "score": 82,
+    "score": 92,
     "tier": "GUIIN",
     "originNickname": "도윤",
     "guestNickname": "지현"
@@ -184,6 +184,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - `originId == resultId` → `SELF_COMPATIBILITY` 400
 - 이미 있는 조합이면 기존 값을 그대로 **200**으로 반환. 재계산하지 않는다
 - `score(A,B) == score(B,A)` 보장
+- `tier` 구간 (2026-09-13 기획 확정, 25점 구간 아님): `GUIIN` 90~100 · `CHALTTEOK` 75~89 · `BEOT` 61~74 · `SEUCHIM` 0~60
 
 ---
 
