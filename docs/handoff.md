@@ -62,6 +62,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-13 | `POST /api/results` 요청에 `calendarType`(필수)·`isLeapMonth` 추가 (음력 지원). 시진 가운데 시각 전송·자시 두 칸 분리 규칙 명시 | ❌ |
 | 2026-09-12 | 결과 응답을 운명 제목·설명, 결혼/자녀/연애 등급·설명, 행운 아이템·장소로 변경 | ❌ |
 | 2026-09-12 | `POST /api/results` 닉네임 최대 길이 20자 → 8자 | ❌ |
 | - | - | - |
@@ -121,19 +122,21 @@
 - 09-13 Codex 기록의 "lunar-java 불일치"는 무보정 입력 재현이며 위 구조로 해결됨. `docs/lunar-java-validation.md`, `tools/check_lunar.py` 는 탐색용이라 커밋하지 않음
 
 **막힌 것 / 넘기는 것**
-- 기획 결정 대기 3건: 자시 두 칸 분리, 지역 입력 유지 여부, 음력 지원 여부
+- 기획 결정 대기 2건: 자시 두 칸 분리, 지역 입력 유지 여부 (음력은 확정)
+- 최선우: `CreateResultRequest` 에 `calendarType`·`isLeapMonth` 추가 + `LUNAR` 면 `KoreanLunarCalendar.toSolar()` 로 변환 후 `analyze()` 호출
 - `saju/` 출력 형태 미확정: `ReadingCategory` 5종(점수) vs `result/ResultAnalysisPort` (운명 + 결혼·자녀·연애 등급 + 행운 아이템·장소). 등급 문자열 집합·산출 기준도 미정. 이게 정해져야 `ReadingScorer`·`ReadingGenerator` 착수 가능
 - TR-01 대체: 포스텔러 만세력 2.2 와 7건 대조(입춘 전후·자시·시진 경계·설날) 전부 일치, `SajuCalculatorTest.matchesPosteller` 에 고정. 실제 인물 데이터가 생기면 추가
 
 **문서 변경**
 - `docs/architecture.md`: 스택 표에 lunar-java 추가, §9 미결정에서 만세력 항목 제거, §6 에 계산 방식 반영
+- `docs/api-spec.md` §2: 음력 필드 2개 추가, 시진 입력 규칙 추가 (필드 추가라 사전 합의 불필요, 프론트 공지 필요)
 
 **프론트에 알려야 할 것** (기획 확인 후 공지, 2026-09-13 기획에 전달)
 - 시간은 시진(2시간) 선택 UI 그대로. 프론트가 선택한 칸의 **가운데 시각**을 `birthTime: HH:mm` 으로 보낸다 (묘시 05:30~07:30 → `06:30`). 같은 시진이면 팔자가 같아서 문제 없음
 - **자시는 두 칸으로 분리 요청**: `자시 00:00~01:30` → `00:45`, `자시 23:30~24:00` → `23:45`. 자정을 걸쳐서 날짜+자시만으로는 새벽/밤 구분이 안 되고, 둘은 일주가 하루 다름
 - 시진 단위 입력이면 `birthRegion` 은 결과에 영향 없음(지역 보정 −24~−34분이 칸 경계에 안 닿음). 프론트에서 빼도 됨, nullable 이라 백엔드 변경 없음
 - `birthTime: null` = 시간 모름, 3주 계산
-- 음력 지원 시 `calendarType`, `isLeapMonth` 필드 추가 필요 — 기획 결정 대기
+- **음력 지원 확정(9/13 기획)**. api-spec §2 에 `calendarType`·`isLeapMonth` 추가함. `CreateResultRequest` 필드 추가와 `KoreanLunarCalendar.toSolar()` 호출은 최선우(`result/`) 작업. `IllegalArgumentException` → `INVALID_INPUT` 매핑 필요
 - 알려진 한계: 절입 순간이 선택 칸 안에 걸리면 월주가 옆 값 (약 1/700). 분 단위 입력 없인 어느 서비스든 동일
 
 ### 2026-09-13 (일) · 차은호 · saju/ 도입 검증 · Codex
