@@ -108,9 +108,9 @@
 ### 2026-09-13 (일) · 차은호 · saju/ + result/ 오늘의 행운 (#14) · Claude Code
 
 **한 일**
-- 행운 아이템·장소를 LLM 에서 빼고 코드로: `DailyLucky.of(pillars, today)`. 팔자 8글자 + 오늘 일진 2글자 중 가장 부족한 오행 → 오행별 풀에서 (일주 번호 + 일진 번호) 로 선택. 매일 바뀌고 사람마다 다르고 결정적
+- 행운 아이템·장소를 LLM 에서 빼고 코드로: `DailyLucky.of(pillars, today)`. **내 일간 vs 오늘 일진 천간의 관계(십성)** 로 행운 오행 결정(비겁→식상, 식상→재성, 재성→관성, 관성→인성, 인성→비겁) → 오행별 풀에서 (일주 번호 + 일진 번호) 로 선택. 오행은 이틀 주기(천간 오행이 둘씩 같음), 아이템·장소는 매일. 사람마다 다르고 결정적
 - 풀은 `resources/lucky/items.txt`, `places.txt` (`오행=항목|항목`). **임시값. 기획이 실제 물건·실제 장소로 교체**
-- `Element` enum (오행, 부족 오행 산출), `ReadingScorer` 오행 표 통합 (#12 에서 가져옴)
+- `Element` enum (오행, `luckyAgainst` 관계 대응), `ReadingScorer` 오행 표 통합. #12 의 "부족 오행 채우기" 는 일진이 의미 없어 폐기
 - `ReadingGenerator` 스키마·프롬프트에서 `luckyItem`·`luckyPlace` 제거 → 출력 토큰 감소
 - `result/`: `reading.lucky_*` 컬럼 삭제(V4), `ResultResponse.from()` 에서 KST 오늘 기준으로 계산. `ResultAnalysisPort.AnalysisResult` 에서 lucky 제거
 - 테스트 52건
@@ -124,6 +124,7 @@
 - 일진은 lunar-java `getDayInGanZhi()` (GMT+8 기준이지만 날짜 단위라 KST 와 동일). 오늘 날짜는 `Asia/Seoul`
 - 풀 항목 수가 달라도 됨. 오행별 최소 1개 없으면 기동 시 실패
 - 오하아사식 "별자리 순위" 는 채택 안 함 (공식 API 없음, 별자리 기준이라 사주와 무관)
+- 관계에 음양을 더하면 십성 10개(정재일·편재일…)로 "오늘 유형" 문구를 매일 다르게 만들 수 있음. 응답 필드 추가라 프론트 합의 후
 
 **막힌 것 / 넘기는 것**
 - 기획: `lucky/items.txt`·`places.txt` 실제 목록

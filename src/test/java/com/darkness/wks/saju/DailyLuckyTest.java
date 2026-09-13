@@ -37,9 +37,12 @@ class DailyLuckyTest {
     }
 
     @Test
-    void elementUsesTodayPillar() {
-        // 팔자 임오 계묘 신사 을미: 수2 화2 목3 금1 토1 → 부족 토(동률 금·토 중 앞). 오늘 일진이 토 2글자(무진)면 금이 부족해진다
-        assertThat(Element.lacking(ME)).isEqualTo(Element.EARTH);
-        assertThat(Element.lacking(ME, "무진")).isEqualTo(Element.METAL);
+    void elementChangesEveryTwoDaysItemEveryDay() {
+        // 일간 신(금). 2000-01-01 무오(토)=인성일 → 금, 01-02 기미(토) → 금, 01-03 경신(금)=비겁일 → 수
+        LocalDate d = LocalDate.of(2000, 1, 1);
+        assertThat(DailyLucky.of(ME, d).element()).isEqualTo(Element.METAL);
+        assertThat(DailyLucky.of(ME, d.plusDays(1)).element()).isEqualTo(Element.METAL);
+        assertThat(DailyLucky.of(ME, d.plusDays(2)).element()).isEqualTo(Element.WATER);
+        assertThat(DailyLucky.of(ME, d).item()).isNotEqualTo(DailyLucky.of(ME, d.plusDays(1)).item());
     }
 }

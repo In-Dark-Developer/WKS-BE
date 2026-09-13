@@ -16,12 +16,12 @@ class ElementTest {
     }
 
     @Test
-    void lackingIsLeastFrequentElement() {
-        // 임오 계묘 신사 을미: 수2 화2 목3 금1 토1 → 동률(금·토) 중 순서 앞선 토
-        assertThat(Element.lacking(new SajuPillars("임오", "계묘", "신사", "을미"))).isEqualTo(Element.EARTH);
-        // 갑인 을묘 병오 정사: 목4 화4, 토·금·수 0 → 토
-        assertThat(Element.lacking(new SajuPillars("갑인", "을묘", "병오", "정사"))).isEqualTo(Element.EARTH);
-        // 시주 없음: 경진 기축 무술 → 금1 토5 → 목(0)
-        assertThat(Element.lacking(new SajuPillars("경진", "기축", "무술", null))).isEqualTo(Element.WOOD);
+    void luckyFollowsTenGodRelation() {
+        Element me = Element.METAL; // 일간 신
+        assertThat(me.luckyAgainst(Element.WOOD)).isEqualTo(Element.FIRE);   // 재성일 → 관성
+        assertThat(me.luckyAgainst(Element.FIRE)).isEqualTo(Element.EARTH);  // 관성일 → 인성
+        assertThat(me.luckyAgainst(Element.EARTH)).isEqualTo(Element.METAL); // 인성일 → 비겁
+        assertThat(me.luckyAgainst(Element.METAL)).isEqualTo(Element.WATER); // 비겁일 → 식상
+        assertThat(me.luckyAgainst(Element.WATER)).isEqualTo(Element.WOOD);  // 식상일 → 재성
     }
 }

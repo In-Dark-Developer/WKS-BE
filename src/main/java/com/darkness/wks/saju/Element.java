@@ -1,7 +1,5 @@
 package com.darkness.wks.saju;
 
-import java.util.List;
-
 /**
  * 오행. 순서가 상생 순환(목→화→토→금→수→목)이라 ordinal 차이로 십성 관계를 구한다.
  */
@@ -42,22 +40,11 @@ public enum Element {
     }
 
     /**
-     * 팔자(+ 추가 간지, 예: 오늘 일진)에서 가장 적게 나온 오행 = 용신 근사. 행운 아이템·장소의 기준.
-     * 동률이면 목→화→토→금→수 순서에서 앞선 것. 결정적.
+     * 오늘 천간 오행과 나(일간)의 관계(십성)에 대응하는 행운 오행.
+     * 비겁(같음)→식상, 식상→재성, 재성→관성, 관성→인성, 인성→비겁. 즉 관계 순환에서 한 칸 뒤.
      */
-    public static Element lacking(SajuPillars p, String... extraGanji) {
-        int[] count = new int[values().length];
-        List<String> all = new java.util.ArrayList<>(List.of(p.yearPillar(), p.monthPillar(), p.dayPillar()));
-        if (p.hourPillar() != null) all.add(p.hourPillar());
-        all.addAll(List.of(extraGanji));
-        for (String pillar : all) {
-            count[ofStem(pillar.charAt(0)).ordinal()]++;
-            count[ofBranch(pillar.charAt(1)).ordinal()]++;
-        }
-        Element min = WOOD;
-        for (Element e : values()) {
-            if (count[e.ordinal()] < count[min.ordinal()]) min = e;
-        }
-        return min;
+    public Element luckyAgainst(Element today) {
+        int relation = (today.ordinal() - ordinal() + 5) % 5; // 0 비겁 1 식상 2 재성 3 관성 4 인성
+        return values()[(ordinal() + relation + 1) % 5];
     }
 }

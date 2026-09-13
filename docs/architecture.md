@@ -239,7 +239,7 @@ CreateResultRequest
   → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
   → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명·결혼·자녀·연애 문장만)
   → ReadingRepository   저장
-  → DailyLucky          조회 시: 팔자 + 오늘 일진 → 오늘의 행운 오행·아이템·장소   ← 코드, 매일 변경
+  → DailyLucky          조회 시: 일간 vs 오늘 일진 천간(십성) → 행운 오행 → 아이템·장소   ← 코드, 매일 변경
 ```
 
 **등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:

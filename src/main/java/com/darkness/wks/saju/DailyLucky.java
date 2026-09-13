@@ -14,8 +14,9 @@ import java.util.Map;
 /**
  * 오늘의 행운 오행·아이템·장소. 매일 바뀌고 사주에 묶인다. LLM·외부 API 없음.
  * <p>
- * 행운 오행 = 내 팔자 8글자 + 오늘 일진(日辰) 2글자 중 가장 부족한 오행.
- * 아이템·장소 = 그 오행의 풀에서 (내 일주 번호 + 오늘 일진 번호) 로 고른다 → 같은 사람 같은 날은 같고, 사람·날짜가 다르면 달라진다.
+ * 행운 오행 = 내 일간(일주 천간)과 오늘 일진(日辰) 천간의 관계(십성)에 대응하는 오행 — {@link Element#luckyAgainst}.
+ * 천간 오행은 이틀씩 같으므로 오행은 이틀 주기, 아이템·장소는 (내 일주 번호 + 오늘 일진 번호) 로 골라 매일 바뀐다.
+ * 같은 사람 같은 날은 같고, 사람·날짜가 다르면 달라진다.
  * 풀은 {@code resources/lucky/items.txt}, {@code places.txt} (기획이 편집).
  */
 public record DailyLucky(Element element, String item, String place) {
@@ -25,7 +26,7 @@ public record DailyLucky(Element element, String item, String place) {
 
     public static DailyLucky of(SajuPillars pillars, LocalDate today) {
         String dayGanji = todayPillar(today);
-        Element element = Element.lacking(pillars, dayGanji);
+        Element element = Element.ofStem(pillars.dayPillar().charAt(0)).luckyAgainst(Element.ofStem(dayGanji.charAt(0)));
         int key = ganjiIndex(pillars.dayPillar()) + ganjiIndex(dayGanji);
         return new DailyLucky(element, pick(ITEMS, element, key), pick(PLACES, element, key));
     }
