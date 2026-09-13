@@ -29,7 +29,6 @@
 
 | 내용 | 담당 | 필요한 것 |
 |---|---|---|
-| 만세력 라이브러리 선정 | 차은호 | **Day 1 내 결론** |
 | Gemini 무료 티어 RPM·RPD 실측 | 차은호 | Day 6 부하 테스트 |
 | 프론트 배포 도메인 (CORS용) | 곽도윤 | 프론트 팀 확인 |
 | 축제 D-day 확정 | 곽도윤 | 학생처 확인 |
@@ -98,6 +97,75 @@
 ---
 
 ## 기록
+
+### 2026-09-13 (일) · 차은호 · saju/ · Claude Code
+
+**한 일**
+- 만세력 라이브러리 확정: `cn.6tail:lunar:1.7.4` (MIT, Maven Central, 런타임 의존성 0). `build.gradle` 에 추가
+- `SajuCalculator` 구현: 연·월·일·시주 계산. 절기·60갑자는 lunar-java, 진태양시는 시도별 경도 보정
+- `KoreanLunarCalendar` 추가: 한국 음력 → 양력 변환 (KASI 표, 1940~2030)
+- 단위 테스트 20건 (`SajuCalculatorTest`, `KoreanLunarCalendarTest`). 스프링·DB 없이 실행
+- 검증: KASI 기준 manseryeok 2.0.0 과 대조. 팔자 38,064건 중 절입 순간 ±30초 이내 4건 외 전부 일치, 음력→양력 22,280일 전부 일치
+- `gradlew` 실행 권한 추가 (기존 644 라 `./gradlew` 실행 불가였음)
+
+**건드린 파일/패키지**
+- `saju/SajuCalculator.java`, `saju/KoreanLunarCalendar.java`, 테스트 2개
+- `build.gradle` (의존성 1줄), `gradlew` (파일 모드), `docs/architecture.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- lunar-java 는 **GMT+8 벽시계 기준**. 절기 판정(연주·월주)엔 KST−1h 를 넣고, 일주·시주는 출생지 진태양시로 따로 계산한다. 이 구조를 무너뜨리면 입춘 전후 1시간 구간에서 연주가 틀린다
+- lunar-java 의 **음력은 중국 기준**이라 쓰지 않는다 (1950~2010 사이 3.2% 날짜가 한국 음력과 다름). 음력은 `KoreanLunarCalendar.toSolar()` 로 먼저 양력 변환 후 `SajuCalculator` 에 넣는다
+- 관법 결정: 자시(23시 이후)도 당일 일주. `birthTime` null 이면 정오 기준으로 연·월·일주 판정, 시주 null. `birthRegion` 이 null 이거나 표에 없으면 서울 경도
+- 미보정(의도적): 균시차 ±16분, 1954~61년 UTC+8:30, 1948~60·1987~88 서머타임. 대상 연령대에 영향 없음. 필요하면 `SajuCalculator` 의 `apparent` 계산 한 줄
+- 음력 입력(`calendarType`, `isLeapMonth`)은 현재 `CreateResultRequest` 에 없음. **최선우 확인 필요**: DTO 필드 추가 후 `KoreanLunarCalendar.toSolar()` 호출
+- 09-13 Codex 기록의 "lunar-java 불일치"는 무보정 입력 재현이며 위 구조로 해결됨. `docs/lunar-java-validation.md`, `tools/check_lunar.py` 는 탐색용이라 커밋하지 않음
+
+**막힌 것 / 넘기는 것**
+- `saju/` 출력 형태 미확정: `ReadingCategory` 5종(점수) vs `result/ResultAnalysisPort` (운명 + 결혼·자녀·연애 등급 + 행운 아이템·장소). 등급 문자열 집합·산출 기준도 미정. 이게 정해져야 `ReadingScorer`·`ReadingGenerator` 착수 가능
+- 실제 인물 5명 대조(TR-01)는 출생 정보 확보 후 `SajuCalculatorTest` 에 추가
+
+**문서 변경**
+- `docs/architecture.md`: 스택 표에 lunar-java 추가, §9 미결정에서 만세력 항목 제거, §6 에 계산 방식 반영
+
+**프론트에 알려야 할 것**
+- 없음 (음력 입력 지원 여부는 api-spec 결정 후 별도 공지)
+
+### 2026-09-13 (일) · 차은호 · saju/ 도입 검증 · Codex
+
+**한 일**
+- `lunar-java 1.7.4` JAR와 `manseryeok 2.0.0`을 실제 실행해 합성 입력 21건 비교: 15건 일치, 6건 불일치. 불일치로 검사 종료 코드 1 반환
+- 1997-02-07/08은 음력 날짜가 하루 다름. 2024 입춘·2021 한로 직전 각 2건은 한국 시각을 그대로 넣은 lunar-java의 연주·월주가 먼저 바뀜
+- 원인은 중국 기준 음력 및 절기 시각(UTC+8)과 한국 기준(UTC+9)의 차이. 한로 경계는 KASI 2021 역서의 10:39 표기와도 대조
+- 비교 스크립트 Python 문법 검사와 `git diff --check` 통과. 운영 코드·의존성은 변경하지 않음
+
+**건드린 파일/패키지**
+- `tools/check_lunar.py`: 외부 라이브러리 경로를 받아 실행하는 독립 비교 스크립트
+- `docs/lunar-java-validation.md`: 조건·결과·출처·제한·재실행 방법
+- `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 라이브러리 채택은 아직 미결정. 한국 시각을 무보정으로 전달하는 방식에서 문제가 재현된 것이며 lunar-java 전체가 잘못됐다는 의미는 아님
+- 비교는 양력 입력, 진태양시 OFF, lunar-java `sect=2`와 manseryeok `splitJasi`로 자시 정책을 맞춤. 두 라이브러리의 기본 자시 정책은 서로 다름
+- 15/21은 정확도 지표가 아님. 경계 사례를 의도적으로 선정했고, 비교 대상 manseryeok도 독립적인 정답으로 인증한 것은 아님
+- 외부 다운로드가 DNS 제한으로 실패하여 로컬 1.7.4 JAR를 사용. 최신 버전 검증으로 보고하면 안 됨
+- 재실행: `python3 tools/check_lunar.py /absolute/path/lunar.jar /absolute/path/node_modules/manseryeok` (Python 3, Java 17+, Node 및 사전 다운로드한 라이브러리 필요)
+- 이번 실행의 로컬 자료는 `/tmp/claude-1000/-home-eunho-Workspace-WKS-BE/a0984da8-3955-4acb-8aef-0e1fc19c9634/scratchpad/` 아래 `lunar-java/lunar-1.7.4.jar`, `mstest/node_modules/manseryeok`. 임시 경로이므로 다른 환경에서는 별도 확보 필요
+- 입력에서 일괄적으로 1시간을 빼면 일주·시주까지 달라질 수 있음. 음력 변환도 별도 문제이므로 이 방법을 해결책으로 적용하지 말 것
+- `SajuCalculator`는 여전히 스텁. `manseryeok` 사용 시 Node 실행 환경이 필요하며 아직 추가하지 않음
+- 앞선 대화의 5개 해석·0~100 점수 요약보다 아래 9/12 B 인계와 현재 API 문서를 우선 확인할 것. 현재 B 응답은 운명·세 운세 등급·행운 아이템·장소 구조
+
+**막힌 것 / 넘기는 것**
+- 채택할 최신 버전으로 재실행하고 1997 음력·2024 입춘 사례를 KASI 원본 데이터에 직접 대조. 현재 이 사례들은 두 구현 간 차이 재현까지 완료
+- 실제 인물 5명, 음력 역변환·잘못된 윤달, 지역·균시차·과거 표준시/DST, 시간·지역 null은 미검증
+- 절기 당일 시간 모름은 연주·월주까지 불확실할 수 있으므로 정책 합의 필요
+- 한국 기준 보정 작업량과 Node 운영 부담을 비교해 lunar-java 또는 manseryeok 선택. 아직 도입·Java 이식·보정 구현을 진행하지 않음
+
+**문서 변경**
+- `docs/lunar-java-validation.md` 추가, `docs/handoff.md` 갱신
+- AGENTS.md / api-spec / architecture / conventions 변경 없음
+
+**프론트에 알려야 할 것**
+- 없음 (이번 작업의 API 변경 없음)
 
 ### 2026-09-12 (토) · 최선우 · result/ · Codex
 
