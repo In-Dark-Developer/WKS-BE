@@ -43,6 +43,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | PR #11 |
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
 | V1 | 곽도윤 | init schema (5개 테이블) | 예정 |
 
@@ -101,6 +102,35 @@
 ---
 
 ## 기록
+
+### 2026-09-13 (일) · 차은호 · result/ 연결 초안 (#10, 최선우 리뷰용) · Claude Code
+
+**한 일**
+- `POST /api/results` 를 가짜 분석기 대신 `saju/` 에 연결하는 초안. **`result/` 는 최선우 담당이라 Draft PR 로 올리고 최선우가 리뷰·머지**
+- `CreateResultRequest`: `calendarType`(필수)·`isLeapMonth` 추가, `birthDate` 를 `String`(yyyy-MM-dd) 으로, `birthRegion` 제거
+- `ResultService`: `BirthDate.parse(...).toSolar()` 로 양력 변환 후 계산·저장. 없는 날짜·윤달, 1950-01-01 ~ 오늘 밖 → 400 `INVALID_INPUT`
+- `SajuResultAnalysisAdapter` 신규: `SajuCalculator` → `ReadingScorer` → `Grade.of` → `ReadingGenerator`. **기본 활성**. 가짜 분석기는 `app.result.fake-analysis-enabled=true` 일 때만 (기본값 뒤집음)
+- `ResultAnalysisPort.analyze(LocalDate solar, LocalTime)` — 지역 파라미터 제거
+- `ResultResponse` 에 `zodiac`
+- 로컬 E2E (Postgres 15 + 실제 Gemini): 양력·음력 윤달·시간 모름 201, 없는 윤달·형식 오류·1949년 400. Gemini 3.1~3.4초/건
+
+**건드린 파일/패키지**
+- `result/`: `CreateResultRequest`, `ResultService`, `ResultAnalysisPort`, `FakeResultAnalysisAdapter`, `SajuResultAnalysisAdapter`(신규), `dto/ResultResponse`, 테스트 2개
+
+**다음 사람이 알아야 할 것**
+- **버그 발견 (내 변경 아님, 최선우 확인)**: `result.birth_time` 이 입력 14:30 인데 DB 에 05:30 으로 저장됨. `hibernate.jdbc.time_zone: UTC` 가 `LocalTime` 에도 적용돼 KST−9h 로 밀림. 팔자는 저장 전에 계산하므로 결과는 맞지만 저장값은 틀림. `birth_date` 는 정상
+- `reading` 에 **점수(0~100)를 저장**한다 (V3, 9/13 결정). 등급은 응답 시 `Grade.of(score).label()`. 등급 컷을 바꿔도 마이그레이션 없이 코드만 고치면 됨
+- LLM 실패 시 팔자를 미리 저장해 재시도 가능하게(FR-RD-07) 하는 건 안 넣음. 계산이 수 ms 라 재요청 시 재계산이 더 단순
+- 옛 9/12 기록의 "`fake-analysis-enabled=false` 로 끈다" 는 반대로 바뀜: 기본이 실제, `true` 면 가짜
+
+**막힌 것 / 넘기는 것**
+- 최선우: PR 리뷰·머지, `birth_time` 저장 버그
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (api-spec 은 이미 반영됨)
 
 ### 2026-09-13 (일) · 차은호 · saju/ 등급·해석 (#6) · Claude Code
 

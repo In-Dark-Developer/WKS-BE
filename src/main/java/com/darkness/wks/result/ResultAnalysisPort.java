@@ -11,7 +11,11 @@ import java.util.List;
  */
 public interface ResultAnalysisPort {
 
-    AnalysisResult analyze(LocalDate birthDate, LocalTime birthTime, String birthRegion);
+    /**
+     * @param solarBirthDate 양력 생년월일. 음력 입력은 호출 전에 {@code BirthDate.parse(...).toSolar()} 로 변환한다
+     * @param birthTime      null 이면 시간 모름
+     */
+    AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime);
 
     record AnalysisResult(
             SajuPillars pillars,
@@ -32,6 +36,7 @@ public interface ResultAnalysisPort {
     record Destiny(String title, String description) {
     }
 
-    record Fortune(FortuneCategory category, String grade, String content) {
+    /** score 는 0~100. 등급은 응답 시 {@code Grade.of(score)} 로 만든다 */
+    record Fortune(FortuneCategory category, int score, String content) {
     }
 }

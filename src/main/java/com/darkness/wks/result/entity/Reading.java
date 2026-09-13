@@ -37,20 +37,20 @@ public class Reading {
     @Column(name = "destiny_content", nullable = false, columnDefinition = "TEXT")
     private String destinyContent;
 
-    @Column(name = "marriage_grade", length = 10, nullable = false)
-    private String marriageGrade;
+    @Column(name = "marriage_score", nullable = false)
+    private Short marriageScore;
 
     @Column(name = "marriage_content", nullable = false, columnDefinition = "TEXT")
     private String marriageContent;
 
-    @Column(name = "children_grade", length = 10, nullable = false)
-    private String childrenGrade;
+    @Column(name = "children_score", nullable = false)
+    private Short childrenScore;
 
     @Column(name = "children_content", nullable = false, columnDefinition = "TEXT")
     private String childrenContent;
 
-    @Column(name = "love_grade", length = 10, nullable = false)
-    private String loveGrade;
+    @Column(name = "love_score", nullable = false)
+    private Short loveScore;
 
     @Column(name = "love_content", nullable = false, columnDefinition = "TEXT")
     private String loveContent;
@@ -69,11 +69,11 @@ public class Reading {
             Result result,
             String destinyTitle,
             String destinyContent,
-            String marriageGrade,
+            int marriageScore,
             String marriageContent,
-            String childrenGrade,
+            int childrenScore,
             String childrenContent,
-            String loveGrade,
+            int loveScore,
             String loveContent,
             String luckyItem,
             String luckyPlace
@@ -81,11 +81,11 @@ public class Reading {
         this.result = result;
         this.destinyTitle = destinyTitle;
         this.destinyContent = destinyContent;
-        this.marriageGrade = marriageGrade;
+        this.marriageScore = (short) marriageScore;
         this.marriageContent = marriageContent;
-        this.childrenGrade = childrenGrade;
+        this.childrenScore = (short) childrenScore;
         this.childrenContent = childrenContent;
-        this.loveGrade = loveGrade;
+        this.loveScore = (short) loveScore;
         this.loveContent = loveContent;
         this.luckyItem = luckyItem;
         this.luckyPlace = luckyPlace;
