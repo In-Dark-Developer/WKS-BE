@@ -1,5 +1,7 @@
 package com.darkness.wks.result.dto;
 
+import com.darkness.wks.compatibility.entity.Compatibility;
+import com.darkness.wks.compatibility.entity.CompatibilityTier;
 import com.darkness.wks.result.FortuneCategory;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
@@ -7,6 +9,7 @@ import com.darkness.wks.saju.Grade;
 import com.darkness.wks.saju.Zodiac;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,10 +33,17 @@ public record ResultResponse(
         String luckyItem,
 
         @Schema(example = "야외 무대")
-        String luckyPlace
+        String luckyPlace,
+
+        @Schema(description = "생성 시 빈 배열, 조회 시 createdAt 내림차순")
+        List<CompatibilityResponse> compatibilities
 ) {
 
     public static ResultResponse from(Result result, Reading reading) {
+        return from(result, reading, List.of());
+    }
+
+    public static ResultResponse from(Result result, Reading reading, List<Compatibility> compatibilities) {
         return new ResultResponse(
                 result.getId(),
                 result.getNickname(),
@@ -53,7 +63,10 @@ public record ResultResponse(
                         new FortuneResponse(FortuneCategory.LOVE, Grade.of(reading.getLoveScore()).label(), reading.getLoveContent())
                 ),
                 reading.getLuckyItem(),
-                reading.getLuckyPlace()
+                reading.getLuckyPlace(),
+                compatibilities.stream()
+                        .map(compatibility -> CompatibilityResponse.from(compatibility, result))
+                        .toList()
         );
     }
 
@@ -70,5 +83,26 @@ public record ResultResponse(
             @Schema(description = "SS S A+ A B+ B", example = "SS") String grade,
             @Schema(example = "결혼운의 흐름이 매우 좋습니다.") String content
     ) {
+    }
+
+    @Schema(description = "친구 궁합 요약. 상대방 개인정보와 resultId는 포함하지 않는다.")
+    public record CompatibilityResponse(
+            @Schema(example = "지현") String nickname,
+            @Schema(minimum = "0", maximum = "100", example = "82") int score,
+            CompatibilityTier tier,
+            Instant createdAt
+    ) {
+
+        public static CompatibilityResponse from(Compatibility compatibility, Result result) {
+            Result other = compatibility.getOrigin().getId().equals(result.getId())
+                    ? compatibility.getGuest()
+                    : compatibility.getOrigin();
+            return new CompatibilityResponse(
+                    other.getNickname(),
+                    compatibility.getScore(),
+                    compatibility.getTier(),
+                    compatibility.getCreatedAt()
+            );
+        }
     }
 }

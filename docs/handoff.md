@@ -118,13 +118,13 @@
 - `result/`: `CreateResultRequest`, `ResultService`, `ResultAnalysisPort`, `FakeResultAnalysisAdapter`, `SajuResultAnalysisAdapter`(신규), `dto/ResultResponse`, 테스트 2개
 
 **다음 사람이 알아야 할 것**
-- **버그 발견 (내 변경 아님, 최선우 확인)**: `result.birth_time` 이 입력 14:30 인데 DB 에 05:30 으로 저장됨. `hibernate.jdbc.time_zone: UTC` 가 `LocalTime` 에도 적용돼 KST−9h 로 밀림. 팔자는 저장 전에 계산하므로 결과는 맞지만 저장값은 틀림. `birth_date` 는 정상
+- **해결됨**: `result.birth_time` 이 입력 14:30 대신 DB에 05:30으로 저장되던 문제는 `Result.birthTime`을 JDBC 네이티브 `LOCAL_TIME`으로 매핑해 전역 UTC 보정 대상에서 제외함
 - `reading` 에 **점수(0~100)를 저장**한다 (V3, 9/13 결정). 등급은 응답 시 `Grade.of(score).label()`. 등급 컷을 바꿔도 마이그레이션 없이 코드만 고치면 됨
 - LLM 실패 시 팔자를 미리 저장해 재시도 가능하게(FR-RD-07) 하는 건 안 넣음. 계산이 수 ms 라 재요청 시 재계산이 더 단순
 - 옛 9/12 기록의 "`fake-analysis-enabled=false` 로 끈다" 는 반대로 바뀜: 기본이 실제, `true` 면 가짜
 
 **막힌 것 / 넘기는 것**
-- 최선우: PR 리뷰·머지, `birth_time` 저장 버그
+- 최선우: PR 리뷰·머지
 
 **문서 변경**
 - `docs/handoff.md`
@@ -264,6 +264,31 @@
 
 **프론트에 알려야 할 것**
 - 없음 (이번 작업의 API 변경 없음)
+### 2026-09-13 (일) · 최선우 · result/·compatibility/ · Codex
+
+**한 일**
+- `GET /api/results/{resultId}` 구현 및 Swagger 명세 추가
+- Result·Reading DB 조회와 궁합 최신순 조회 연결
+- `FakeResultAnalysisAdapter`를 제거하고 `SajuCalculator` → `ReadingScorer` → Gemini 해석 경로를 유일한 `ResultAnalysisPort` 구현으로 고정
+- 잘못된 UUID 400, 없는 Result 404 처리
+- 조회 시 A 분석 모듈 미호출 단위 테스트 및 실제 PostgreSQL 재조회 검증
+
+**건드린 파일/패키지**
+- `result/`의 Controller, Service, 응답 DTO와 테스트
+- `compatibility/CompatibilityRepository`
+
+**다음 사람이 알아야 할 것**
+- POST와 GET이 `ResultResponse`를 공유하며 POST의 `compatibilities`는 빈 배열
+- 궁합 조회는 origin/guest 양쪽을 한 쿼리로 조회하고 `createdAt` 내림차순 정렬
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md`에 POST 빈 궁합 배열 반영
+
+**프론트에 알려야 할 것**
+- POST 응답에도 `compatibilities: []`가 포함됨
 
 ### 2026-09-12 (토) · 최선우 · result/ · Codex
 

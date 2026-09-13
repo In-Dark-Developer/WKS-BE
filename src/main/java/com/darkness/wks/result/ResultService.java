@@ -2,6 +2,8 @@ package com.darkness.wks.result;
 
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
+import com.darkness.wks.compatibility.CompatibilityRepository;
+import com.darkness.wks.compatibility.entity.Compatibility;
 import com.darkness.wks.result.dto.CreateResultRequest;
 import com.darkness.wks.result.dto.ResultResponse;
 import com.darkness.wks.result.entity.Reading;
@@ -12,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +24,7 @@ public class ResultService {
 
     private final ResultRepository resultRepository;
     private final ReadingRepository readingRepository;
+    private final CompatibilityRepository compatibilityRepository;
     private final ResultAnalysisPort resultAnalysisPort;
 
     private static final LocalDate MIN_BIRTH_DATE = LocalDate.of(1950, 1, 1);
@@ -62,6 +67,17 @@ public class ResultService {
         return ResultResponse.from(result, reading);
     }
 
+    public ResultResponse getResult(String resultId) {
+        UUID id = parseResultId(resultId);
+        Result result = resultRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
+        Reading reading = readingRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException("Reading not found for result: " + id));
+        List<Compatibility> compatibilities = compatibilityRepository.findAllByResultIdOrderByCreatedAtDesc(id);
+
+        return ResultResponse.from(result, reading, compatibilities);
+    }
+
     /** 음력이면 양력으로 변환. 없는 날짜·윤달, 1950-01-01 ~ 오늘 범위 밖이면 INVALID_INPUT */
     private static LocalDate toSolar(CreateResultRequest request) {
         LocalDate solar;
@@ -74,5 +90,17 @@ public class ResultService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         return solar;
+    }
+
+    private UUID parseResultId(String value) {
+        try {
+            UUID id = UUID.fromString(value);
+            if (!id.toString().equalsIgnoreCase(value) || id.version() != 4) {
+                throw new IllegalArgumentException("Invalid UUID v4");
+            }
+            return id;
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
     }
 }

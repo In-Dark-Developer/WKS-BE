@@ -106,7 +106,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
       { "category": "LOVE",     "grade": "B",  "content": "연애운에 대한 설명" }
     ],
     "luckyItem": "파란색 팔찌",
-    "luckyPlace": "야외 무대"
+    "luckyPlace": "야외 무대",
+    "compatibilities": []
   }
 }
 ```
@@ -142,8 +143,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": [
-      { "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" },
-      { "nickname": "민수", "score": 31, "tier": "BEOT",  "createdAt": "2026-09-11T13:20:00Z" }
+      { "nickname": "민수", "score": 31, "tier": "BEOT",  "createdAt": "2026-09-11T13:20:00Z" },
+      { "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" }
     ]
   }
 }
