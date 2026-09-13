@@ -10,7 +10,7 @@ import java.time.LocalTime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 기대값은 KASI 기준 manseryeok 2.0.0 (서울 경도 126.978, 균시차·서머타임 OFF, 자정 경계) 출력.
+ * 기대값은 KASI 기준 manseryeok 2.0.0 (서울 경도 126.978, 균시차·서머타임 OFF, 야자시=다음날) 출력.
  */
 class SajuCalculatorTest {
 
@@ -46,15 +46,18 @@ class SajuCalculatorTest {
     }
 
     @Test
-    void midnightBoundaryUsesTrueSolarTime() {
-        // 00:28 KST = 서울 진태양시 23:56 전날 → 일주 전날. 부산(-24분)은 00:04 → 당일
-        assertThat(join(calculator.calculate(LocalDate.of(2002, 3, 14), LocalTime.of(0, 28), "서울")))
-                .isEqualTo("임오 계묘 경진 병자");
-        assertThat(join(calculator.calculate(LocalDate.of(2002, 3, 14), LocalTime.of(0, 28), "부산광역시")))
-                .isEqualTo("임오 계묘 신사 무자");
-        // 23:30 자시: 일주는 당일 유지(자정 경계)
+    void dayBoundaryIsStartOfJasiInTrueSolarTime() {
+        // 23:30 KST = 서울 진태양시 22:58 → 해시, 당일. 23:40 = 23:08 → 야자시, 다음날 일주·시주
         assertThat(join(calculator.calculate(LocalDate.of(2002, 3, 14), LocalTime.of(23, 30), "서울")))
                 .isEqualTo("임오 계묘 신사 기해");
+        assertThat(join(calculator.calculate(LocalDate.of(2002, 3, 14), LocalTime.of(23, 40), "서울")))
+                .isEqualTo("임오 계묘 임오 경자");
+        // 포스텔러 대조: 2000-01-01 00:15 인천 → 진태양시 23:41 전날, 야자시 → 일주 1/1 무오, 시주 임자
+        assertThat(join(calculator.calculate(LocalDate.of(2000, 1, 1), LocalTime.of(0, 15), "인천")))
+                .isEqualTo("기묘 병자 무오 임자");
+        // 포스텔러 대조: 2004-02-04 19:00 광주 → 입춘(20:56) 전
+        assertThat(join(calculator.calculate(LocalDate.of(2004, 2, 4), LocalTime.of(19, 0), "광주광역시")))
+                .isEqualTo("계미 을축 계축 신유");
     }
 
     @Test

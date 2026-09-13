@@ -15,7 +15,8 @@ import java.util.Map;
  * 절기 판정(연주·월주)에는 KST 에서 1시간을 뺀 시각을 넣는다. 일주·시주는 출생지 진태양시 기준이므로
  * 별도의 시각으로 다시 계산한다.
  * <p>
- * 관법: 자시(23시 이후)도 당일로 본다(자정 경계). 음력 입력은 {@link KoreanLunarCalendar} 로 먼저 양력 변환한다.
+ * 관법: 야자시 — 진태양시 23시 이후는 다음날 일주·시주로 본다 (포스텔러와 동일). 음력 입력은
+ * {@link KoreanLunarCalendar} 로 먼저 양력 변환한다.
  * DB(Repository/Entity)·스프링 컨텍스트에 의존하지 않는다.
  */
 public class SajuCalculator {
@@ -61,19 +62,11 @@ public class SajuCalculator {
         LocalDateTime apparent = kst.plusSeconds(Math.round((longitude(birthRegion) - KST_MERIDIAN) * 240));
         Lunar forDay = toLunar(apparent);
 
-        String day = forDay.getDayInGanZhiExact2(); // 자정 경계: 23시 이후도 당일
-        String hour = null;
-        if (birthTime != null) {
-            int branch = forDay.getTimeZhiIndex();
-            int stem = (GAN.indexOf(day.charAt(0)) % 5 * 2 + branch) % 10; // 오서둔: 일간 기준 시간 천간
-            hour = "" + GAN_KO.charAt(stem) + ZHI_KO.charAt(branch);
-        }
-
         return new SajuPillars(
                 toKorean(forTerms.getYearInGanZhiExact()),
                 toKorean(forTerms.getMonthInGanZhiExact()),
-                toKorean(day),
-                hour
+                toKorean(forDay.getDayInGanZhiExact()),   // 야자시: 23시 이후는 다음날
+                birthTime == null ? null : toKorean(forDay.getTimeInGanZhi())
         );
     }
 
