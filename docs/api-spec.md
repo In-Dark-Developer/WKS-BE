@@ -62,7 +62,6 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "birthDate": "2002-03-14",
   "isLeapMonth": false,
   "birthTime": "14:30",
-  "birthRegion": "서울",
   "gender": "MALE"
 }
 ```
@@ -74,7 +73,6 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `birthDate` | `yyyy-MM-dd`, 1950-01-01 ~ 오늘, 필수. `LUNAR` 면 음력 날짜 |
 | `isLeapMonth` | boolean. `LUNAR` 이고 윤달이면 `true`. 생략 시 `false`. `SOLAR` 면 무시 |
 | `birthTime` | `HH:mm` 또는 **null(모름)** |
-| `birthRegion` | 최대 50자 또는 **null(모름)** |
 | `gender` | `MALE` \| `FEMALE`, 필수 |
 
 **음력 입력**
@@ -87,7 +85,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - 시진(2시간 단위)을 고르면 그 칸의 **가운데 시각**을 보낸다. 예: 묘시 05:30~07:30 → `"06:30"`
 - **자시는 두 칸으로 나눈다**: `자시 00:00~01:30` → `"00:45"`, `자시 23:30~24:00` → `"23:45"`.
   자정을 걸치는 칸이라 날짜만으로는 새벽/밤 구분이 안 되고, 둘은 사주가 다르다
-- 시진 단위로 보내면 `birthRegion` 은 결과에 영향이 없다. 화면에서 빼도 된다
+- 출생 지역은 받지 않는다 (9/13 기획 결정). 시진 단위 입력이라 지역 시차 보정이 결과에 영향이 없다. 서버는 서울 경도 기준으로 계산한다
 
 **Response 201**
 

@@ -62,6 +62,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-13 | `POST /api/results` 요청에서 `birthRegion` 제거 (기획 결정, 시진 입력이라 무의미) | ❌ |
 | 2026-09-13 | `POST /api/results` 요청에 `calendarType`(필수)·`isLeapMonth` 추가 (음력 지원). 시진 가운데 시각 전송·자시 두 칸 분리 규칙 명시 | ❌ |
 | 2026-09-12 | 결과 응답을 운명 제목·설명, 결혼/자녀/연애 등급·설명, 행운 아이템·장소로 변경 | ❌ |
 | 2026-09-12 | `POST /api/results` 닉네임 최대 길이 20자 → 8자 | ❌ |
@@ -122,8 +123,8 @@
 - 09-13 Codex 기록의 "lunar-java 불일치"는 무보정 입력 재현이며 위 구조로 해결됨. `docs/lunar-java-validation.md`, `tools/check_lunar.py` 는 탐색용이라 커밋하지 않음
 
 **막힌 것 / 넘기는 것**
-- 기획 결정 대기 2건: 자시 두 칸 분리, 지역 입력 유지 여부 (음력은 확정)
-- 최선우: `CreateResultRequest` 에 `CalendarType calendarType`(saju 패키지 enum)·`Boolean isLeapMonth` 추가, `birthDate` 를 `String` 으로. `BirthDate.parse(...).toSolar()` 결과(양력)를 `analyze()` 와 `Result` 저장에 사용
+- 기획 결정 대기 1건: 자시 두 칸 분리 (음력 지원·지역 제거는 확정)
+- 최선우: `CreateResultRequest` 에 `CalendarType calendarType`(saju 패키지 enum)·`Boolean isLeapMonth` 추가, `birthDate` 를 `String` 으로, `birthRegion` 삭제. `BirthDate.parse(...).toSolar()` 결과(양력)를 `analyze()` 와 `Result` 저장에 사용
 - `saju/` 출력 형태 미확정: `ReadingCategory` 5종(점수) vs `result/ResultAnalysisPort` (운명 + 결혼·자녀·연애 등급 + 행운 아이템·장소). 등급 문자열 집합·산출 기준도 미정. 이게 정해져야 `ReadingScorer`·`ReadingGenerator` 착수 가능
 - TR-01 대체: 포스텔러 만세력 2.2 와 7건 대조(입춘 전후·자시·시진 경계·설날) 전부 일치, `SajuCalculatorTest.matchesPosteller` 에 고정. 실제 인물 데이터가 생기면 추가
 
@@ -134,7 +135,7 @@
 **프론트에 알려야 할 것** (기획 확인 후 공지, 2026-09-13 기획에 전달)
 - 시간은 시진(2시간) 선택 UI 그대로. 프론트가 선택한 칸의 **가운데 시각**을 `birthTime: HH:mm` 으로 보낸다 (묘시 05:30~07:30 → `06:30`). 같은 시진이면 팔자가 같아서 문제 없음
 - **자시는 두 칸으로 분리 요청**: `자시 00:00~01:30` → `00:45`, `자시 23:30~24:00` → `23:45`. 자정을 걸쳐서 날짜+자시만으로는 새벽/밤 구분이 안 되고, 둘은 일주가 하루 다름
-- 시진 단위 입력이면 `birthRegion` 은 결과에 영향 없음(지역 보정 −24~−34분이 칸 경계에 안 닿음). 프론트에서 빼도 됨, nullable 이라 백엔드 변경 없음
+- **`birthRegion` 제거 확정(9/13 기획)**. 시진 단위 입력이라 지역 보정(−24~−34분)이 칸 경계에 안 닿음. api-spec 에서 뺌. `CreateResultRequest` 필드 삭제는 최선우, DB 컬럼 `birth_region` 은 그대로 두고 NULL 저장(마이그레이션 불필요). `SajuCalculator` 지역 파라미터는 `null` 로 넘기면 서울 기준
 - `birthTime: null` = 시간 모름, 3주 계산
 - **음력 지원 확정(9/13 기획)**. api-spec §2 에 `calendarType`·`isLeapMonth` 추가함. 변환은 `saju/BirthDate` 가 맡는다:
   `BirthDate.parse(calendarType, "yyyy-MM-dd", isLeapMonth).toSolar()` → 양력 `LocalDate`. 음력 2월 30일처럼 `LocalDate` 로 못 담는 날짜가 있어 **DTO 의 `birthDate` 는 `String` 이어야 한다**. 잘못된 날짜·윤달은 `IllegalArgumentException` → `INVALID_INPUT` 매핑 필요
