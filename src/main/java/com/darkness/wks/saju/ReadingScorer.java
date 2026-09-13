@@ -17,6 +17,7 @@ public class ReadingScorer {
     /** 십성 역할 인덱스: 0 비겁, 1 식상, 2 재성, 3 관성, 4 인성 */
     private static final int[] SPOUSE_BONUS = {0, 10, 30, 30, 20};
     private static final int[] CHILD_BONUS = {0, 20, 12, 8, 4};
+    private static final int[] CHILD_STEM_BONUS = {2, 10, 6, 4, 0};
 
     /** 년·월·일·시 기둥 비중 */
     private static final double[] PILLAR_WEIGHT = {0.7, 1.3, 1.0, 0.9};
@@ -67,14 +68,16 @@ public class ReadingScorer {
         double love = 20 + 10 * jaeGwan + 8 * dohwa;
         double marriage = 38 + SPOUSE_BONUS[relation(dayMaster, Element.ofBranch(spouseBranch))]
                 + 4 * jaeGwan + 12 * hap - 12 * chung;
-        double children = 30 + 16 * role[1] * scale;
+        // 자녀: 식상(자식 기운)이 많을수록, 인성(식상을 누르는 기운)이 많을수록 감점. 시주는 지지(자녀궁)·천간 둘 다 본다
+        double children = 30 + 12 * role[1] * scale - 4 * role[4] * scale;
         if (pillars.hourPillar() != null) {
-            children += CHILD_BONUS[relation(dayMaster, Element.ofBranch(pillars.hourPillar().charAt(1)))];
+            children += CHILD_BONUS[relation(dayMaster, Element.ofBranch(pillars.hourPillar().charAt(1)))]
+                    + CHILD_STEM_BONUS[relation(dayMaster, Element.ofStem(pillars.hourPillar().charAt(0)))];
         }
 
         Map<ReadingCategory, Integer> result = new EnumMap<>(ReadingCategory.class);
         result.put(ReadingCategory.MARRIAGE, calibrate(marriage, 65.7, 0.86));
-        result.put(ReadingCategory.CHILDREN, calibrate(children, 56.7, 0.9));
+        result.put(ReadingCategory.CHILDREN, calibrate(children, 51, 0.76));
         result.put(ReadingCategory.LOVE, calibrate(love, 57.9, 0.95));
         return result;
     }
