@@ -13,7 +13,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-wks}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 30s
 
   app:
     image: ${APP_IMAGE}
