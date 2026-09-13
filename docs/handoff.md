@@ -102,6 +102,34 @@
 
 ## 기록
 
+### 2026-09-13 (일) · 차은호 · saju/ 등급·해석 (#6) · Claude Code
+
+**한 일**
+- `ReadingCategory` 를 api-spec 기준 3종(MARRIAGE, CHILDREN, LOVE)으로 교체. 옛 5종 스텁 제거
+- `Grade` 6단계 `SS S A+ A B+ B` (기획 확정). 점수→등급 경계는 `Grade.of()` 한 곳
+- `ReadingScorer`: 팔자 → **0~100 점수**. 일간 기준 십성 분포·일지(배우자궁)·시지(자녀궁)·합충·도화살 가중치. 순수 함수. 등급 변환은 API 계층에서 `Grade.of(score)` (궁합의 점수→Tier 와 같은 구조)
+- `ReadingGenerator`: Gemini `gemini-2.5-flash` 1회 호출, JSON 스키마 강제, thinking 0, 재시도 1회, 실패 시 `LLM_UNAVAILABLE`. 로그는 ms·토큰 수만
+- 프롬프트 `resources/prompts/reading-system.txt` (보살 톤, 행운 장소는 동국대 캠퍼스 안)
+- 테스트 8건: 등급 결정성·경계, 프롬프트 개인정보 미포함, 파싱 실패
+
+**건드린 파일/패키지**
+- `saju/` 만: `ReadingCategory`, `Grade`, `Reading`, `ReadingScorer`, `ReadingGenerator`, `resources/prompts/`
+
+**다음 사람이 알아야 할 것**
+- 등급 분포(1950~2010 고유 팔자 8,225개): 결혼 SS 13%·B 4%, 자녀 SS 10%·B 16%, 연애 SS 4%·B 8%. 기획이 더 후하게/짜게 원하면 `ReadingScorer` 상수만 조정
+- Gemini 모델 `gemini-3.6-flash` (`gemini.model`, 기본값). **`gemini-2.5-flash` 는 신규 키에 404** ("no longer available to new users"). 3.x 는 `thinkingBudget` 400 → `thinkingLevel: MINIMAL` 사용
+- 실제 호출 스모크 완료: 약 3초, 약 770 토큰/건, 응답 스키마 7필드 정상. `GeminiSmokeTest` 는 `GOOGLE_API_KEY` 있을 때만 실행(CI 제외)
+- 최선우 연결 지점: `SajuCalculator.calculate()` → `ReadingScorer.score()` (점수) → `Grade.of(score)` (등급) → `ReadingGenerator.generate(pillars, grades)`. `Reading.contents()` 는 `EnumMap<ReadingCategory,String>`, 응답 `grade` 는 `Grade.label()`. 점수를 저장할지 등급만 저장할지는 `reading` 테이블 설계(최선우) 몫
+- 런타임 LLM 유지 결정(9/13). 대안으로 검토한 사전 생성(카테고리 3 × 등급 6 × 일주 60 문장을 미리 만들어 리소스로, 런타임 호출 0회)은 축제 순간 트래픽·429 위험을 없애는 방법. 무료 한도 실측 후 부족하면 이 안으로 전환 가능
+
+**막힌 것 / 넘기는 것**
+- Day 6 RPM·RPD 실측 (무료 티어 한도가 축제 트래픽에 부족하면 결제 연결 — 곽도윤)
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (등급 6단계는 PR #5 에서 api-spec 반영됨)
 ### 2026-09-13 (일) · 차은호 · 문서 (#7, 기획 명세 반영) · Claude Code
 
 **한 일**
