@@ -45,6 +45,21 @@ class SajuCalculatorTest {
         assertThat(join(calculator.calculate(date, time, null))).isEqualTo(expected);
     }
 
+    /** 포스텔러 만세력 2.2 (야자시/조자시 미체크, 지역시 적용) 실제 대조 결과. 2026-09-13 */
+    @ParameterizedTest(name = "포스텔러 {0} {1} {2} → {3}")
+    @CsvSource({
+            "2000-01-01, 00:15, 인천광역시, 기묘 병자 무오 임자",
+            "2004-02-04, 19:00, 광주광역시, 계미 을축 계축 신유",
+            "2004-02-04, 21:30, 광주광역시, 갑신 병인 계축 임술",
+            "2003-07-04, 23:40, 대구광역시, 계미 무오 기묘 갑자",
+            "1999-08-08, 05:30, 대전광역시, 기묘 신미 임진 임인",
+            "2002-06-21, 21:10, 수원시, 임오 병오 경신 병술",
+            "1997-02-08, 03:30, 서울특별시, 정축 임인 신사 기축",
+    })
+    void matchesPosteller(LocalDate date, LocalTime time, String region, String expected) {
+        assertThat(join(calculator.calculate(date, time, region))).isEqualTo(expected);
+    }
+
     @Test
     void dayBoundaryIsStartOfJasiInTrueSolarTime() {
         // 23:30 KST = 서울 진태양시 22:58 → 해시, 당일. 23:40 = 23:08 → 야자시, 다음날 일주·시주
@@ -52,12 +67,6 @@ class SajuCalculatorTest {
                 .isEqualTo("임오 계묘 신사 기해");
         assertThat(join(calculator.calculate(LocalDate.of(2002, 3, 14), LocalTime.of(23, 40), "서울")))
                 .isEqualTo("임오 계묘 임오 경자");
-        // 포스텔러 대조: 2000-01-01 00:15 인천 → 진태양시 23:41 전날, 야자시 → 일주 1/1 무오, 시주 임자
-        assertThat(join(calculator.calculate(LocalDate.of(2000, 1, 1), LocalTime.of(0, 15), "인천")))
-                .isEqualTo("기묘 병자 무오 임자");
-        // 포스텔러 대조: 2004-02-04 19:00 광주 → 입춘(20:56) 전
-        assertThat(join(calculator.calculate(LocalDate.of(2004, 2, 4), LocalTime.of(19, 0), "광주광역시")))
-                .isEqualTo("계미 을축 계축 신유");
     }
 
     @Test
