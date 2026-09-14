@@ -229,6 +229,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | FR-CP-07 | P0 | 응답·조회에 **상대의 생년월일·성별·resultId 미포함.** 닉네임과 점수만 |
 | FR-CP-08 | P0 | `CompatibilityCalculator` 는 순수 함수 |
 | FR-CP-09 | P1 | 동시 요청으로 같은 조합이 중복 생성되지 않는다 (UNIQUE + 예외 처리) |
+| FR-CP-10 | P0 | 실제 팔자 표본의 Tier 목표 분포는 귀인 20% / 찰떡 30% / 벗 30% / 스침 20% (각 ±2%p) |
 
 ### 인수 조건
 
@@ -236,6 +237,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 - 같은 조합 2회 요청 → 두 번째 200, 점수 동일, DB row 1개
 - 궁합 응답 JSON에 `birthDate`, `birthTime`, `gender` 키가 없다
 - 경계값 60/61/74/75/89/90에서 Tier가 정확히 나뉜다
+- 고정 시드 실제 팔자 10만 조합에서 각 Tier가 목표 비율 ±2%p 안에 든다
 
 ---
 
