@@ -33,7 +33,7 @@ public class ResultService {
     @Transactional
     public ResultResponse createResult(CreateResultRequest request) {
         LocalDate birthDate = toSolar(request);
-        ResultAnalysisPort.AnalysisResult analysis = resultAnalysisPort.analyze(birthDate, request.birthTime());
+        ResultAnalysisPort.AnalysisResult analysis = resultAnalysisPort.analyze(birthDate, request.birthTime(), request.gender());
 
         Result result = resultRepository.save(new Result(
                 request.nickname(),

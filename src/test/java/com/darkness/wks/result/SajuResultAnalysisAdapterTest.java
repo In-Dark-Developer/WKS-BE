@@ -1,5 +1,6 @@
 package com.darkness.wks.result;
 
+import com.darkness.wks.common.Gender;
 import com.darkness.wks.saju.Grade;
 import com.darkness.wks.saju.Reading;
 import com.darkness.wks.saju.ReadingCategory;
@@ -23,12 +24,12 @@ class SajuResultAnalysisAdapterTest {
     @Test
     void mapsPillarsGradesAndContentsIntoContract() {
         ReadingGenerator generator = mock(ReadingGenerator.class);
-        when(generator.generate(any(), any())).thenReturn(new Reading(
+        when(generator.generate(any(), any(), any())).thenReturn(new Reading(
                 "설명",
                 Map.of(ReadingCategory.MARRIAGE, "결혼", ReadingCategory.CHILDREN, "자녀", ReadingCategory.LOVE, "연애")));
         SajuResultAnalysisAdapter adapter = new SajuResultAnalysisAdapter(generator);
 
-        ResultAnalysisPort.AnalysisResult r = adapter.analyze(LocalDate.of(2002, 3, 14), LocalTime.of(14, 30));
+        ResultAnalysisPort.AnalysisResult r = adapter.analyze(LocalDate.of(2002, 3, 14), LocalTime.of(14, 30), Gender.FEMALE);
 
         assertThat(r.pillars()).isEqualTo(new SajuPillars("임오", "계묘", "신사", "을미"));
         assertThat(r.fortunes()).extracting(ResultAnalysisPort.Fortune::category)
@@ -39,7 +40,7 @@ class SajuResultAnalysisAdapterTest {
         // 점수는 코드가 정하고, LLM 에는 그 점수의 등급이 그대로 전달된다 (FR-RD-02)
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<ReadingCategory, Grade>> grades = ArgumentCaptor.forClass(Map.class);
-        org.mockito.Mockito.verify(generator).generate(any(), grades.capture());
+        org.mockito.Mockito.verify(generator).generate(any(), grades.capture(), any());
         assertThat(r.fortunes()).extracting(f -> Grade.of(f.score()))
                 .containsExactly(
                         grades.getValue().get(ReadingCategory.MARRIAGE),
@@ -50,11 +51,11 @@ class SajuResultAnalysisAdapterTest {
     @Test
     void unknownTimeHasNoHourPillar() {
         ReadingGenerator generator = mock(ReadingGenerator.class);
-        when(generator.generate(any(), any())).thenReturn(new Reading("d",
+        when(generator.generate(any(), any(), any())).thenReturn(new Reading("d",
                 Map.of(ReadingCategory.MARRIAGE, "a", ReadingCategory.CHILDREN, "b", ReadingCategory.LOVE, "c")));
 
         ResultAnalysisPort.AnalysisResult r = new SajuResultAnalysisAdapter(generator)
-                .analyze(LocalDate.of(2002, 3, 14), null);
+                .analyze(LocalDate.of(2002, 3, 14), null, Gender.MALE);
 
         assertThat(r.pillars().hourPillar()).isNull();
     }
