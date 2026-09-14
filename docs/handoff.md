@@ -197,9 +197,10 @@
 
 **한 일**
 - `ResultResponse.from`: 아이템 해시 키를 `resultId` → `생년월일/시간/성별`. 같은 입력을 다시 생성해도 같은 날엔 같은 아이템. 날짜 바뀌면 변경(기존과 동일)
+- `LuckyPlace.of(pillars, today)`: 장소도 매일 변경. 보완 오행은 원국 기준 그대로 고정, 그 오행 풀(3~4곳) 안에서 `팔자 + 날짜` 해시. #34 의 "사람마다 고정"은 폐기
 
 **건드린 파일/패키지**
-- `result/dto/ResultResponse.java`(2줄, 최선우 리뷰), `saju/DailyLucky.java` 주석, `docs/api-spec.md`, `docs/architecture.md`
+- `result/dto/ResultResponse.java`(3줄, 최선우 리뷰), `saju/LuckyPlace.java`, `saju/DailyLucky.java` 주석, `LuckyPlaceTest`, `docs/api-spec.md`, `docs/architecture.md`
 
 **다음 사람이 알아야 할 것**
 - 같은 생년월일·시간·성별인 두 사람은 같은 날 같은 아이템을 받는다 (의도)
@@ -211,7 +212,7 @@
 - `docs/api-spec.md` §2, `docs/architecture.md` DDL 주석, `docs/handoff.md`
 
 **프론트에 알려야 할 것**
-- 없음
+- `luckyPlace` 도 매일 바뀐다 (#34 공지 번복). 오늘 결과와 내일 결과가 다를 수 있음
 
 ### 2026-09-15 (화) · 차은호 · saju/ + result/ 성별 반영 (#36) · Claude Code
 
