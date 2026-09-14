@@ -236,8 +236,8 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 CreateResultRequest
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
-  → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
-  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명 설명·결혼·자녀·연애 문장만)
+  → ReadingScorer       결혼·자녀·연애 점수 산출 (성별로 배우자성·자녀성 결정)   ← 결정적
+  → ReadingGenerator    등급+팔자+성별 → 보살 톤 문장   ← LLM (운명 설명·결혼·자녀·연애 문장만)
   → DestinyTitle        조회 시: 점수 상/하 조합 → 운명 제목 8종   ← 코드 표
   → ReadingRepository   저장
   → DailyLucky          조회 시: 오행별 (궁합 40% + 오늘 일진 활성도 60%) → 행운 오행 → 아이템   ← 코드, 매일 변경

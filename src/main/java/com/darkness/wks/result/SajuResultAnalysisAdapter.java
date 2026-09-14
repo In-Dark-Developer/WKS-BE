@@ -1,5 +1,6 @@
 package com.darkness.wks.result;
 
+import com.darkness.wks.common.Gender;
 import com.darkness.wks.saju.Grade;
 import com.darkness.wks.saju.Reading;
 import com.darkness.wks.saju.ReadingCategory;
@@ -28,14 +29,14 @@ public class SajuResultAnalysisAdapter implements ResultAnalysisPort {
     private final ReadingScorer readingScorer = new ReadingScorer();
 
     @Override
-    public AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime) {
+    public AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime, Gender gender) {
         SajuPillars pillars = sajuCalculator.calculate(solarBirthDate, birthTime, null); // 지역 미수집 → 서울 기준
 
-        Map<ReadingCategory, Integer> scores = readingScorer.score(pillars);
+        Map<ReadingCategory, Integer> scores = readingScorer.score(pillars, gender);
         Map<ReadingCategory, Grade> grades = new EnumMap<>(ReadingCategory.class);
         scores.forEach((category, score) -> grades.put(category, Grade.of(score)));
 
-        Reading reading = readingGenerator.generate(pillars, grades);
+        Reading reading = readingGenerator.generate(pillars, grades, gender);
 
         return new AnalysisResult(
                 pillars,

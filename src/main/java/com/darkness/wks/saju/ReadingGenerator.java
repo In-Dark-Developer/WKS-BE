@@ -1,5 +1,6 @@
 package com.darkness.wks.saju;
 
+import com.darkness.wks.common.Gender;
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.google.genai.Client;
@@ -58,8 +59,8 @@ public class ReadingGenerator {
         this.model = model;
     }
 
-    public Reading generate(SajuPillars pillars, Map<ReadingCategory, Grade> grades) {
-        String prompt = buildPrompt(pillars, grades);
+    public Reading generate(SajuPillars pillars, Map<ReadingCategory, Grade> grades, Gender gender) {
+        String prompt = buildPrompt(pillars, grades, gender);
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 return call(prompt);
@@ -87,9 +88,10 @@ public class ReadingGenerator {
         return parse(response.text());
     }
 
-    /** 팔자와 등급뿐. 개인정보 미포함은 테스트로 고정한다 (TR-03). */
-    static String buildPrompt(SajuPillars p, Map<ReadingCategory, Grade> grades) {
+    /** 팔자·등급·성별뿐. 개인정보 미포함은 테스트로 고정한다 (TR-03). 성별은 배우자·부모 역할 표현을 맞추는 데 필요하다 */
+    static String buildPrompt(SajuPillars p, Map<ReadingCategory, Grade> grades, Gender gender) {
         StringBuilder sb = new StringBuilder()
+                .append("성별 ").append(gender == Gender.MALE ? "남성" : "여성").append("\n")
                 .append("년주 ").append(p.yearPillar())
                 .append(", 월주 ").append(p.monthPillar())
                 .append(", 일주 ").append(p.dayPillar())

@@ -193,6 +193,32 @@
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
 
+### 2026-09-15 (화) · 차은호 · saju/ + result/ 성별 반영 (#36) · Claude Code
+
+**한 일**
+- `ReadingScorer.score(pillars, gender)`: 배우자성·자녀성을 성별로 결정. 남자 재성=배우자·관성=자녀, 여자 관성=배우자·식상=자녀. 일지 보너스는 배우자성 30, 재·관 중 나머지 18. 시주 자녀 보너스는 자녀성과의 생극 관계로 통일
+- `ReadingGenerator.generate(pillars, grades, gender)`: 프롬프트 첫 줄에 성별. 시스템 프롬프트에 "역할·호칭은 성별에 맞춘다, 어긋나는 표현 금지" 규칙 추가
+- `ResultAnalysisPort.analyze(date, time, gender)` 시그니처 변경, `ResultService`·`SajuResultAnalysisAdapter` 호출부 반영 — 최선우 리뷰
+- 보정 상수 재측정 (시주 포함 고유 팔자 265,004개): 결혼 63.0/0.93, 자녀 51.9/0.78, 연애 54.1/0.95. 남녀 원점수 중앙값 차이 0.5 이내라 공통 상수
+
+**건드린 파일/패키지**
+- `saju/ReadingScorer.java`, `saju/ReadingGenerator.java`, `resources/prompts/reading-system.txt`
+- `result/ResultAnalysisPort.java`, `result/ResultService.java`(1줄), `result/SajuResultAnalysisAdapter.java`
+- 테스트 5개, `docs/api-spec.md`, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 등급 분포(남녀 거의 동일): SS 6~9% / S 17~20% / A+ 25~26% / A 24~27% / B+ 18~20% / B 2~5%. 상(A+ 이상) 약 52%
+- 같은 팔자라도 성별이 다르면 결혼·자녀 점수가 달라진다. 연애는 배우자성 비중만 달라져 차이 작음
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2 gender 설명, `docs/architecture.md` §6, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (요청·응답 스키마 변경 없음)
+
 ### 2026-09-14 (월) · 차은호 · saju/ + result/ 기능명세서 정렬 (#34) · Claude Code
 
 **한 일**
