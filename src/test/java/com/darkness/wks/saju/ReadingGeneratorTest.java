@@ -15,9 +15,22 @@ class ReadingGeneratorTest {
             ReadingCategory.MARRIAGE, Grade.SS, ReadingCategory.CHILDREN, Grade.A_PLUS, ReadingCategory.LOVE, Grade.B);
 
     @Test
-    void promptContainsOnlyGenderPillarsAndGrades() {
+    void promptContainsGenderPillarsElementFactsAndGrades() {
+        // 일간 신(쇠). 남자: 배우자성 재성 = 나무, 자녀성 관성 = 불. 일지 사 = 불
         String prompt = ReadingGenerator.buildPrompt(new SajuPillars("임오", "계묘", "신사", "을미"), GRADES, Gender.MALE);
-        assertThat(prompt).isEqualTo("성별 남성\n년주 임오, 월주 계묘, 일주 신사, 시주 을미\n결혼운 등급: SS\n자녀운 등급: A+\n연애운 등급: B");
+        assertThat(prompt).isEqualTo("""
+                성별 남성
+                년주 임오, 월주 계묘, 일주 신사, 시주 을미
+                나의 기운: 쇠
+                강한 기운: 나무, 물 / 약한 기운: 없음
+                배우자 기운: 나무 / 배우자 자리의 기운: 불
+                자녀 기운: 불
+                결혼운 등급: SS
+                자녀운 등급: A+
+                연애운 등급: B""");
+        // 여자: 배우자성 관성 = 불, 자녀성 식상 = 물
+        assertThat(ReadingGenerator.buildPrompt(new SajuPillars("임오", "계묘", "신사", "을미"), GRADES, Gender.FEMALE))
+                .contains("배우자 기운: 불 /").contains("자녀 기운: 물");
         assertThat(prompt).doesNotContainPattern("\\d{4}"); // 생년 등 숫자 정보 없음 (TR-03)
     }
 
