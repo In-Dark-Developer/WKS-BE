@@ -193,6 +193,26 @@
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
 
+### 2026-09-15 (화) · 차은호 · result/ 행운 아이템 해시 키 (#40) · Claude Code
+
+**한 일**
+- `ResultResponse.from`: 아이템 해시 키를 `resultId` → `생년월일/시간/성별`. 같은 입력을 다시 생성해도 같은 날엔 같은 아이템. 날짜 바뀌면 변경(기존과 동일)
+
+**건드린 파일/패키지**
+- `result/dto/ResultResponse.java`(2줄, 최선우 리뷰), `saju/DailyLucky.java` 주석, `docs/api-spec.md`, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 같은 생년월일·시간·성별인 두 사람은 같은 날 같은 아이템을 받는다 (의도)
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2, `docs/architecture.md` DDL 주석, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
+
 ### 2026-09-15 (화) · 차은호 · saju/ + result/ 성별 반영 (#36) · Claude Code
 
 **한 일**

@@ -27,7 +27,7 @@ public record DailyLucky(Element element, String item) {
     private static final double ACTIVITY_MIN = -2, ACTIVITY_MAX = 3.5;
 
     /**
-     * @param userKey 사용자 식별값 (resultId). 같은 값이면 같은 날 같은 아이템
+     * @param userKey 사용자 식별값 (생년월일·시간·성별). 같은 값이면 같은 날 같은 아이템
      */
     public static DailyLucky of(SajuPillars pillars, LocalDate today, String userKey) {
         String dayGanji = todayPillar(today);

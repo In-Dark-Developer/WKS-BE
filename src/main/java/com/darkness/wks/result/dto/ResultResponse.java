@@ -54,7 +54,9 @@ public record ResultResponse(
 
     public static ResultResponse from(Result result, Reading reading, List<Compatibility> compatibilities) {
         SajuPillars pillars = new SajuPillars(result.getYearPillar(), result.getMonthPillar(), result.getDayPillar(), result.getHourPillar());
-        DailyLucky lucky = DailyLucky.of(pillars, LocalDate.now(ZoneId.of("Asia/Seoul")), result.getId().toString());
+        // 키는 입력값. 같은 생년월일·시간·성별이면 같은 날 같은 아이템 (다시 생성해도 동일). 날짜가 바뀌면 재계산
+        String luckyKey = result.getBirthDate() + "/" + result.getBirthTime() + "/" + result.getGender();
+        DailyLucky lucky = DailyLucky.of(pillars, LocalDate.now(ZoneId.of("Asia/Seoul")), luckyKey);
         return new ResultResponse(
                 result.getId(),
                 result.getShareId(),
