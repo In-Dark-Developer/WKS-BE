@@ -193,7 +193,7 @@
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
 
-### 2026-09-15 (화) · 차은호 · result/ 행운 아이템 해시 키 (#40) · Claude Code
+### 2026-09-15 (화) · 차은호 · result/ 행운 아이템 해시 키 (#40) + 장소 매일 변경 (#42) · Claude Code
 
 **한 일**
 - `ResultResponse.from`: 아이템 해시 키를 `resultId` → `생년월일/시간/성별`. 같은 입력을 다시 생성해도 같은 날엔 같은 아이템. 날짜 바뀌면 변경(기존과 동일)
