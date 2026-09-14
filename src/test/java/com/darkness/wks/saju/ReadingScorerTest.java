@@ -19,6 +19,16 @@ class ReadingScorerTest {
     }
 
     @Test
+    void unknownHourIsNotPenalisedOnChildren() {
+        // 시주 모름 = 시주 보너스 평균. 같은 3주에 최악 시주(자녀성을 극하는 글자)를 붙인 것보다 높고, 최고 시주보다 낮다
+        // 일간 갑(목), 여자 자녀성 식상(화): 최악 시주 임자(수·수, 식상을 극함), 최고 시주 병오(화·화)
+        int unknown = scorer.score(new SajuPillars("임오", "계묘", "갑진", null), Gender.FEMALE).get(ReadingCategory.CHILDREN);
+        int worst = scorer.score(new SajuPillars("임오", "계묘", "갑진", "임자"), Gender.FEMALE).get(ReadingCategory.CHILDREN);
+        int best = scorer.score(new SajuPillars("임오", "계묘", "갑진", "병오"), Gender.FEMALE).get(ReadingCategory.CHILDREN);
+        assertThat(unknown).isGreaterThan(worst).isLessThan(best);
+    }
+
+    @Test
     void worksWithoutHourPillar() {
         Map<ReadingCategory, Integer> g = scorer.score(new SajuPillars("경진", "기축", "무술", null), Gender.FEMALE);
         assertThat(g).hasSize(3);

@@ -200,6 +200,7 @@
 - `ReadingGenerator.generate(pillars, grades, gender)`: 프롬프트 첫 줄에 성별. 시스템 프롬프트에 "역할·호칭은 성별에 맞춘다, 어긋나는 표현 금지" 규칙 추가
 - `ResultAnalysisPort.analyze(date, time, gender)` 시그니처 변경, `ResultService`·`SajuResultAnalysisAdapter` 호출부 반영 — 최선우 리뷰
 - 보정 상수 재측정 (시주 포함 고유 팔자 265,004개): 결혼 63.0/0.93, 자녀 51.9/0.78, 연애 54.1/0.95. 남녀 원점수 중앙값 차이 0.5 이내라 공통 상수
+- 시주 모름이면 자녀 시주 보너스를 0 대신 모집단 평균 13.2로 채움. 이전엔 시간 미입력자 자녀 상 비율 24%(입력자 52%)로 한 등급 손해 보던 것 → 51%로 복귀
 
 **건드린 파일/패키지**
 - `saju/ReadingScorer.java`, `saju/ReadingGenerator.java`, `resources/prompts/reading-system.txt`

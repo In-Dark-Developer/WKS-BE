@@ -25,6 +25,8 @@ public class ReadingScorer {
     /** 시주 글자 → 자녀 보너스. 자녀성과의 관계 순: 같음, 자녀성을 생함, 자녀성이 생함, 자녀성을 극함, 자녀성이 극함 */
     private static final int[] CHILD_BONUS = {20, 12, 8, 0, 4};
     private static final int[] CHILD_STEM_BONUS = {10, 6, 4, 0, 2};
+    /** 시주 모름이면 시주 보너스를 모집단 평균으로 채운다. 시주가 최악인 것처럼 0 을 주면 자녀운만 한 등급 낮아진다 (1950~2010 실측 13.2, 남녀 동일) */
+    private static final double UNKNOWN_HOUR_CHILD_BONUS = 13.2;
 
     /** 년·월·일·시 기둥 비중 */
     private static final double[] PILLAR_WEIGHT = {0.7, 1.3, 1.0, 0.9};
@@ -95,6 +97,8 @@ public class ReadingScorer {
         if (pillars.hourPillar() != null) {
             children += CHILD_BONUS[offset(childStar, relation(dayMaster, Element.ofBranch(pillars.hourPillar().charAt(1))))]
                     + CHILD_STEM_BONUS[offset(childStar, relation(dayMaster, Element.ofStem(pillars.hourPillar().charAt(0))))];
+        } else {
+            children += UNKNOWN_HOUR_CHILD_BONUS;
         }
         return new double[] {marriage, children, love};
     }
