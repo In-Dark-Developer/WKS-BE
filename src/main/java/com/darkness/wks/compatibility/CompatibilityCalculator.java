@@ -44,7 +44,24 @@ public class CompatibilityCalculator {
 
         score += elementBalanceScore(originPillars, guestPillars);
         score += yinYangScore(originPillars, guestPillars);
-        return clamp(score, 0, 100);
+        return calibrate(clamp(score, 0, 100));
+    }
+
+    /**
+     * 1950~2010년 실제 팔자 10만 무작위 조합의 누적 등급 경계 원점수(50, 60, 70)를
+     * 기획 Tier 경계(61, 75, 90)에 맞춘다. 관계 점수의 순서는 유지한다.
+     */
+    private static int calibrate(int rawScore) {
+        if (rawScore <= 50) {
+            return Math.round(rawScore * 60f / 50f);
+        }
+        if (rawScore <= 60) {
+            return 61 + Math.round((rawScore - 51) * 13f / 9f);
+        }
+        if (rawScore <= 70) {
+            return 75 + Math.round((rawScore - 61) * 14f / 9f);
+        }
+        return 90 + Math.round((rawScore - 71) * 10f / 29f);
     }
 
     private int stemScore(char first, char second, int weight) {

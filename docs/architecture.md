@@ -268,8 +268,9 @@ CreateResultRequest
 
 SDK: `com.google.genai:google-genai` (Gemini Developer API).
 API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
-모델 `gemini-3.6-flash` (설정 `gemini.model`), 타임아웃 30초 (`gemini.timeout-seconds`).
+모델 `gemini-3.5-flash-lite` (설정 `gemini.model`), 타임아웃 30초 (`gemini.timeout-seconds`).
 `gemini-2.5-flash` 는 2026-09 기준 신규 키에 404 ("no longer available to new users").
+모델별 무료 한도가 크게 다르다: `gemini-3.6-flash` 는 하루 20건, `gemini-3.5-flash-lite` 는 하루 2,000건 이상·분당 85건 이상 실측(2026-09-13, 1토큰 요청). 그래서 lite 를 기본으로 쓴다.
 3.x 는 `thinkingBudget` 을 거부하므로 `thinkingLevel: MINIMAL` 로 사고 토큰을 줄인다.
 
 > SDK 2.0.0부터 Java 17 이상이 필수다. 우리는 Java 17이라 문제없다.
@@ -318,6 +319,9 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 | 0~60 | `SEUCHIM` | 스침 |
 
 2026-09-13 기획 확정. 25점 균등 구간이 아니다.
+
+실제 팔자 10만 무작위 조합의 원점수 누적 경계(50/60/70)를 Tier 경계(61/75/90)에 맞춰
+단조 구간 보정한다. 목표 분포는 귀인 20% · 찰떡 30% · 벗 30% · 스침 20%이며 관계 점수의 순서는 유지한다.
 
 `CompatibilityCalculator` 는 순수 함수. `score(A,B) == score(B,A)` 가 성립해야 한다.
 

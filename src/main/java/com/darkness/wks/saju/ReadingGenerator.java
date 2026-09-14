@@ -53,7 +53,7 @@ public class ReadingGenerator {
     private final String model;
     private final JsonMapper mapper = JsonMapper.builder().build();
 
-    public ReadingGenerator(Client geminiClient, @Value("${gemini.model:gemini-3.6-flash}") String model) {
+    public ReadingGenerator(Client geminiClient, @Value("${gemini.model:gemini-3.5-flash-lite}") String model) {
         this.geminiClient = geminiClient;
         this.model = model;
     }
