@@ -145,7 +145,8 @@
 - 운명 제목 8종을 코드 표로: `DestinyTitle.of(m, c, l)` — 결혼·자녀·연애 상(A+ 이상)/하 조합. 제목은 `resources/destiny-titles.txt` (**임시값, 영채 확정 후 교체**)
 - `destinyTitle` 을 Gemini 스키마에서 제거. `reading.destiny_title` 삭제(V5). 조회 시 점수로 계산
 - 결혼·자녀·연애 문장을 기획 요구대로 **8~10문장**(문장마다 `\n`)으로. 스모크: 약 450자/항목, 9.2초, 1,432토큰/건 (이전 3초·850토큰). 30초 SLA 안. 비용 약 3원/건
-- 읽기 쉽게 프롬프트 조정: 짧은 문장, 사주 용어·팔자 글자 금지, 어미 다양화, 축제 행동 조언 제외(기획). **이 버전은 스모크 못 돌림 — 아래 한도 초과**
+- 읽기 쉽게 프롬프트 조정: 짧은 문장, 사주 용어·팔자 글자 금지, 어미 다양화, 축제 행동 조언 제외(기획)
+- **기본 모델을 `gemini-3.5-flash-lite` 로 변경.** 같은 무료 키로 3.6-flash 는 하루 20건인데 3.5-flash-lite 는 2,000회 연속 성공(429 없음, 약 85 RPM). 품질 스모크 4.6초·1,376토큰, 문장 수준 동등. 실제 크기 요청의 TPM 한도는 미확인 → Day 6 에 실제 크기로 재측정
 - **무료 티어 한도 실측 (Day 6 항목 조기 확인)**: `429 RESOURCE_EXHAUSTED ... generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash`. 오늘 호출 약 18건 만에 막힘 → **무료 티어는 하루 20건 수준**. 축제 트래픽 불가. 결제 연결(Tier 1) 필수 — 곽도윤. 429 는 재시도 안 하도록 수정
 - 테스트 54건
 
@@ -190,7 +191,7 @@
 - 관계에 음양을 더하면 십성 10개(정재일·편재일…)로 "오늘 유형" 문구를 매일 다르게 만들 수 있음. 응답 필드 추가라 프론트 합의 후
 
 **막힌 것 / 넘기는 것**
-- 기획: `lucky/items.txt`·`places.txt` 실제 목록
+- ~~기획: `lucky/items.txt`·`places.txt` 실제 목록~~ 9/14 확정본 반영 (오행당 아이템 10개, 장소 3~4개)
 - 최선우: `result/` 변경 리뷰
 
 **문서 변경**
@@ -329,7 +330,7 @@
 - 09-13 Codex 기록의 "lunar-java 불일치"는 무보정 입력 재현이며 위 구조로 해결됨. `docs/lunar-java-validation.md`, `tools/check_lunar.py` 는 탐색용이라 커밋하지 않음
 
 **막힌 것 / 넘기는 것**
-- 기획 결정 대기 1건: 자시 두 칸 분리 (음력 지원·지역 제거·등급 6단계는 확정)
+- ~~기획 결정 대기 1건: 자시 두 칸 분리~~ 9/14 승인. 프론트: `자시 00:00~01:30` → `00:45`, `자시 23:30~24:00` → `23:45`
 - 최선우: `CreateResultRequest` 에 `CalendarType calendarType`(saju 패키지 enum)·`Boolean isLeapMonth` 추가, `birthDate` 를 `String` 으로, `birthRegion` 삭제. `BirthDate.parse(...).toSolar()` 결과(양력)를 `analyze()` 와 `Result` 저장에 사용
 - 최선우: 응답에 `zodiac` 추가 — `SajuPillars.zodiac()` (또는 저장된 `year_pillar` 로 `Zodiac.fromYearPillar`). 컬럼 추가 불필요
 - `saju/` 출력 형태 미확정: `ReadingCategory` 5종(점수) vs `result/ResultAnalysisPort` (운명 + 결혼·자녀·연애 등급 + 행운 아이템·장소). 등급 문자열 집합·산출 기준도 미정. 이게 정해져야 `ReadingScorer`·`ReadingGenerator` 착수 가능
@@ -341,7 +342,7 @@
 
 **프론트에 알려야 할 것** (기획 확인 후 공지, 2026-09-13 기획에 전달)
 - 시간은 시진(2시간) 선택 UI 그대로. 프론트가 선택한 칸의 **가운데 시각**을 `birthTime: HH:mm` 으로 보낸다 (묘시 05:30~07:30 → `06:30`). 같은 시진이면 팔자가 같아서 문제 없음
-- **자시는 두 칸으로 분리 요청**: `자시 00:00~01:30` → `00:45`, `자시 23:30~24:00` → `23:45`. 자정을 걸쳐서 날짜+자시만으로는 새벽/밤 구분이 안 되고, 둘은 일주가 하루 다름
+- **자시 두 칸 분리 확정(9/14 기획)**: `자시 00:00~01:30` → `00:45`, `자시 23:30~24:00` → `23:45`. 자정을 걸쳐서 날짜+자시만으로는 새벽/밤 구분이 안 되고, 둘은 일주가 하루 다름
 - **`birthRegion` 제거 확정(9/13 기획)**. 시진 단위 입력이라 지역 보정(−24~−34분)이 칸 경계에 안 닿음. api-spec 에서 뺌. `CreateResultRequest` 필드 삭제는 최선우, DB 컬럼 `birth_region` 은 그대로 두고 NULL 저장(마이그레이션 불필요). `SajuCalculator` 지역 파라미터는 `null` 로 넘기면 서울 기준
 - `birthTime: null` = 시간 모름, 3주 계산
 - **음력 지원 확정(9/13 기획)**. api-spec §2 에 `calendarType`·`isLeapMonth` 추가함. 변환은 `saju/BirthDate` 가 맡는다:
