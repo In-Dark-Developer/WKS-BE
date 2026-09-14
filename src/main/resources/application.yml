@@ -49,6 +49,8 @@ gemini:
 app:
   mail:
     from: ${MAIL_FROM:noreply@wks.local}
+  backend:
+    base-url: ${BACKEND_BASE_URL:http://localhost:8080}
   frontend:
     verify-redirect-url: ${VERIFY_REDIRECT_URL:http://localhost:3000/verify}
   cors:

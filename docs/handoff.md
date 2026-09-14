@@ -109,6 +109,69 @@
 
 ## 기록
 
+### 2026-09-14 (월) · 곽도윤 · CI/CD 배포 실패 원인 조사 · Claude Code
+
+**한 일**
+- EC2 배포 시 `appleboy/scp-action`이 간헐적으로 `Process exited with status 1`로 실패하는 문제 조사
+- **원인: EC2 루트 파티션(`/`, 6.7G) 디스크 풀.** `df -h` 확인 결과 `Use% 100%`, 여유 0
+- 근본 원인: `deploy.yml` 마지막 줄이 `docker image prune -f`(태그 없는 이미지만 정리)였는데, 매 배포가 `github.sha`로 유니크 태그를 붙여 pull하기 때문에 이전 커밋 이미지들이 태그가 남아 절대 안 지워지고 계속 쌓임
+- `nginx/default.conf`가 디렉터리로 잘못 생성됐을 가능성도 확인했으나 아니었음 (정상 파일, `ubuntu` 소유)
+
+**건드린 파일/패키지**
+- `.github/workflows/deploy.yml` — `docker image prune -f` → `docker image prune -a -f`, `concurrency` 그룹 추가(동시 배포 방지, 원인은 아니었지만 안전장치로 유지), scp 스텝 `debug: true` 추가
+
+**다음 사람이 알아야 할 것**
+- **CI에서 디스크 정리는 고쳤지만, 지금 당장 EC2가 꽉 찬 상태는 수동으로 풀어야 동작한다.** SSH로 들어가서:
+  ```
+  docker image prune -a -f
+  sudo journalctl --vacuum-size=200M
+  ```
+  (`--volumes`는 절대 쓰지 말 것 — postgres 데이터·certbot 인증서가 named volume에 있어서 같이 삭제됨)
+- 루트 파티션이 6.7G로 상당히 작다. 이미지가 수백MB 단위라 몇 번만 더 쌓여도 다시 찰 수 있음 — 볼륨 확장이나 별도 데이터 디스크 분리를 팀에서 검토할 것
+
+**막힌 것 / 넘기는 것**
+- EC2 디스크 수동 정리는 아직 실행 안 함 (서버 접근 권한이 있는 사람이 위 명령 실행 필요)
+
+**문서 변경**
+- 없음
+
+**프론트에 알려야 할 것**
+- 없음
+
+### 2026-09-14 (월) · 곽도윤 · signup/ 사전등록·이메일 인증 (§5) · Claude Code
+
+**한 일**
+- `POST /api/signups`, `POST /api/signups/resend`, `GET /api/signups/verify` 3개 엔드포인트 구현 (기존엔 TODO 스텁만 있었음)
+- `EmailVerificationService.sendVerificationEmail()` 구현 (기존엔 `UnsupportedOperationException`)
+- `SignupController` 매핑을 `/api/signup` → `/api/signups` 로 수정 (api-spec §7 복수형 규칙 위반이었음)
+- `Signup` 엔티티에 `issueCoupon()`, `markVerified()`, `isVerified()` 추가 (Setter 금지 규칙 준수)
+- `EmailVerificationService.verify()` 반환 타입을 `void` → `EmailVerification` 으로 변경 (호출부에서 `signup.markVerified()` 하기 위함)
+- `GlobalExceptionHandler` 에 `MissingServletRequestParameterException` 핸들러 추가 (400 `INVALID_INPUT`). `GET /verify?token=` 처럼 필수 쿼리 파라미터가 없으면 기존엔 500으로 새던 걸 공통으로 막음 — signup 외 다른 패키지에도 적용되는 공통 인프라 변경이라 공유함
+- Swagger 문서화: signup 3개 엔드포인트에 `@Operation`/`@ApiResponses`/`@Schema` 전부 붙임 (다른 컨트롤러와 동일 수준). `HealthController` 에 빠져있던 `@Tag` 도 추가함 (전 컨트롤러 통일)
+- 로컬에서 실제 기동해 `/v3/api-docs` 확인함 — 8개 경로(health/results×2/shares×2/signups×3) 전부 정상 노출, 요청·응답 스키마와 에러 예시까지 반영됨 확인. 기존에 8080에서 돌고 있던 다른 프로세스(PID 11544, 9/11부터 떠있던 것으로 보임)는 건드리지 않고 8090으로 별도 확인 후 종료함
+
+**건드린 파일/패키지**
+- `signup/` 전체 (Controller, Service, EmailVerificationService, Repository, Entity, dto/)
+- `application.yml`, `.env.prod.example`, `docker-compose.prod.yml` — `BACKEND_BASE_URL` 신규 추가 (인증 메일 링크가 백엔드 `/api/signups/verify` 를 가리켜야 해서 필요)
+- `common/exception/GlobalExceptionHandler.java`, `common/HealthController.java` — 공통 인프라 소폭 수정 (위 참고)
+
+**다음 사람이 알아야 할 것**
+- **이메일 도메인 화이트리스트 미결정 상태를 그대로 반영**: `SIGNUP_ALLOWED_EMAIL_DOMAINS` 가 비어있으면(현재 로컬/prod 기본값) 도메인 검증을 **건너뛴다** (전체 허용). 학교 도메인이 정해지면 그 값만 채우면 동작함 — 코드 변경 불필요
+- **메일 제목/본문은 임시 문구.** `api-spec.md` 의 `destiny.title` 처럼 기획(영채) 확정 전까지 자리만 채움 (`EmailVerificationService.SUBJECT`, 본문 텍스트 블록)
+- **`resultId` 가 존재하지 않을 때 정책을 `RESULT_NOT_FOUND` 404 로 임시 결정함.** `backend-requirements.md` §10 인수조건에 "Day 3까지 결정" 이라고 되어 있던 항목 — 팀 확정되면 바꿀 것
+- 재발송(`/resend`)의 "이미 인증됨" 케이스는 전용 에러코드가 없어 `INVALID_INPUT` 400 재사용함. api-spec에 명시된 에러코드 표에 없는 케이스라 전용 코드가 필요하면 팀 논의 후 추가
+- 쿠폰은 이메일 1개당 신청 1건(unique 제약)이라 신청 성공 시 항상 `couponIssued: true` 로 처리함 (별도 쿠폰 테이블 없음, FR-SU-10 "1인 1회"는 이메일 unique 제약으로 자연히 보장)
+
+**막힌 것 / 넘기는 것**
+- SMTP 발송 계정 미확보 상태라 로컬에서 실제 메일 발송 확인은 못 했음 (todo.md 대로 본인 계정으로 임시 테스트 필요)
+- 학교 웹메일 도메인 화이트리스트, 축제 D-day 등은 여전히 미정 (todo.md §3 그대로)
+
+**문서 변경**
+- `api-spec.md` §5 `POST /api/signups/resend` 에 Response 200 예시 추가 (기존엔 없었음). 에러코드도 `INVALID_INPUT` 재사용임을 명시
+
+**프론트에 알려야 할 것**
+- `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
 ### 2026-09-13 (일) · 최선우 · compatibility/ · Codex
 
 **한 일**

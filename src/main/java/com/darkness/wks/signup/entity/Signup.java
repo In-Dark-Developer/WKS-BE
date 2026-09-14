@@ -62,4 +62,16 @@ public class Signup {
         this.gender = gender;
         this.preferGender = preferGender;
     }
+
+    public void issueCoupon() {
+        this.couponIssued = true;
+    }
+
+    public boolean isVerified() {
+        return verifiedAt != null;
+    }
+
+    public void markVerified(Instant verifiedAt) {
+        this.verifiedAt = verifiedAt;
+    }
 }

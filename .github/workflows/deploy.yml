@@ -8,6 +8,13 @@ permissions:
   contents: read
   packages: write
 
+# 여러 명이 비슷한 시간에 push하면 배포 잡이 동시에 같은 EC2에 붙어 충돌한다 (scp/docker compose 겹침).
+# 진행 중인 배포는 끝까지 두고, 새 push는 큐에서 대기시켜 순서대로 실행한다.
+# (cancel-in-progress: true로 하면 docker compose up 중간에 SSH가 끊겨 EC2가 어중간한 상태로 남을 수 있어 false로 둔다)
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
 jobs:
   vars:
     runs-on: ubuntu-latest
@@ -57,6 +64,7 @@ jobs:
           source: "docker-compose.prod.yml,nginx"
           target: ${{ secrets.EC2_APP_DIR }}
           strip_components: 0
+          debug: true
 
       - name: SSH and redeploy
         uses: appleboy/ssh-action@v1.2.0
@@ -71,4 +79,5 @@ jobs:
             APP_IMAGE=${{ needs.vars.outputs.image }}:${{ github.sha }} docker compose -f docker-compose.prod.yml pull app
             APP_IMAGE=${{ needs.vars.outputs.image }}:${{ github.sha }} docker compose -f docker-compose.prod.yml up -d
             docker compose -f docker-compose.prod.yml restart nginx
-            docker image prune -f
+            # 매 배포마다 github.sha로 유니크 태그를 붙여 pull하므로, -a 없이는 이전 커밋 이미지가 태그가 남아있어 정리되지 않고 디스크를 채운다
+            docker image prune -a -f

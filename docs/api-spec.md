@@ -237,11 +237,28 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ### `POST /api/signups/resend`
 
+**Request**
+
 ```json
 { "email": "dev@dgu.ac.kr" }
 ```
 
-메일 재발송. 이미 인증 완료된 이메일이면 400.
+메일 재발송. 이미 인증 완료된 이메일이면 400 `INVALID_INPUT` (전용 에러코드 없음).
+신청 내역이 없는 이메일도 400 `INVALID_INPUT`.
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "mailSent": true,
+    "message": "인증 메일을 재발송했다."
+  }
+}
+```
+
+`mailSent: false` 여도 200이다. SMTP 실패가 요청을 실패시키지 않는다 (§2 `POST /api/results`와 동일 원칙).
 
 ### `GET /api/signups/verify?token={token}`
 
