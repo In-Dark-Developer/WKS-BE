@@ -6,7 +6,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/wks
     username: wks
-    password: ${DB_PASSWORD}
+    password: ${DB_PASSWORD:postgres}
   mail:
     host: smtp.gmail.com
     port: 587
