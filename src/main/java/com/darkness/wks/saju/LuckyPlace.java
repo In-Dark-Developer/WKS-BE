@@ -1,10 +1,11 @@
 package com.darkness.wks.saju;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 행운의 장소 (기능명세서 "행운의 장소", 2026-09-14). 원국 기준이라 사람마다 고정, 날짜 무관.
+ * 행운의 장소 (기능명세서 "행운의 장소", 2026-09-14). 오행은 원국 기준이라 사람마다 고정, 장소는 그 오행 풀 안에서 매일 바뀐다 (2026-09-15 결정).
  * <p>
  * 원국 오행 세력({@link Element#strengths})으로 일간 강약을 보고, 균형을 가장 잘 보완하는 오행을 고른다.
  * <ul>
@@ -14,7 +15,7 @@ import java.util.Map;
  * </ul>
  * 후보 중 현재 세력이 가장 적은 오행 = 보완 오행. 동점은 목→화→토→금→수 순.
  * ponytail: 명세의 지장간·통근·월령 보정은 생략. 시주 없으면 3주로만 계산.
- * 장소는 {@code resources/lucky/places.txt} 풀에서 팔자 해시로 하나 고정.
+ * 장소는 {@code resources/lucky/places.txt} 풀에서 {@code 팔자 + 날짜} 해시로 하나. 풀이 3~4곳이라 며칠에 한 번은 같은 곳이 나온다.
  */
 public final class LuckyPlace {
 
@@ -23,10 +24,9 @@ public final class LuckyPlace {
     private LuckyPlace() {
     }
 
-    public static String of(SajuPillars pillars) {
+    public static String of(SajuPillars pillars, LocalDate today) {
         Element element = luckyElement(pillars);
-        List<String> pool = PLACES.get(element);
-        return pool.get(Math.floorMod(pillars.toString().hashCode(), pool.size()));
+        return LuckyPool.pick(PLACES.get(element), pillars.toString() + today);
     }
 
     static Element luckyElement(SajuPillars pillars) {

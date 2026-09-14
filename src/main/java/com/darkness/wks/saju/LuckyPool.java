@@ -7,11 +7,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SplittableRandom;
 
 /** {@code 오행=항목|항목|...} 형식 리소스 로더. 오행별 최소 1개 없으면 기동 실패 */
 final class LuckyPool {
 
     private LuckyPool() {
+    }
+
+    /**
+     * 키 → 풀 인덱스. {@code String.hashCode()} 는 끝 글자에 선형이라 날짜가 하루 지나면 해시도 1씩 늘어
+     * 풀을 목록 순서대로 도는 주기가 생긴다. SplittableRandom 의 시드 섞기로 흩뜨린다 (결정적, JVM 무관)
+     */
+    static <T> T pick(List<T> pool, String key) {
+        return pool.get(new SplittableRandom(key.hashCode()).nextInt(pool.size()));
     }
 
     static Map<Element, List<String>> load(String path) {

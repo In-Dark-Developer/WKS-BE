@@ -2,6 +2,7 @@ package com.darkness.wks.saju;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,16 +24,26 @@ class LuckyPlaceTest {
     }
 
     @Test
-    void fixedPerPersonAndFromPool() {
+    void sameDaySamePlaceAndFromPool() {
         SajuPillars p = new SajuPillars("임오", "계묘", "신사", "을미");
-        String place = LuckyPlace.of(p);
-        assertThat(LuckyPlace.of(p)).isEqualTo(place);
+        LocalDate d = LocalDate.of(2026, 9, 29);
+        String place = LuckyPlace.of(p, d);
+        assertThat(LuckyPlace.of(p, d)).isEqualTo(place);
         assertThat(List.of("상록원", "팔정도", "혜화관", "대운동장", "만해광장", "학관", "명진관", "본관", "원흥관", "법학만해관",
                 "신공학관", "경영관", "사회과학관", "중앙도서관", "다향관", "동대입구역", "충무로역")).contains(place);
     }
 
     @Test
+    void placeChangesAcrossDaysWithinSameElementPool() {
+        SajuPillars p = new SajuPillars("임오", "계묘", "신사", "을미");
+        LocalDate d = LocalDate.of(2026, 9, 29);
+        long distinct = java.util.stream.IntStream.range(0, 30)
+                .mapToObj(i -> LuckyPlace.of(p, d.plusDays(i))).distinct().count();
+        assertThat(distinct).isGreaterThan(1); // 오행 풀 안에서 날짜별로 바뀐다
+    }
+
+    @Test
     void worksWithoutHourPillar() {
-        assertThat(LuckyPlace.of(new SajuPillars("경진", "기축", "무술", null))).isNotBlank();
+        assertThat(LuckyPlace.of(new SajuPillars("경진", "기축", "무술", null), LocalDate.of(2026, 9, 29))).isNotBlank();
     }
 }
