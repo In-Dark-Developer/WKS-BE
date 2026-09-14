@@ -185,7 +185,7 @@ CREATE TABLE reading (
     love_score         SMALLINT     NOT NULL,
     love_content       TEXT         NOT NULL,
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
-    -- 행운 아이템·장소는 저장하지 않는다. 아이템은 조회 시 팔자 + 오늘 일진 + resultId (saju/DailyLucky), 장소는 원국 강약 (saju/LuckyPlace)
+    -- 행운 아이템·장소는 저장하지 않는다. 아이템은 조회 시 팔자 + 오늘 일진 + 생년월일·시간·성별 (saju/DailyLucky), 장소는 원국 강약 (saju/LuckyPlace)
 );
 
 CREATE TABLE compatibility (
