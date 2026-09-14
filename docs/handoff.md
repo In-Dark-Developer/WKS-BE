@@ -18,18 +18,17 @@
 | 항목 | 상태 |
 |---|---|
 | 릴리즈 D-day | (미정) |
-| `main`·`dev` 브랜치 생성 + 보호 설정 | ❌ |
-| main(프로덕션) 배포 상태 | ⚠️ 파이프라인 코드는 준비됨, EC2 인스턴스 없음 (미배포) |
-| `/api/health` (배포 도메인) | ❌ |
+| `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
+| 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
+| `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
 | Flyway 최신 버전 | V6 |
 | api-spec 프론트 전달 | ❌ 미전달 |
-| CORS localhost:3000 허용 | ❌ |
+| CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
 ### 지금 막혀 있는 것
 
 | 내용 | 담당 | 필요한 것 |
 |---|---|---|
-| 만세력 라이브러리 선정 | 차은호 | **Day 1 내 결론** |
 | Gemini 무료 티어 RPM·RPD 실측 | 차은호 | Day 6 부하 테스트 |
 | 프론트 배포 도메인 (CORS용) | 곽도윤 | 프론트 팀 확인 |
 | 축제 D-day 확정 | 곽도윤 | 학생처 확인 |
@@ -45,11 +44,11 @@
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
-| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | PR (#17) |
-| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR #15 |
+| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
+| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | 완료 |
 | V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
-| V1 | 곽도윤 | init schema (5개 테이블) | 예정 |
+| V1 | 곽도윤 | init schema (5개 테이블) | 완료 |
 
 ---
 
