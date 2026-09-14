@@ -198,6 +198,7 @@
 **한 일**
 - `ResultResponse.from`: 아이템 해시 키를 `resultId` → `생년월일/시간/성별`. 같은 입력을 다시 생성해도 같은 날엔 같은 아이템. 날짜 바뀌면 변경(기존과 동일)
 - `LuckyPlace.of(pillars, today)`: 장소도 매일 변경. 보완 오행은 원국 기준 그대로 고정, 그 오행 풀(3~4곳) 안에서 `팔자 + 날짜` 해시. #34 의 "사람마다 고정"은 폐기
+- 아이템·장소 선택 해시를 `LuckyPool.pick` 으로 통일. `String.hashCode()` 는 날짜 끝자리에 선형이라 매일 인덱스가 +1 되어 풀을 목록 순서대로 도는 주기(장소 4일·아이템 10일)가 있었음. `SplittableRandom(seed)` 로 섞어 제거. 결정적(같은 키 = 같은 결과), JVM 무관
 
 **건드린 파일/패키지**
 - `result/dto/ResultResponse.java`(3줄, 최선우 리뷰), `saju/LuckyPlace.java`, `saju/DailyLucky.java` 주석, `LuckyPlaceTest`, `docs/api-spec.md`, `docs/architecture.md`

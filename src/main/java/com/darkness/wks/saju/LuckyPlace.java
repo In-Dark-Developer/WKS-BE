@@ -26,8 +26,7 @@ public final class LuckyPlace {
 
     public static String of(SajuPillars pillars, LocalDate today) {
         Element element = luckyElement(pillars);
-        List<String> pool = PLACES.get(element);
-        return pool.get(Math.floorMod((pillars.toString() + today).hashCode(), pool.size()));
+        return LuckyPool.pick(PLACES.get(element), pillars.toString() + today);
     }
 
     static Element luckyElement(SajuPillars pillars) {

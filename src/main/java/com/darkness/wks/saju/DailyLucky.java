@@ -32,9 +32,7 @@ public record DailyLucky(Element element, String item) {
     public static DailyLucky of(SajuPillars pillars, LocalDate today, String userKey) {
         String dayGanji = todayPillar(today);
         Element element = luckyElement(pillars, dayGanji);
-        List<String> pool = ITEMS.get(element);
-        int idx = Math.floorMod((userKey + today + element).hashCode(), pool.size());
-        return new DailyLucky(element, pool.get(idx));
+        return new DailyLucky(element, LuckyPool.pick(ITEMS.get(element), userKey + today + element));
     }
 
     static Element luckyElement(SajuPillars pillars, String dayGanji) {
