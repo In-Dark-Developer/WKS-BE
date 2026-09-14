@@ -7,6 +7,7 @@ import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.DailyLucky;
 import com.darkness.wks.saju.DestinyTitle;
+import com.darkness.wks.saju.LuckyPlace;
 import com.darkness.wks.saju.Grade;
 import com.darkness.wks.saju.SajuPillars;
 import com.darkness.wks.saju.Zodiac;
@@ -40,7 +41,7 @@ public record ResultResponse(
         @Schema(description = "오늘의 행운 아이템. 팔자 + 오늘 일진으로 계산, 매일 바뀜", example = "파란 부채")
         String luckyItem,
 
-        @Schema(description = "오늘의 행운 장소(동국대 안). 매일 바뀜", example = "팔정도 앞")
+        @Schema(description = "행운의 장소(동국대 안). 원국 기준이라 사람마다 고정", example = "팔정도")
         String luckyPlace,
 
         @Schema(description = "생성 시 빈 배열, 조회 시 createdAt 내림차순")
@@ -52,9 +53,8 @@ public record ResultResponse(
     }
 
     public static ResultResponse from(Result result, Reading reading, List<Compatibility> compatibilities) {
-        DailyLucky lucky = DailyLucky.of(
-                new SajuPillars(result.getYearPillar(), result.getMonthPillar(), result.getDayPillar(), result.getHourPillar()),
-                LocalDate.now(ZoneId.of("Asia/Seoul")));
+        SajuPillars pillars = new SajuPillars(result.getYearPillar(), result.getMonthPillar(), result.getDayPillar(), result.getHourPillar());
+        DailyLucky lucky = DailyLucky.of(pillars, LocalDate.now(ZoneId.of("Asia/Seoul")), result.getId().toString());
         return new ResultResponse(
                 result.getId(),
                 result.getShareId(),
@@ -77,7 +77,7 @@ public record ResultResponse(
                         new FortuneResponse(FortuneCategory.LOVE, Grade.of(reading.getLoveScore()).label(), reading.getLoveContent())
                 ),
                 lucky.item(),
-                lucky.place(),
+                LuckyPlace.of(pillars),
                 compatibilities.stream()
                         .map(compatibility -> CompatibilityResponse.from(compatibility, result))
                         .toList()

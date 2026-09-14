@@ -8,8 +8,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 운명 제목 8종. 결혼·자녀·연애 각각 상(SS/S/A+)·하(A/B+/B) 조합 2×2×2 (기획 2026-09-13).
- * 제목은 {@code resources/destiny-titles.txt} ("결혼자녀연애=제목", 예: 상하상=…). 저장하지 않고 점수로 계산한다.
+ * 운명 제목 8종. 연애·결혼·자녀 각각 상(SS/S/A+)·하(A/B+/B) 조합 2×2×2 (기능명세서 유형 1~8 순서).
+ * 제목은 {@code resources/destiny-titles.txt} ("연애결혼자녀=제목", 예: 상하상=…). 저장하지 않고 점수로 계산한다.
  */
 public final class DestinyTitle {
 
@@ -19,7 +19,7 @@ public final class DestinyTitle {
     }
 
     public static String of(int marriageScore, int childrenScore, int loveScore) {
-        return TITLES.get(level(marriageScore) + level(childrenScore) + level(loveScore));
+        return TITLES.get(level(loveScore) + level(marriageScore) + level(childrenScore));
     }
 
     /** 상 = A+ 이상 */

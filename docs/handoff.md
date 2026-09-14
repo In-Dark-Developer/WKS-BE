@@ -172,6 +172,33 @@
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
 
+### 2026-09-14 (월) · 차은호 · saju/ + result/ 기능명세서 정렬 (#34) · Claude Code
+
+**한 일**
+- 운명 8유형 키 순서를 기능명세서와 동일하게 연애→결혼→자녀로 변경 (`destiny-titles.txt` 유형 1~8 재배열, `DestinyTitle.of`)
+- 행운 아이템 오행을 명세 점수화로 교체: 사용자 궁합(십성) 40% + 오늘 일진 활성도 60%, 동점은 활성도→인성→비겁. 아이템은 `resultId + 날짜 + 오행` 해시 → 같은 팔자라도 사람마다 다름
+- 행운 장소를 별도 로직으로 분리 (`LuckyPlace`): 원국 오행 세력 + 신강/신약(돕는 세력 40%/55% 컷)으로 보완 오행 → 장소. 사람마다 고정, 날짜 무관
+- `Element` 에 `generates`/`controls`/`roleFor`/`strengths` 추가, `luckyAgainst` 제거. 풀 로더 `LuckyPool` 공용화
+- `ResultResponse.from` 만 수정 (`DailyLucky.of(pillars, today, resultId)`, `LuckyPlace.of(pillars)`) — 최선우 리뷰
+
+**건드린 파일/패키지**
+- `saju/Element.java`, `saju/DailyLucky.java`, `saju/LuckyPlace.java`(신규), `saju/LuckyPool.java`(신규), `saju/DestinyTitle.java`, `resources/destiny-titles.txt`
+- `result/dto/ResultResponse.java` (호출부 2줄)
+- 테스트 4개, `docs/api-spec.md`, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 장소 오행 계산은 명세의 지장간·통근·월령 보정 생략 (기둥 가중치 0.7/1.3/1.0/0.9, 지지 0.85 만). 정밀화 요청 오면 `Element.strengths` 만 손대면 됨
+- 운명 제목 문구는 여전히 임시값. 기획(영채) 8개 확정되면 `destiny-titles.txt` 만 교체
+
+**막힌 것 / 넘기는 것**
+- SS 추가 조건(FR-3) 도입 여부 → 기획 답 대기
+
+**문서 변경**
+- `docs/api-spec.md` §2 (luckyItem 매일·luckyPlace 고정, 운명 유형 순서), `docs/architecture.md` §6·DDL 주석, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `luckyPlace` 는 이제 사람마다 고정값 (매일 바뀌지 않음). `luckyItem` 은 매일 변경 유지
+
 ### 2026-09-14 (월) · 차은호 · saju/ 프롬프트 구체화 (#30) · Claude Code
 
 **한 일**
