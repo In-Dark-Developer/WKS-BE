@@ -185,7 +185,7 @@ CREATE TABLE reading (
     love_score         SMALLINT     NOT NULL,
     love_content       TEXT         NOT NULL,
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
-    -- 행운 아이템·장소는 저장하지 않는다. 조회 시 팔자 + 오늘 일진으로 계산 (saju/DailyLucky)
+    -- 행운 아이템·장소는 저장하지 않는다. 아이템은 조회 시 팔자 + 오늘 일진 + resultId (saju/DailyLucky), 장소는 원국 강약 (saju/LuckyPlace)
 );
 
 CREATE TABLE compatibility (
@@ -240,7 +240,8 @@ CreateResultRequest
   → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명 설명·결혼·자녀·연애 문장만)
   → DestinyTitle        조회 시: 점수 상/하 조합 → 운명 제목 8종   ← 코드 표
   → ReadingRepository   저장
-  → DailyLucky          조회 시: 일간 vs 오늘 일진 천간(십성) → 행운 오행 → 아이템·장소   ← 코드, 매일 변경
+  → DailyLucky          조회 시: 오행별 (궁합 40% + 오늘 일진 활성도 60%) → 행운 오행 → 아이템   ← 코드, 매일 변경
+  → LuckyPlace          조회 시: 원국 오행 세력·신강/신약 → 보완 오행 → 장소   ← 코드, 사람마다 고정
 ```
 
 **등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:

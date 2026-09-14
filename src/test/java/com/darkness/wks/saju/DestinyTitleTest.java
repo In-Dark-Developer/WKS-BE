@@ -15,6 +15,14 @@ class DestinyTitleTest {
     }
 
     @Test
+    void keyOrderIsLoveMarriageChildren() {
+        // 연애 상 / 결혼 하 / 자녀 하 = 유형 4
+        assertThat(DestinyTitle.of(60, 60, 80)).isEqualTo("스스로 빛을 만드는 별");
+        // 연애 하 / 결혼 상 / 자녀 상 = 유형 5
+        assertThat(DestinyTitle.of(80, 80, 60)).isEqualTo("집안에 복이 깃든 팔자");
+    }
+
+    @Test
     void eightCombinationsAllHaveTitles() {
         java.util.Set<String> titles = new java.util.HashSet<>();
         for (int m : new int[]{80, 60}) for (int c : new int[]{80, 60}) for (int l : new int[]{80, 60}) {
