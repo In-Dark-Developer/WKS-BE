@@ -1,5 +1,6 @@
 package com.darkness.wks.saju;
 
+import com.darkness.wks.common.Gender;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -13,23 +14,56 @@ class ReadingScorerTest {
     @Test
     void sameInputSameScores() {
         SajuPillars p = new SajuPillars("임오", "계묘", "신사", "을미");
-        assertThat(scorer.score(p)).isEqualTo(scorer.score(p));
-        assertThat(scorer.score(p)).containsOnlyKeys(ReadingCategory.MARRIAGE, ReadingCategory.CHILDREN, ReadingCategory.LOVE);
+        assertThat(scorer.score(p, Gender.MALE)).isEqualTo(scorer.score(p, Gender.MALE));
+        assertThat(scorer.score(p, Gender.MALE)).containsOnlyKeys(ReadingCategory.MARRIAGE, ReadingCategory.CHILDREN, ReadingCategory.LOVE);
+    }
+
+    @Test
+    void unknownHourIsNotPenalisedOnChildren() {
+        // 시주 모름 = 시주 보너스 평균. 같은 3주에 최악 시주(자녀성을 극하는 글자)를 붙인 것보다 높고, 최고 시주보다 낮다
+        // 일간 갑(목), 여자 자녀성 식상(화): 최악 시주 임자(수·수, 식상을 극함), 최고 시주 병오(화·화)
+        int unknown = scorer.score(new SajuPillars("임오", "계묘", "갑진", null), Gender.FEMALE).get(ReadingCategory.CHILDREN);
+        int worst = scorer.score(new SajuPillars("임오", "계묘", "갑진", "임자"), Gender.FEMALE).get(ReadingCategory.CHILDREN);
+        int best = scorer.score(new SajuPillars("임오", "계묘", "갑진", "병오"), Gender.FEMALE).get(ReadingCategory.CHILDREN);
+        assertThat(unknown).isGreaterThan(worst).isLessThan(best);
     }
 
     @Test
     void worksWithoutHourPillar() {
-        Map<ReadingCategory, Integer> g = scorer.score(new SajuPillars("경진", "기축", "무술", null));
+        Map<ReadingCategory, Integer> g = scorer.score(new SajuPillars("경진", "기축", "무술", null), Gender.FEMALE);
         assertThat(g).hasSize(3);
         assertThat(g.values()).allMatch(v -> v >= 0 && v <= 100);
     }
 
     @Test
     void spouseBranchRelationMovesMarriageScore() {
-        // 일간 갑(목): 일지 진(토) = 재성 → 보너스 30. 일지 인(목) = 비겁 → 보너스 0
-        int jae = scorer.score(new SajuPillars("임오", "계묘", "갑진", "신미")).get(ReadingCategory.MARRIAGE);
-        int bi = scorer.score(new SajuPillars("임오", "계묘", "갑인", "신미")).get(ReadingCategory.MARRIAGE);
+        // 일간 갑(목): 일지 진(토) = 재성 → 남자 배우자성 보너스 30. 일지 인(목) = 비겁 → 보너스 0
+        int jae = scorer.score(new SajuPillars("임오", "계묘", "갑진", "신미"), Gender.MALE).get(ReadingCategory.MARRIAGE);
+        int bi = scorer.score(new SajuPillars("임오", "계묘", "갑인", "신미"), Gender.MALE).get(ReadingCategory.MARRIAGE);
         assertThat(jae).isGreaterThan(bi);
+    }
+
+    @Test
+    void spouseStarDependsOnGender() {
+        // 일간 갑(목), 일지 진(토)=재성: 남자에겐 배우자성 → 남자 결혼 점수가 더 높다
+        SajuPillars p = new SajuPillars("임오", "계묘", "갑진", "신미");
+        assertThat(scorer.score(p, Gender.MALE).get(ReadingCategory.MARRIAGE))
+                .isGreaterThan(scorer.score(p, Gender.FEMALE).get(ReadingCategory.MARRIAGE));
+        // 일지 신(금)=관성: 여자 배우자성
+        SajuPillars q = new SajuPillars("임오", "계묘", "갑신", "신미");
+        assertThat(scorer.score(q, Gender.FEMALE).get(ReadingCategory.MARRIAGE))
+                .isGreaterThan(scorer.score(q, Gender.MALE).get(ReadingCategory.MARRIAGE));
+    }
+
+    @Test
+    void childStarDependsOnGender() {
+        // 일간 갑(목). 시주 병오(화·화)=식상: 여자 자녀성. 시주 경신(금·금)=관성: 남자 자녀성
+        SajuPillars sik = new SajuPillars("임오", "계묘", "갑진", "병오");
+        SajuPillars gwan = new SajuPillars("임오", "계묘", "갑진", "경신");
+        assertThat(scorer.score(sik, Gender.FEMALE).get(ReadingCategory.CHILDREN))
+                .isGreaterThan(scorer.score(sik, Gender.MALE).get(ReadingCategory.CHILDREN));
+        assertThat(scorer.score(gwan, Gender.MALE).get(ReadingCategory.CHILDREN))
+                .isGreaterThan(scorer.score(gwan, Gender.FEMALE).get(ReadingCategory.CHILDREN));
     }
 
     @Test

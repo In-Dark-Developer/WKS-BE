@@ -26,7 +26,8 @@ class GeminiSmokeTest {
 
         Reading r = generator.generate(
                 new SajuPillars("임오", "계묘", "신사", "을미"),
-                Map.of(ReadingCategory.MARRIAGE, Grade.SS, ReadingCategory.CHILDREN, Grade.A_PLUS, ReadingCategory.LOVE, Grade.B));
+                Map.of(ReadingCategory.MARRIAGE, Grade.SS, ReadingCategory.CHILDREN, Grade.A_PLUS, ReadingCategory.LOVE, Grade.B),
+                com.darkness.wks.common.Gender.MALE);
 
         System.out.println(r);
         assertThat(r.destinyDescription()).isNotBlank();

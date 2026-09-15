@@ -18,18 +18,17 @@
 | 항목 | 상태 |
 |---|---|
 | 릴리즈 D-day | (미정) |
-| `main`·`dev` 브랜치 생성 + 보호 설정 | ❌ |
-| main(프로덕션) 배포 상태 | ⚠️ 파이프라인 코드는 준비됨, EC2 인스턴스 없음 (미배포) |
-| `/api/health` (배포 도메인) | ❌ |
+| `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
+| 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
+| `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
 | Flyway 최신 버전 | V6 |
 | api-spec 프론트 전달 | ❌ 미전달 |
-| CORS localhost:3000 허용 | ❌ |
+| CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
 ### 지금 막혀 있는 것
 
 | 내용 | 담당 | 필요한 것 |
 |---|---|---|
-| 만세력 라이브러리 선정 | 차은호 | **Day 1 내 결론** |
 | Gemini 무료 티어 RPM·RPD 실측 | 차은호 | Day 6 부하 테스트 |
 | 프론트 배포 도메인 (CORS용) | 곽도윤 | 프론트 팀 확인 |
 | 축제 D-day 확정 | 곽도윤 | 학생처 확인 |
@@ -46,11 +45,11 @@
 |---|---|---|---|
 | V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
-| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | PR (#17) |
-| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR #15 |
+| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
+| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | 완료 |
 | V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
-| V1 | 곽도윤 | init schema (5개 테이블) | 예정 |
+| V1 | 곽도윤 | init schema (5개 테이블) | 완료 |
 
 ---
 
@@ -109,6 +108,27 @@
 ---
 
 ## 기록
+
+### 2026-09-14 (월) · 차은호 · saju/ 등급 노출 완화 (#32) · Codex
+
+**한 일**
+- 해석 문장에 내부 운세 등급을 반드시 명시하지 않아도 되도록 시스템 프롬프트 규칙을 명확히 함
+- 등급은 기존처럼 해석의 방향과 강도를 정하는 입력으로 유지
+
+**건드린 파일/패키지**
+- `resources/prompts/reading-system.txt`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- API 응답 구조와 등급 산출 로직은 바뀌지 않음
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
 
 ### 2026-09-15 (화) · 곽도윤 · 사전신청 API 필드 확장 (피그마 반영) · Claude Code
 
@@ -231,6 +251,172 @@
 
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
+### 2026-09-15 (화) · 차은호 · saju/ 운명 제목 기획 문구 반영 (#52) · Claude Code
+
+**한 일**
+- `destiny-titles.txt` 8개를 기획(영채) 피드백 1차 문구로 교체. 임시값 제거
+- 매핑(연애·결혼·자녀): 상상상 복이 겹친 운명 / 상상하 오래 사랑할 운명 / 상하상 사랑을 남길 운명 / 상하하 사랑이 깊은 운명 / 하상상 가정을 이룰 운명 / 하상하 끝내 닿는 운명 / 하하상 복을 잇는 운명 / 하하하 제 길을 갈 운명
+
+**건드린 파일/패키지**
+- `resources/destiny-titles.txt`, `DestinyTitleTest`, `docs/api-spec.md` 예시, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- "피드백 1차"라 2차 오면 파일만 다시 교체. 코드 변경 없음
+- 화면이 "당신의 운명은" + 제목이라 "…운명"이 겹침("당신의 운명은 사랑이 깊은 운명"). 기획에 전달함
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2 예시, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (스키마 동일)
+
+### 2026-09-15 (화) · 차은호 · saju/ 프롬프트 오행 역할 설명 (#50) · Claude Code
+
+**한 일**
+- #49 이후 오행 사실은 맞지만 카드가 "흙인 당신 → 결혼은 물과 불 → 자녀는 나무"로 읽혀 독자에게 불일치로 보임. "라벨 그대로 읊기 금지"가 역할 언급까지 지운 것
+- 규칙 교체: 나의 기운이 아닌 기운은 "흙의 기운인 당신에게 물의 기운은 배우자 인연을 뜻해요"처럼 뜻을 꼭 밝힌다. 각 항목 첫 문장은 나의 기운에서 시작. 연애운 기운 지정(나의 기운 + 배우자 기운) 추가
+- 실호출 3회(카드와 같은 흙 일간·남성 구성): 연애·결혼·자녀 첫 문장 전부 "흙의 기운인 당신에게 X의 기운은 …을 뜻해요". 합쇼체 0. 입력 1,474토큰(+130)
+
+**건드린 파일/패키지**
+- `resources/prompts/reading-system.txt`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 없음
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
+
+### 2026-09-15 (화) · 차은호 · saju/ 프롬프트에 오행 사실 전달 (#48) · Claude Code
+
+**한 일**
+- 같은 입력인데 시도마다 언급 오행이 달랐음(첫 시도 "물과 불", 두 번째 "물과 흙"). 프롬프트에 팔자 글자만 있어 LLM이 오행을 스스로 골랐기 때문
+- `ReadingGenerator.buildPrompt`: 나의 기운(일간), 강한 기운(세력 상위 2), 약한 기운(총량 10% 미만), 배우자 기운(성별 기준 배우자성)·배우자 자리의 기운(일지), 자녀 기운(자녀성)을 나무·불·흙·쇠·물로 전달
+- 시스템 프롬프트: 기운 이야기는 전달된 오행 정보만 근거. 항목별로 어느 기운에서 끌어낼지 지정. 라벨("배우자 기운" 등) 그대로 읊기 금지. 합쇼체 금지 명시
+- 스모크 5회(3.5-flash-lite): 결혼은 항상 나무+불, 자녀는 항상 불, 성격은 쇠+나무·물. 토큰 약 2,000 (+50)
+
+**건드린 파일/패키지**
+- `saju/ReadingGenerator.java`, `resources/prompts/reading-system.txt`, `ReadingGeneratorTest`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 합쇼체("~합니다")가 2회 중 1회꼴로 섞임. 프롬프트 금지 문구로는 완전히 안 잡힘. 거슬리면 temperature 0.9 → 0.7 검토
+- 프롬프트가 등급 외 사실을 더 받으므로 `ReadingGeneratorTest` 의 기대 문자열이 오행 계산(`Element.strengths`)에 묶임. 가중치 바꾸면 테스트 문자열도 갱신
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
+
+### 2026-09-15 (화) · 차은호 · saju/ 프롬프트 '등급' 표현 제거 (#46) · Claude Code
+
+**한 일**
+- 해석 문장에 "…만드는 등급입니다"가 나옴. 출력 지시 3곳이 "이 등급이 나온 기운"이라 LLM이 따라 씀
+- 원칙에 "'등급'이라는 말과 등급 기호(SS, A+ 등)를 문장에 쓰지 않는다. '~하는 사주예요', '~하는 흐름이에요'처럼 풀어 쓴다" 추가. 출력 지시는 "이 운의 바탕이 되는 기운"으로
+- 스모크(3.5-flash-lite) 1회: '등급' 0회, 등급 기호 0회. 5.5초, 1,953토큰
+
+**건드린 파일/패키지**
+- `resources/prompts/reading-system.txt`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 없음
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
+
+### 2026-09-15 (화) · 차은호 · result/ 행운 아이템 해시 키 (#40) + 장소 매일 변경 (#42) · Claude Code
+
+**한 일**
+- `ResultResponse.from`: 아이템 해시 키를 `resultId` → `생년월일/시간/성별`. 같은 입력을 다시 생성해도 같은 날엔 같은 아이템. 날짜 바뀌면 변경(기존과 동일)
+- `LuckyPlace.of(pillars, today)`: 장소도 매일 변경. 보완 오행은 원국 기준 그대로 고정, 그 오행 풀(3~4곳) 안에서 `팔자 + 날짜` 해시. #34 의 "사람마다 고정"은 폐기
+- 아이템·장소 선택 해시를 `LuckyPool.pick` 으로 통일. `String.hashCode()` 는 날짜 끝자리에 선형이라 매일 인덱스가 +1 되어 풀을 목록 순서대로 도는 주기(장소 4일·아이템 10일)가 있었음. `SplittableRandom(seed)` 로 섞어 제거. 결정적(같은 키 = 같은 결과), JVM 무관
+
+**건드린 파일/패키지**
+- `result/dto/ResultResponse.java`(3줄, 최선우 리뷰), `saju/LuckyPlace.java`, `saju/DailyLucky.java` 주석, `LuckyPlaceTest`, `docs/api-spec.md`, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 같은 생년월일·시간·성별인 두 사람은 같은 날 같은 아이템을 받는다 (의도)
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2, `docs/architecture.md` DDL 주석, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `luckyPlace` 도 매일 바뀐다 (#34 공지 번복). 오늘 결과와 내일 결과가 다를 수 있음
+
+### 2026-09-15 (화) · 차은호 · saju/ + result/ 성별 반영 (#36) · Claude Code
+
+**한 일**
+- `ReadingScorer.score(pillars, gender)`: 배우자성·자녀성을 성별로 결정. 남자 재성=배우자·관성=자녀, 여자 관성=배우자·식상=자녀. 일지 보너스는 배우자성 30, 재·관 중 나머지 18. 시주 자녀 보너스는 자녀성과의 생극 관계로 통일
+- `ReadingGenerator.generate(pillars, grades, gender)`: 프롬프트 첫 줄에 성별. 시스템 프롬프트에 "역할·호칭은 성별에 맞춘다, 어긋나는 표현 금지" 규칙 추가
+- `ResultAnalysisPort.analyze(date, time, gender)` 시그니처 변경, `ResultService`·`SajuResultAnalysisAdapter` 호출부 반영 — 최선우 리뷰
+- 보정 상수 재측정 (시주 포함 고유 팔자 265,004개): 결혼 63.0/0.93, 자녀 51.9/0.78, 연애 54.1/0.95. 남녀 원점수 중앙값 차이 0.5 이내라 공통 상수
+- 시주 모름이면 자녀 시주 보너스를 0 대신 모집단 평균 13.2로 채움. 이전엔 시간 미입력자 자녀 상 비율 24%(입력자 52%)로 한 등급 손해 보던 것 → 51%로 복귀
+
+**건드린 파일/패키지**
+- `saju/ReadingScorer.java`, `saju/ReadingGenerator.java`, `resources/prompts/reading-system.txt`
+- `result/ResultAnalysisPort.java`, `result/ResultService.java`(1줄), `result/SajuResultAnalysisAdapter.java`
+- 테스트 5개, `docs/api-spec.md`, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 등급 분포(남녀 거의 동일): SS 6~9% / S 17~20% / A+ 25~26% / A 24~27% / B+ 18~20% / B 2~5%. 상(A+ 이상) 약 52%
+- 같은 팔자라도 성별이 다르면 결혼·자녀 점수가 달라진다. 연애는 배우자성 비중만 달라져 차이 작음
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2 gender 설명, `docs/architecture.md` §6, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (요청·응답 스키마 변경 없음)
+
+### 2026-09-14 (월) · 차은호 · saju/ + result/ 기능명세서 정렬 (#34) · Claude Code
+
+**한 일**
+- 운명 8유형 키 순서를 기능명세서와 동일하게 연애→결혼→자녀로 변경 (`destiny-titles.txt` 유형 1~8 재배열, `DestinyTitle.of`)
+- 행운 아이템 오행을 명세 점수화로 교체: 사용자 궁합(십성) 40% + 오늘 일진 활성도 60%, 동점은 활성도→인성→비겁. 아이템은 `resultId + 날짜 + 오행` 해시 → 같은 팔자라도 사람마다 다름
+- 행운 장소를 별도 로직으로 분리 (`LuckyPlace`): 원국 오행 세력 + 신강/신약(돕는 세력 40%/55% 컷)으로 보완 오행 → 장소. 사람마다 고정, 날짜 무관
+- `Element` 에 `generates`/`controls`/`roleFor`/`strengths` 추가, `luckyAgainst` 제거. 풀 로더 `LuckyPool` 공용화
+- `ResultResponse.from` 만 수정 (`DailyLucky.of(pillars, today, resultId)`, `LuckyPlace.of(pillars)`) — 최선우 리뷰
+
+**건드린 파일/패키지**
+- `saju/Element.java`, `saju/DailyLucky.java`, `saju/LuckyPlace.java`(신규), `saju/LuckyPool.java`(신규), `saju/DestinyTitle.java`, `resources/destiny-titles.txt`
+- `result/dto/ResultResponse.java` (호출부 2줄)
+- 테스트 4개, `docs/api-spec.md`, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 장소 오행 계산은 명세의 지장간·통근·월령 보정 생략 (기둥 가중치 0.7/1.3/1.0/0.9, 지지 0.85 만). 정밀화 요청 오면 `Element.strengths` 만 손대면 됨
+- 운명 제목 문구는 여전히 임시값. 기획(영채) 8개 확정되면 `destiny-titles.txt` 만 교체
+
+**막힌 것 / 넘기는 것**
+- SS 추가 조건(FR-3) 도입 여부 → 기획 답 대기
+
+**문서 변경**
+- `docs/api-spec.md` §2 (luckyItem 매일·luckyPlace 고정, 운명 유형 순서), `docs/architecture.md` §6·DDL 주석, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `luckyPlace` 는 이제 사람마다 고정값 (매일 바뀌지 않음). `luckyItem` 은 매일 변경 유지
 
 ### 2026-09-14 (월) · 차은호 · saju/ 프롬프트 구체화 (#30) · Claude Code
 

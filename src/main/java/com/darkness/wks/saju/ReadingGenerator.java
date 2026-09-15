@@ -1,5 +1,6 @@
 package com.darkness.wks.saju;
 
+import com.darkness.wks.common.Gender;
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.google.genai.Client;
@@ -58,8 +59,8 @@ public class ReadingGenerator {
         this.model = model;
     }
 
-    public Reading generate(SajuPillars pillars, Map<ReadingCategory, Grade> grades) {
-        String prompt = buildPrompt(pillars, grades);
+    public Reading generate(SajuPillars pillars, Map<ReadingCategory, Grade> grades, Gender gender) {
+        String prompt = buildPrompt(pillars, grades, gender);
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 return call(prompt);
@@ -87,13 +88,41 @@ public class ReadingGenerator {
         return parse(response.text());
     }
 
-    /** 팔자와 등급뿐. 개인정보 미포함은 테스트로 고정한다 (TR-03). */
-    static String buildPrompt(SajuPillars p, Map<ReadingCategory, Grade> grades) {
+    /** 프롬프트용 오행 이름. 시스템 프롬프트의 "나무·불·흙·쇠·물의 기운"과 맞춘다 */
+    private static final String[] PLAIN = {"나무", "불", "흙", "쇠", "물"};
+
+    /**
+     * 팔자·등급·성별·오행 사실뿐. 개인정보 미포함은 테스트로 고정한다 (TR-03).
+     * 오행 사실(나의 기운·강한/약한 기운·배우자·자녀 기운)을 코드가 정해 넘긴다. 팔자 글자만 주면 LLM 이 매번 다른 오행을 집어 말한다 (#48)
+     */
+    static String buildPrompt(SajuPillars p, Map<ReadingCategory, Grade> grades, Gender gender) {
+        Element me = Element.ofStem(p.dayPillar().charAt(0));
+        double[] s = Element.strengths(p);
+        double total = 0;
+        for (double v : s) total += v;
+        List<Element> byStrength = java.util.Arrays.stream(Element.values())
+                .sorted(java.util.Comparator.comparingDouble((Element e) -> -s[e.ordinal()])).toList();
+        String strong = byStrength.subList(0, 2).stream().map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
+        double weakCut = total * 0.1;
+        String weak = byStrength.stream().filter(e -> s[e.ordinal()] < weakCut).map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
+        int spouseRole = gender == Gender.MALE ? 2 : 3; // 남 재성, 여 관성
+        int childRole = gender == Gender.MALE ? 3 : 1;  // 남 관성, 여 식상
+        Element spouse = null, child = null;
+        for (Element e : Element.values()) {
+            if (e.roleFor(me) == spouseRole) spouse = e;
+            if (e.roleFor(me) == childRole) child = e;
+        }
         StringBuilder sb = new StringBuilder()
+                .append("성별 ").append(gender == Gender.MALE ? "남성" : "여성").append("\n")
                 .append("년주 ").append(p.yearPillar())
                 .append(", 월주 ").append(p.monthPillar())
                 .append(", 일주 ").append(p.dayPillar())
-                .append(", 시주 ").append(p.hourPillar() == null ? "모름" : p.hourPillar());
+                .append(", 시주 ").append(p.hourPillar() == null ? "모름" : p.hourPillar()).append("\n")
+                .append("나의 기운: ").append(PLAIN[me.ordinal()]).append("\n")
+                .append("강한 기운: ").append(strong).append(" / 약한 기운: ").append(weak.isEmpty() ? "없음" : weak).append("\n")
+                .append("배우자 기운: ").append(PLAIN[spouse.ordinal()])
+                .append(" / 배우자 자리의 기운: ").append(PLAIN[Element.ofBranch(p.dayPillar().charAt(1)).ordinal()]).append("\n")
+                .append("자녀 기운: ").append(PLAIN[child.ordinal()]);
         for (ReadingCategory c : ReadingCategory.values()) {
             sb.append("\n").append(c.korean()).append(" 등급: ").append(grades.get(c).label());
         }

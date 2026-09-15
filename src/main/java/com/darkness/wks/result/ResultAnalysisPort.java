@@ -1,5 +1,6 @@
 package com.darkness.wks.result;
 
+import com.darkness.wks.common.Gender;
 import com.darkness.wks.saju.SajuPillars;
 
 import java.time.LocalDate;
@@ -14,8 +15,9 @@ public interface ResultAnalysisPort {
     /**
      * @param solarBirthDate 양력 생년월일. 음력 입력은 호출 전에 {@code BirthDate.parse(...).toSolar()} 로 변환한다
      * @param birthTime      null 이면 시간 모름
+     * @param gender         배우자성·자녀성 판정과 해석 문장의 역할 표현에 쓴다
      */
-    AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime);
+    AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime, Gender gender);
 
     record AnalysisResult(
             SajuPillars pillars,

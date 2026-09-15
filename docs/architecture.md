@@ -185,7 +185,7 @@ CREATE TABLE reading (
     love_score         SMALLINT     NOT NULL,
     love_content       TEXT         NOT NULL,
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
-    -- 행운 아이템·장소는 저장하지 않는다. 조회 시 팔자 + 오늘 일진으로 계산 (saju/DailyLucky)
+    -- 행운 아이템·장소는 저장하지 않는다. 아이템은 조회 시 팔자 + 오늘 일진 + 생년월일·시간·성별 (saju/DailyLucky), 장소는 원국 강약 (saju/LuckyPlace)
 );
 
 CREATE TABLE compatibility (
@@ -236,11 +236,12 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 CreateResultRequest
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
-  → ReadingScorer       결혼·자녀·연애 등급 산출     ← 결정적
-  → ReadingGenerator    등급+팔자 → 보살 톤 문장     ← LLM (운명 설명·결혼·자녀·연애 문장만)
+  → ReadingScorer       결혼·자녀·연애 점수 산출 (성별로 배우자성·자녀성 결정)   ← 결정적
+  → ReadingGenerator    등급+팔자+성별 → 보살 톤 문장   ← LLM (운명 설명·결혼·자녀·연애 문장만)
   → DestinyTitle        조회 시: 점수 상/하 조합 → 운명 제목 8종   ← 코드 표
   → ReadingRepository   저장
-  → DailyLucky          조회 시: 일간 vs 오늘 일진 천간(십성) → 행운 오행 → 아이템·장소   ← 코드, 매일 변경
+  → DailyLucky          조회 시: 오행별 (궁합 40% + 오늘 일진 활성도 60%) → 행운 오행 → 아이템   ← 코드, 매일 변경
+  → LuckyPlace          조회 시: 원국 오행 세력·신강/신약 → 보완 오행(고정) → 풀에서 날짜별 장소   ← 코드, 매일 변경
 ```
 
 **등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:
