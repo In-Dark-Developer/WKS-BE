@@ -17,9 +17,9 @@ class DestinyTitleTest {
     @Test
     void keyOrderIsLoveMarriageChildren() {
         // 연애 상 / 결혼 하 / 자녀 하 = 유형 4
-        assertThat(DestinyTitle.of(60, 60, 80)).isEqualTo("스스로 빛을 만드는 별");
+        assertThat(DestinyTitle.of(60, 60, 80)).isEqualTo("사랑이 깊은 운명");
         // 연애 하 / 결혼 상 / 자녀 상 = 유형 5
-        assertThat(DestinyTitle.of(80, 80, 60)).isEqualTo("집안에 복이 깃든 팔자");
+        assertThat(DestinyTitle.of(80, 80, 60)).isEqualTo("가정을 이룰 운명");
     }
 
     @Test
