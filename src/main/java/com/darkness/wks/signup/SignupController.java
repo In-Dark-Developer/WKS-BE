@@ -39,7 +39,7 @@ public class SignupController {
     @Value("${app.frontend.verify-redirect-url}")
     private String verifyRedirectUrl;
 
-    @Operation(summary = "사전등록 신청", description = "이메일·성별·선호성별로 신청하고 인증 메일을 발송한다.")
+    @Operation(summary = "사전등록 신청", description = "이름·이메일·연락처·학과·MBTI·자기소개·성별·선호성별로 신청하고 인증 메일을 발송한다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "신청 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 또는 허용되지 않는 이메일 도메인",

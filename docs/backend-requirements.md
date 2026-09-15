@@ -245,7 +245,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 
 | ID | P | 요구사항 |
 |---|---|---|
-| FR-SU-01 | P0 | 이메일·성별·선호성별·`resultId`(nullable)로 신청 생성 |
+| FR-SU-01 | P0 | 이메일·성별·선호성별(필수)·`resultId`(nullable)로 신청 생성. 이름·연락수단(`PHONE`\|`INSTAGRAM`)+연락처값·학과·MBTI·자기소개도 함께 받지만 **필수/선택 여부는 미정** (FR-SU-11 참고) |
 | FR-SU-02 | P0 | 학교 웹메일 **도메인 화이트리스트** 검증 → `INVALID_EMAIL_DOMAIN` 400 |
 | FR-SU-03 | P0 | 이메일 중복 → `DUPLICATE_SIGNUP` 409 |
 | FR-SU-04 | P0 | `resultId` nullable. 사주 없이 신청하는 경로 허용 |
@@ -255,11 +255,13 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | FR-SU-08 | P0 | 만료·위조·재사용 토큰 → `INVALID_TOKEN` 400 |
 | FR-SU-09 | P0 | 인증 성공 시 프론트 완료 페이지로 **302**. 대상 URL은 설정값 |
 | FR-SU-10 | P0 | 쿠폰은 **1인 1회** |
-| FR-SU-11 | P0 | **이름·전화번호를 수집하지 않는다.** 스키마에 컬럼도 없다 |
+| FR-SU-11 | P0 | **(2026-09-15 정책 변경, 피그마 사전신청 화면 반영)** 이름·연락처(전화번호 또는 인스타그램)·학과·MBTI·자기소개를 수집한다. `signup` 테이블에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가(V7). **⚠️ 6개 필드 모두 필수/선택 여부가 기획 미확정**이라 서버는 전부 `nullable`로 구현했다(값이 있을 때만 형식 검증). 피그마 화면 자체가 사전신청 전체 화면이라는 것은 확인됨(2026-09-15) — 단 필수 표시(*)가 없어 현재로선 어떤 필드가 Must인지 알 수 없다. **결정되면 DB 컬럼에 `NOT NULL` 제약 추가 + DTO에 `@NotBlank`/`@NotNull` 추가하는 후속 마이그레이션 필요**. 사진 업로드는 **2차 릴리즈로 보류** — 이번 MVP API에는 포함하지 않는다 |
+| FR-SU-11A | P0 | `contactMethod`가 `PHONE`이면 `contactValue`는 한국 휴대폰 번호 형식이어야 한다(값이 있을 때만 검증). `INSTAGRAM`이면 형식 제약 없음 |
 | FR-SU-12 | P0 | **메일 발송 실패가 signup 생성을 롤백시키지 않는다.** 재발송 가능해야 한다 |
 | FR-SU-13 | P0 | 재발송 API 제공. 이미 인증된 이메일이면 400 |
 | FR-SU-14 | P1 | 신청자 수·성비 조회 쿼리를 문서화 |
 | FR-SU-15 | P1 | SMTP 발송 계정의 일일 한도를 확인하고 기록 |
+| FR-SU-16 | P2 | 프로필 사진 업로드 — 2차 릴리즈. 스토리지(S3 등) 연동, 용량·포맷 검증 필요 |
 
 ### 인수 조건
 
@@ -269,6 +271,10 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 - `resultId: null` 신청이 정상 생성
 - **SMTP를 강제 실패시켜도 signup row는 남고 재발송이 가능하다**
 - 존재하지 않는 `resultId` 신청 시 처리 방침이 정의되어 있다 (**Day 3까지 결정**)
+- `name`·`department`·`mbti`·`bio`·`contactMethod`·`contactValue` 전부 `null`이어도 **정상 생성** (필수 여부 미정 상태의 임시 동작)
+- `contactMethod: "PHONE"` + `contactValue: "not-a-phone"` → 400 `INVALID_INPUT`
+- `contactMethod: "INSTAGRAM"` + 임의 문자열 `contactValue` → 정상 생성
+- `mbti: "ABCD"` (16유형 외, 빈 문자열 아님) → 400 `INVALID_INPUT`
 
 ---
 
@@ -379,6 +385,8 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 - [ ] Tier 경계값이 정확히 나뉨
 - [ ] 자기 자신 궁합 → 400 / 없는 resultId 조회 → 404
 - [ ] 외부 도메인 이메일 → 400 / 이메일 중복 → 409, 쿠폰 1회
+- [ ] 이름·연락처·학과·MBTI·자기소개 필수 여부 기획 확정 → 서버 검증 반영 완료 (미확정 시 현재는 전부 선택값)
+- [ ] `PHONE` 형식 오류 시 400 / `INSTAGRAM`·미입력 시 정상 처리
 - [ ] 인증 메일 수신 및 링크 동작
 - [ ] 만료·재사용 토큰 → 400
 - [ ] **SMTP 강제 실패 시 signup 유지 + 재발송 동작**

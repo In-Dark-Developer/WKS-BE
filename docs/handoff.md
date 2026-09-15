@@ -44,6 +44,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
 | V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | PR (#17) |
 | V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | PR #15 |
@@ -108,6 +109,65 @@
 ---
 
 ## 기록
+
+### 2026-09-15 (화) · 곽도윤 · 사전신청 API 필드 확장 (피그마 반영) · Claude Code
+
+**한 일**
+- 프론트가 공유한 사전신청 화면(피그마, "가을 축제, 나에게 어떤 인연이 찾아올까?")과 `POST /api/signups` 계약을 대조 → 이름·연락처(전화/인스타)·학과·MBTI·자기소개가 API에 없는 걸 확인
+- 9/13 기록에 "팀 결정 필요"로 남아있던 FR-SU-11("이름·전화번호 미수집")을 **정책 변경**으로 해결 — 피그마대로 수집하는 쪽으로 결정
+- `Signup` 엔티티·`CreateSignupRequest`에 `name`·`contactMethod`(`PHONE`\|`INSTAGRAM`)·`contactValue`·`department`·`mbti`·`bio` 추가. `contactMethod=PHONE`일 때만 휴대폰 번호 형식 검증(`SignupService.validateContact`), `INSTAGRAM`은 형식 제약 없음
+- `common/ContactMethod` enum 신규 추가 (`Gender`와 동일 패턴)
+- `V7__add_signup_profile_fields.sql` 작성 — signup에 6개 컬럼 추가
+- **(정정, 같은 날)** 공유해주신 피그마가 사전신청 화면 **전체**이고 "이 화면 안에서 뭘 필수/선택으로 할지는 아직 안 정해졌다"는 사용자 확인을 받음. 처음엔 6개 필드를 전부 필수로 구현했었는데, 이 확인 후 **전부 nullable로 되돌림** — DB 컬럼 `NOT NULL` 제거, DTO `@NotBlank`/`@NotNull` 제거(형식 검증(`@Size`/`@Pattern`/전화번호 정규식)은 값이 있을 때만 동작), 서비스에 빈 문자열→`null` 정규화(`SignupService.blankToNull`) 추가
+- `docs/api-spec.md` §5, `api.md` §4, `docs/backend-requirements.md` FR-SU 섹션 갱신 (필수 표시를 전부 "⚠️ 미정"으로)
+- `SignupServiceTest`·`SignupControllerTest`의 기존 생성자 호출부 전부 갱신 + `PHONE` 형식 오류·`INSTAGRAM` 허용·6개 필드 전부 `null`이어도 생성되는 케이스 테스트 추가. `./gradlew test --tests "com.darkness.wks.signup.*"` 통과 확인
+
+**건드린 파일/패키지**
+- `signup/entity/Signup.java`, `signup/dto/CreateSignupRequest.java`, `signup/SignupService.java`, `signup/SignupController.java`
+- `common/ContactMethod.java` (신규)
+- `db/migration/V7__add_signup_profile_fields.sql` (신규)
+- `signup/SignupServiceTest.java`, `signup/SignupControllerTest.java`
+- `docs/api-spec.md`, `api.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- **6개 신규 필드(`name`/`contactMethod`/`contactValue`/`department`/`mbti`/`bio`) 전부 현재 선택값(nullable)이다.** 필수/선택은 기획 미확정 — 확정되면 V7 후속 마이그레이션으로 `NOT NULL` 추가 + DTO에 `@NotBlank`/`@NotNull` 추가 필요. **이 상태로 배포하면 누구든 이름·연락처 없이 신청 가능** — 이대로 MVP 낼지 미리 확인
+- **사진 업로드는 이번 릴리즈에 안 넣었다** (사용자 결정, 2026-09-15). S3 등 스토리지 연동 필요해서 리스크가 커서 2차로 보류. 이미지 저장 방식(S3 vs EC2 로컬 디스크 vs DB)은 아직 미정 — 2차 착수 전 결정 필요. 프론트에 사진 필드는 UI만 두거나 비활성화하라고 전달 필요 (FR-SU-16)
+- **`gender`/`preferGender`는 그대로 유지했다.** 공유받은 피그마가 사전신청 화면 전체인 게 확인됐는데, 그 화면엔 성별 입력이 안 보인다. 즉 **현재 API는 화면에 없는 필드를 필수로 요구 중** — 프론트가 이 두 필드를 어디서/어떻게 보낼지 확인 필요. 매칭(FR-CP 궁합) 로직이 성별에 의존해서 임의로 빼지 않았음
+- **`나이`는 이번 API에 안 넣었다.** 9/13 기록(FR-10)엔 나이도 Must였는데 공유된 피그마 화면엔 없어서 뺐다. 프론트가 다른 화면에서 받는지 확인 필요
+- MBTI는 정규식(`^[EI][SN][TF][JP]$`, 빈 문자열은 허용)만 검증, 자기소개 글자수 상한 500자는 **피그마에 실제 숫자가 없어서 임의로 잡은 값** — 기획 확정되면 `CreateSignupRequest.bio`의 `@Size(max=...)`와 V7 컬럼 길이 같이 조정
+
+**막힌 것 / 넘기는 것**
+- 프론트·기획 확인 필요: (1) 6개 필드 중 필수는 어느 것인지, (2) 사진 저장 방식(S3/로컬디스크/기타) 및 2차 착수 시점, (3) 성별/선호성별 입력 위치, (4) 나이 필드 포함 여부·자기소개 최대 글자수
+
+**문서 변경**
+- `docs/api-spec.md`, `api.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `POST /api/signups`에 `name`·`contactMethod`·`contactValue`·`department`·`mbti`·`bio` 6개 필드 추가됨. **전부 현재는 선택값** — 필수 여부 확정되면 재공지 예정. `api.md` §4 갱신함
+- 사진 업로드는 이번 API에 없음 — 2차 릴리즈 예정
+- 성별/나이 관련 위 미결정 항목 답변 필요
+
+### 2026-09-14 (월) · 곽도윤 · 프론트 공유용 api.md 작성 · Claude Code
+
+**한 일**
+- 루트에 `api.md` 신규 작성 — 프론트 팀 전달 목적. 구현된 8개 엔드포인트(health/results×2/shares×2/compatibility/signups×3) 전부 실제 DTO 코드 대조해서 정리
+- Base URL 섹션에 운영 도메인(`https://api.threadoffate.site`)·로컬(`localhost:8080`) 둘 다 명시
+
+**건드린 파일/패키지**
+- `api.md` (신규, 루트)
+
+**다음 사람이 알아야 할 것**
+- `docs/api-spec.md`가 여전히 내부 원본이고 `api.md`는 그걸 프론트 공유용으로 옮겨 적은 것. **스펙 바뀌면 `docs/api-spec.md` 먼저 고치고 `api.md`도 같이 갱신할 것** — 안 그러면 두 문서가 어긋남
+- `api.md`에 이메일 도메인 화이트리스트가 "현재 검증 건너뛰는 중"이라고 명시해둠 — 팀 결정되면 이 문구도 지울 것
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api.md` 신규 작성
+
+**프론트에 알려야 할 것**
+- `api.md` 파일로 전체 API 명세 전달함 (기존 `docs/api-spec.md` 미전달 상태였던 것 참고)
 
 ### 2026-09-14 (월) · 곽도윤 · CI/CD 배포 실패 원인 조사 · Claude Code
 
@@ -398,7 +458,7 @@
 **다음 사람이 알아야 할 것 — 프론트 명세와 어긋나는 것 (팀 결정 필요)**
 - **API 계약 불일치.** 프론트 명세는 `POST /readings`, `GET /shares/{shareId}`, `POST /shares/{shareId}/compatibility`, `GET /me/friends`, `POST /me/threads` 와 응답 타입 `Reading{id, shareId, zodiac, destiny, sections(3), cardGrades, lucky}` 를 쓰고, 원본을 "백엔드 저장소 `docs/api/openapi.yaml`" 이라고 적음. **우리 레포에 그 파일 없음.** 우리 계약은 `docs/api-spec.md` (`/api/results`, `resultId`, `destiny`, `fortunes`). 프론트 Open Question Q3 담당은 `@hairyung2002`. 9/17 전에 한쪽으로 맞춰야 연동 가능
 - **요청 형식.** 프론트는 `birthDate` "숫자 8자리", 우리는 `yyyy-MM-dd`. 시진 선택 UI 인데 전송 규칙(가운데 시각, 자시 두 칸)이 프론트 문서에 없음 → api-spec §2 를 프론트에 공지해야 함
-- **사전신청 수집 항목.** 프론트 FR-10 은 학교 이메일·이름·연락처(인스타/전화)·사진·학과·나이·MBTI·자기소개 를 Must 로 수집. 우리 규칙은 "이름·전화번호는 받지 않는다, 컬럼도 없다". `signup/` 스키마·개인정보 정책 결정 필요 (곽도윤)
+- ~~**사전신청 수집 항목.** 프론트 FR-10 은 학교 이메일·이름·연락처(인스타/전화)·사진·학과·나이·MBTI·자기소개 를 Must 로 수집. 우리 규칙은 "이름·전화번호는 받지 않는다, 컬럼도 없다". `signup/` 스키마·개인정보 정책 결정 필요 (곽도윤)~~ → **2026-09-15 해결.** 이름·연락처·학과·MBTI·자기소개 수집으로 정책 변경(FR-SU-11 개정, V7). 사진은 2차 릴리즈로 보류(FR-SU-16). 나이는 이번 API에 포함 안 함 — 프론트 확인 필요
 - **범위.** 프론트 Must 에 운명의 실(`/me/threads`), 소개팅 후보 열람(`/matching`), 세션(`/me/*`)이 포함. 우리 1차 범위 "하지 않는 것"에 매칭·로그인 있음. 소개팅 페이지는 축제 당일(9/29) 오픈
 - **일정.** 축제 2026-09-29 ~ 10-01, MVP 마감 9/17
 - 프론트 명세에서 확인된 결정(이미 반영됨): 지역 입력 없음, 등급 B~SS 6단계, 십이간지 캐릭터, 행운 장소는 동국대 안, 닉네임 8자, 성별 남/여

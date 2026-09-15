@@ -1,5 +1,6 @@
 package com.darkness.wks.signup;
 
+import com.darkness.wks.common.ContactMethod;
 import com.darkness.wks.common.Gender;
 import com.darkness.wks.signup.dto.CreateSignupRequest;
 import com.darkness.wks.signup.dto.ResendSignupRequest;
@@ -27,7 +28,7 @@ class SignupControllerTest {
 
     @Test
     void createsSignup() {
-        CreateSignupRequest request = new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE);
+        CreateSignupRequest request = new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         SignupResponse response = new SignupResponse(1024L, true, true, "신청이 접수됐다. 인증 메일을 확인해라.");
         when(signupService.createSignup(request)).thenReturn(response);
 

@@ -1,5 +1,6 @@
 package com.darkness.wks.signup;
 
+import com.darkness.wks.common.ContactMethod;
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.result.ResultRepository;
@@ -20,6 +21,7 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -27,6 +29,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class SignupService {
+
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^01[016789]-?\\d{3,4}-?\\d{4}$");
 
     private final SignupRepository signupRepository;
     private final ResultRepository resultRepository;
@@ -43,10 +47,14 @@ public class SignupService {
         if (signupRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_SIGNUP);
         }
+        String contactValue = blankToNull(request.contactValue());
+        validateContact(request.contactMethod(), contactValue);
 
         Result result = resolveResult(request.resultId());
 
-        Signup signup = new Signup(email, result, request.gender(), request.preferGender());
+        Signup signup = new Signup(email, result, request.gender(), request.preferGender(),
+                blankToNull(request.name()), request.contactMethod(), contactValue,
+                blankToNull(request.department()), normalizeMbti(request.mbti()), blankToNull(request.bio()));
         signup.issueCoupon();
         signupRepository.save(signup);
 
@@ -107,6 +115,26 @@ public class SignupService {
         if (!allowed) {
             throw new BusinessException(ErrorCode.INVALID_EMAIL_DOMAIN);
         }
+    }
+
+    private void validateContact(ContactMethod contactMethod, String contactValue) {
+        if (contactMethod == ContactMethod.PHONE && contactValue != null
+                && !PHONE_PATTERN.matcher(contactValue).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
+    private String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeMbti(String mbti) {
+        String normalized = blankToNull(mbti);
+        return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
     private Set<String> parseAllowedDomains() {
