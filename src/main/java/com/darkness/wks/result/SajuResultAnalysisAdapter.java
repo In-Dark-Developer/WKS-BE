@@ -29,6 +29,12 @@ public class SajuResultAnalysisAdapter implements ResultAnalysisPort {
     private final ReadingScorer readingScorer = new ReadingScorer();
 
     @Override
+    public int analysisVersion() {
+        int v = readingGenerator.promptVersion() * 31 + ReadingScorer.VERSION;
+        return v == 0 ? 1 : v; // 0 은 버전 도입 전 행. 해시가 우연히 0 이어도 옛 행과 섞이지 않게
+    }
+
+    @Override
     public AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime, Gender gender) {
         SajuPillars pillars = sajuCalculator.calculate(solarBirthDate, birthTime, null); // 지역 미수집 → 서울 기준
 

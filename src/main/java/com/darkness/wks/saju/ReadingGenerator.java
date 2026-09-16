@@ -59,6 +59,11 @@ public class ReadingGenerator {
         this.model = model;
     }
 
+    /** 시스템 프롬프트·모델이 바뀌면 달라진다. 저장된 해석 재사용 여부 판단용 (#62) */
+    public int promptVersion() {
+        return (SYSTEM_PROMPT + "|" + model).hashCode();
+    }
+
     public Reading generate(SajuPillars pillars, Map<ReadingCategory, Grade> grades, Gender gender) {
         String prompt = buildPrompt(pillars, grades, gender);
         for (int attempt = 1; attempt <= 2; attempt++) {

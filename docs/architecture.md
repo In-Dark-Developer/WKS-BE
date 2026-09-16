@@ -184,6 +184,7 @@ CREATE TABLE reading (
     children_content   TEXT         NOT NULL,
     love_score         SMALLINT     NOT NULL,
     love_content       TEXT         NOT NULL,
+    version            INTEGER      NOT NULL DEFAULT 0,  -- 프롬프트·점수 로직 버전. 같은 입력 해석 재사용은 같은 버전끼리만 (#62). 0 = 도입 전 행
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
     -- 행운 아이템·장소는 저장하지 않는다. 아이템은 조회 시 팔자 + 오늘 일진 + 생년월일·시간·성별 (saju/DailyLucky), 장소는 원국 강약 (saju/LuckyPlace)
 );
@@ -234,6 +235,7 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 
 ```
 CreateResultRequest
+  → ReadingRepository   같은 생년월일·시간·성별 + 같은 버전의 해석이 있으면 복사하고 아래 분석은 건너뜀 (#62)
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
   → ReadingScorer       결혼·자녀·연애 점수 산출 (성별로 배우자성·자녀성 결정)   ← 결정적
