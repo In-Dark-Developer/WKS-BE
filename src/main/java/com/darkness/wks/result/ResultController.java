@@ -3,6 +3,7 @@ package com.darkness.wks.result;
 import com.darkness.wks.common.response.ApiResponse;
 import com.darkness.wks.common.response.ErrorResponse;
 import com.darkness.wks.result.dto.CreateResultRequest;
+import com.darkness.wks.result.dto.ResultInputResponse;
 import com.darkness.wks.result.dto.ResultResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -105,5 +106,21 @@ public class ResultController {
             @PathVariable String resultId
     ) {
         return ApiResponse.success(resultService.getResult(resultId));
+    }
+
+    @Operation(summary = "입력값 조회", description = """
+            결과를 만들 때 입력한 값을 그대로 돌려준다. 재입력 폼 자동 채움용.
+            음력으로 입력했으면 음력 날짜가 나온다. `resultId` 는 본인만 아는 값이라는 전제다.
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "결과 없음")
+    })
+    @GetMapping("/{resultId}/input")
+    public ApiResponse<ResultInputResponse> getResultInput(
+            @Parameter(description = "조회할 UUID v4 결과 ID", schema = @Schema(type = "string", format = "uuid"))
+            @PathVariable String resultId
+    ) {
+        return ApiResponse.success(resultService.getResultInput(resultId));
     }
 }

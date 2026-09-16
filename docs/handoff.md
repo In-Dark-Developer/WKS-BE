@@ -21,7 +21,7 @@
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
 | 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V8 |
+| Flyway 최신 버전 | V9 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -42,6 +42,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V9 | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
 | V8 | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
 | V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
@@ -67,6 +68,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-17 | `GET /api/results/{resultId}/input` 추가 (폼 자동 채움). `resultId` 는 URL 노출 금지 | ❌ |
 | 2026-09-13 | 본인용 `resultId`와 공개용 `shareId` 분리. `GET /api/shares/{shareId}`, 궁합 POST 추가 | ❌ |
 | 2026-09-13 | `luckyItem`·`luckyPlace` 가 오늘 기준으로 매일 바뀜 (조회마다 재계산) | ❌ |
 | 2026-09-13 | 궁합 `tier` 구간 변경: 90/75/61 경계 (25점 구간 아님) | ❌ |
@@ -251,6 +253,32 @@
 
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
+### 2026-09-17 (목) · 차은호 · result/ 입력값 조회 API (#66) · Claude Code
+
+**한 일**
+- `GET /api/results/{resultId}/input`: 결과를 만들 때 입력한 값을 그대로 반환. 재입력 폼 자동 채움용. 필드 구성은 `POST /api/results` 요청과 동일
+- **V9**: `result` 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 기존 `birth_date` 는 양력 변환값이라 음력 입력을 복원할 수 없었다. 기존 행은 SOLAR + 양력 문자열로 채움
+- `birthTime` 은 `@JsonFormat(pattern = "HH:mm")`. 기본 직렬화가 `14:30:00` 이라 요청 형식과 어긋났다
+- 로컬 실검증: 음력 입력(2002-03-14 윤달 아님, 양력 4/26 변환) → `/input` 이 음력 원본 그대로 반환. 시간 모름은 `null`, 없는 ID 는 404
+
+**건드린 파일/패키지**
+- `result/ResultController.java`, `result/ResultService.java`, `result/entity/Result.java`, `result/dto/ResultInputResponse.java`(신규) — 최선우 리뷰
+- `db/migration/V9__add_result_input_columns.sql`, `ResultServiceTest`, 문서 3개
+
+**다음 사람이 알아야 할 것**
+- **이 응답에는 생년월일·성별이 들어 있다.** `resultId` 는 본인만 아는 값이라는 전제이므로 프론트가 URL·화면에 노출하면 개인정보가 샌다. 공유는 `shareId`
+- `Result` 생성자가 둘. 9-arg 는 SOLAR 기본값으로 위임하고, 입력 원본을 저장하려면 12-arg 를 쓴다
+- V9 이전에 만들어진 결과는 음력 입력이어도 양력으로 표시된다 (원본이 남아 있지 않음)
+
+**막힌 것 / 넘기는 것**
+- 최선우: 궁합 점수로 상대 팔자·생년월일시를 역산할 수 있다. 별건으로 정리해 전달 예정
+
+**문서 변경**
+- `docs/api-spec.md` §3 (새 엔드포인트), `docs/architecture.md` result DDL, `docs/handoff.md` Flyway 표
+
+**프론트에 알려야 할 것**
+- `GET /api/results/{resultId}/input` 추가. 폼 자동 채움에 그대로 사용. `resultId` 는 URL 에 노출 금지
 
 ### 2026-09-16 (수) · 차은호 · saju/ Gemini 호출 총량 상한 (#64) · Claude Code
 

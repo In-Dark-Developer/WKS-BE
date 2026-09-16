@@ -162,6 +162,33 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - `compatibilities` 는 `createdAt` 내림차순
 - **상대의 생년월일·성별·resultId 는 내려보내지 않는다.** 닉네임과 점수만
 
+### `GET /api/results/{resultId}/input`
+
+결과를 만들 때 **입력한 값을 그대로** 돌려준다. 재입력 폼 자동 채움용. 필드 구성은 `POST /api/results` 요청과 같아서 그대로 폼에 넣으면 된다.
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "nickname": "도윤",
+    "calendarType": "LUNAR",
+    "birthDate": "2002-03-14",
+    "isLeapMonth": false,
+    "birthTime": "14:30",
+    "gender": "FEMALE"
+  }
+}
+```
+
+- `birthDate` 는 **입력 원본**. 음력으로 입력했으면 음력 날짜가 나온다 (양력 변환값이 아니다)
+- `birthTime` 은 `HH:mm`, 모르면 `null`
+- 없는 `resultId` 면 `RESULT_NOT_FOUND` 404
+- **`resultId` 는 본인만 아는 값이라는 전제다.** 이 응답에는 생년월일·성별이 들어 있으므로 프론트는 `resultId` 를 URL·화면에 노출하지 않는다. 공유에는 `shareId` 를 쓴다
+
+---
+
 ### `GET /api/shares/{shareId}`
 
 친구가 공유 링크로 진입할 때 링크 주인의 공개 결과와 궁합 지도를 조회한다.
