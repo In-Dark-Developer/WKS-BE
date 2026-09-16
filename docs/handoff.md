@@ -252,6 +252,32 @@
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
 
+### 2026-09-16 (수) · 차은호 · saju/ Gemini 호출 총량 상한 (#64) · Claude Code
+
+**한 일**
+- `saju/CallBudget`: 분당·일일 호출 카운터. 상한이면 Gemini 호출 없이 `LLM_UNAVAILABLE`. `ReadingGenerator` 재시도 루프에서 시도마다 확인
+- 설정 `gemini.max-per-minute`(60, env `GEMINI_MAX_PER_MINUTE`)·`gemini.max-per-day`(1600, env `GEMINI_MAX_PER_DAY`). 실측(90 RPM·2,000 RPD 이상 통과)의 안전값
+- 일일 창은 태평양 자정 기준 (`America/Los_Angeles` 날짜). Google 무료 한도 리셋과 동일
+- 로컬 실검증: 분당 1로 띄워 새 입력 2건 → 2번째 503, 같은 입력 재사용(#62)은 카운트 안 하고 통과
+
+**건드린 파일/패키지**
+- `saju/CallBudget.java`(신규), `saju/ReadingGenerator.java`, `application.yml`, `CallBudgetTest`(신규), `docs/api-spec.md` 에러표, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 무료 한도는 **프로젝트 단위**. 로컬 테스트 키가 운영과 같은 프로젝트면 한도 공유. 축제 당일 로컬 스모크 금지
+- 정확한 RPD·RPM 은 https://aistudio.google.com/rate-limit 에서 확인 후 env 로 조정. 유료 전환하면 상한 크게 올릴 것
+- `ReadingGenerator` 생성자가 둘(스프링용 4-arg `@Autowired`, 테스트용 2-arg)
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: nginx `limit_req` — `POST /api/results` IP당 분당 30·burst 60 (NAT 고려해 넓게). 폭주만 차단, 총량은 앱이 지킴
+- 곽도윤: 유료 전환 시 Google 콘솔 일일 예산 상한
+
+**문서 변경**
+- `docs/api-spec.md` 에러 코드표, `docs/architecture.md` §Gemini, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `LLM_UNAVAILABLE`(503) 에 "잠시 후 다시 시도" 안내 UI 필요. 총량 상한 걸리면 1분 뒤 풀림
+
 ### 2026-09-16 (수) · 차은호 · result/ 같은 입력 해석 재사용 (#62) · Claude Code
 
 **한 일**

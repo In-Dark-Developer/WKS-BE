@@ -41,7 +41,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `DUPLICATE_SIGNUP` | 409 | 이미 신청한 이메일 |
 | `INVALID_EMAIL_DOMAIN` | 400 | 학교 웹메일 아님 |
 | `INVALID_TOKEN` | 400 | 인증 토큰 만료·위조·재사용 |
-| `LLM_UNAVAILABLE` | 503 | 해석 생성 실패 |
+| `LLM_UNAVAILABLE` | 503 | 해석 생성 실패. Gemini 오류·타임아웃, 또는 서버 호출 총량 상한(분당 60·일 1,600) 초과. 잠시 후 재시도 안내 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
 

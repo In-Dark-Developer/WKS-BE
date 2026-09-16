@@ -45,6 +45,9 @@ springdoc:
 
 gemini:
   timeout-seconds: 30
+  # 호출 총량 상한 (#64). 무료 한도 실측(90 RPM·2,000 RPD 이상 통과)의 안전값. AI Studio 한도 확인 후 조정
+  max-per-minute: ${GEMINI_MAX_PER_MINUTE:60}
+  max-per-day: ${GEMINI_MAX_PER_DAY:1600}
 
 app:
   mail:
