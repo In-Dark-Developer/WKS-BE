@@ -87,6 +87,14 @@ public class Result {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * 닉네임만 바꾼다 (#68). 팔자·점수·해석은 그대로라 재생성이 필요 없고 `resultId`·`shareId`·궁합 기록이 유지된다.
+     * 닉네임은 compatibility 에 복사돼 있지 않아 궁합 목록·공유 페이지에도 자동 반영된다.
+     */
+    public void rename(String nickname) {
+        this.nickname = nickname;
+    }
+
     public Result(String nickname, LocalDate birthDate, LocalTime birthTime, String birthRegion,
                   Gender gender, String yearPillar, String monthPillar, String dayPillar, String hourPillar) {
         this(nickname, birthDate, birthTime, birthRegion, gender, yearPillar, monthPillar, dayPillar, hourPillar,

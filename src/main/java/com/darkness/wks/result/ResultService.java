@@ -7,6 +7,7 @@ import com.darkness.wks.compatibility.entity.Compatibility;
 import com.darkness.wks.result.dto.CreateResultRequest;
 import com.darkness.wks.result.dto.ResultInputResponse;
 import com.darkness.wks.result.dto.ResultResponse;
+import com.darkness.wks.result.dto.UpdateNicknameRequest;
 import com.darkness.wks.result.dto.SharedResultResponse;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
@@ -94,6 +95,15 @@ public class ResultService {
         Result result = resultRepository.findById(parseResultId(resultId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
         return ResultInputResponse.from(result);
+    }
+
+    /** 닉네임만 변경한다 (#68). 해석·점수·궁합은 그대로 */
+    @Transactional
+    public ResultResponse updateNickname(String resultId, UpdateNicknameRequest request) {
+        Result result = resultRepository.findById(parseResultId(resultId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
+        result.rename(request.nickname());
+        return getResultResponse(result);
     }
 
     public ResultResponse getResult(String resultId) {

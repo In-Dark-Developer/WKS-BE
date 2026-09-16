@@ -68,6 +68,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-17 | `PATCH /api/results/{resultId}` 추가 (닉네임만 변경, 공유 링크·궁합 유지) | ❌ |
 | 2026-09-17 | `GET /api/results/{resultId}/input` 추가 (폼 자동 채움). `resultId` 는 URL 노출 금지 | ❌ |
 | 2026-09-13 | 본인용 `resultId`와 공개용 `shareId` 분리. `GET /api/shares/{shareId}`, 궁합 POST 추가 | ❌ |
 | 2026-09-13 | `luckyItem`·`luckyPlace` 가 오늘 기준으로 매일 바뀜 (조회마다 재계산) | ❌ |
@@ -253,6 +254,31 @@
 
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
+### 2026-09-17 (목) · 차은호 · result/ 닉네임 변경 API (#68) · Claude Code
+
+**한 일**
+- `PATCH /api/results/{resultId}` 로 닉네임만 수정. 검증은 생성과 동일(필수·8자)
+- 닉네임이 `compatibility` 에 복사돼 있지 않고 조회 시 `result` 에서 읽는 구조라, 공유 페이지와 친구 궁합 목록까지 자동 반영. 별도 갱신 로직 불필요
+- `Result.rename()` 도메인 메서드 추가 (엔티티에 setter 없음)
+- 로컬 실검증: A·B 궁합을 맺은 뒤 A 닉네임 변경 → B 의 궁합 목록·공유 페이지에 새 닉네임, `shareId`·등급·궁합 수 유지. 9자 400, 없는 ID 404
+
+**건드린 파일/패키지**
+- `result/ResultController.java`, `result/ResultService.java`, `result/entity/Result.java`, `result/dto/UpdateNicknameRequest.java`(신규) — 최선우 리뷰
+- `ResultServiceTest` 2건, `docs/api-spec.md` §3, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- **인증이 없다.** `resultId` 를 아는 사람이 바꿀 수 있다. 공유해서 궁합을 맺은 뒤 욕설로 바꾸면 상대 목록에 그대로 보인다. 변경 횟수 제한(결과당 3회)·닉네임 금칙어 필터는 넣지 않았다. 필요하면 별건
+- 닉네임은 행운 아이템 해시 키(생년월일·시간·성별)와 무관하고 궁합 점수(팔자만)에도 안 쓰이므로 변경해도 결과값이 흔들리지 않는다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §3 (새 엔드포인트), `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `PATCH /api/results/{resultId}` 추가. 닉네임 오타 수정에 재생성 대신 이걸 쓰면 공유 링크·궁합이 유지된다
 
 ### 2026-09-17 (목) · 차은호 · result/ 입력값 조회 API (#66) · Claude Code
 

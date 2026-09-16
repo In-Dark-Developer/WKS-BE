@@ -189,6 +189,26 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ---
 
+### `PATCH /api/results/{resultId}`
+
+닉네임만 바꾼다. 팔자·점수·해석·궁합 기록과 `resultId`·`shareId` 는 그대로다.
+
+**Request**
+
+```json
+{ "nickname": "도윤" }
+```
+
+- `nickname` 필수, 8자 이하 (생성과 같은 규칙)
+
+**Response 200** — `GET /api/results/{resultId}` 와 같은 구조
+
+- 닉네임은 `compatibility` 에 복사돼 있지 않고 조회 시 `result` 에서 읽으므로 **공유 페이지와 친구의 궁합 목록에도 바로 반영된다**
+- 형식 오류는 `INVALID_INPUT` 400, 없는 `resultId` 는 `RESULT_NOT_FOUND` 404
+- 인증이 없다. `resultId` 는 본인만 아는 값이라는 전제이므로 프론트는 URL·화면에 노출하지 않는다
+
+---
+
 ### `GET /api/shares/{shareId}`
 
 친구가 공유 링크로 진입할 때 링크 주인의 공개 결과와 궁합 지도를 조회한다.
