@@ -8,6 +8,7 @@ import com.darkness.wks.result.dto.ResultResponse;
 import com.darkness.wks.result.dto.SharedResultResponse;
 import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.saju.SajuPillars;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -60,8 +61,18 @@ class ResultServiceTest {
         assertThat(response.nickname()).isEqualTo("도윤");
         assertThat(response.fortunes()).extracting(ResultResponse.FortuneResponse::grade)
                 .containsExactly("SS", "A+", "B");
+        assertThat(response.elements()).isEqualTo(new ResultResponse.ElementResponse(2, 1, 1, 0, 2));
         assertThat(response.compatibilities()).isEmpty();
         verifyNoInteractions(resultAnalysisPort);
+    }
+
+    @Test
+    void countsEightElementsWhenHourPillarExists() {
+        ResultResponse.ElementResponse elements = ResultResponse.ElementResponse.from(
+                new SajuPillars("임오", "계묘", "갑진", "경신")
+        );
+
+        assertThat(elements).isEqualTo(new ResultResponse.ElementResponse(2, 1, 1, 2, 2));
     }
 
     @Test
