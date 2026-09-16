@@ -66,6 +66,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-16 | 결과 응답에 `elements`(나의·배우자·자녀 기운, 오행별 세력 %) 추가. 공유 응답엔 없음 | ❌ |
 | 2026-09-13 | 본인용 `resultId`와 공개용 `shareId` 분리. `GET /api/shares/{shareId}`, 궁합 POST 추가 | ❌ |
 | 2026-09-13 | `luckyItem`·`luckyPlace` 가 오늘 기준으로 매일 바뀜 (조회마다 재계산) | ❌ |
 | 2026-09-13 | 궁합 `tier` 구간 변경: 90/75/61 경계 (25점 구간 아님) | ❌ |
@@ -191,6 +192,30 @@
 
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
+### 2026-09-16 (수) · 차은호 · saju/ + result/ 결과 응답에 오행 정보 (#55) · Claude Code
+
+**한 일**
+- 해석 문장이 여러 기운을 말하는데 화면에 오행이 없어 근거가 안 보임. 응답에 `elements` 추가: `mine`(일간), `spouse`·`children`(성별 기준 배우자성·자녀성), `strength`(오행별 세력 %, 합 100)
+- `saju/ElementProfile` 신규. `ReadingGenerator.buildPrompt` 의 오행 계산을 여기로 옮겨 화면과 프롬프트가 같은 값을 씀. 프롬프트 문자열은 그대로
+- `ResultResponse` 필드 1개 + `from` 1줄 (`result/dto`, 최선우 리뷰). `SharedResultResponse` 엔 안 넣음. DB 변경 없음 (조회 시 계산)
+- `luckyPlace` Swagger 설명 낡은 문구("사람마다 고정") 수정
+
+**건드린 파일/패키지**
+- `saju/ElementProfile.java`(신규), `saju/ReadingGenerator.java`, `result/dto/ResultResponse.java`, `ElementProfileTest`(신규), `docs/api-spec.md` §2·§3
+
+**다음 사람이 알아야 할 것**
+- 세력 %는 `Element.strengths` 가중치(기둥 0.7/1.3/1.0/0.9, 지지 0.85)를 정수화한 것. 명세의 지장간·통근·월령 보정은 여전히 없음
+- 프론트가 표시 안 하면 무해. 표시하려면 기획이 카드 자리 결정 필요
+
+**막힌 것 / 넘기는 것**
+- 프론트: `elements` 표시 여부·디자인 → 기획 확인
+
+**문서 변경**
+- `docs/api-spec.md` §2 (`elements` 필드·설명), §3 예시, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `POST /api/results`·`GET /api/results/{id}` 응답에 `elements` 추가 (공유 응답엔 없음). 기존 필드 변경 없음
 
 ### 2026-09-15 (화) · 차은호 · saju/ 운명 제목 기획 문구 반영 (#52) · Claude Code
 

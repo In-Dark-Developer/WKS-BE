@@ -96,33 +96,20 @@ public class ReadingGenerator {
      * 오행 사실(나의 기운·강한/약한 기운·배우자·자녀 기운)을 코드가 정해 넘긴다. 팔자 글자만 주면 LLM 이 매번 다른 오행을 집어 말한다 (#48)
      */
     static String buildPrompt(SajuPillars p, Map<ReadingCategory, Grade> grades, Gender gender) {
-        Element me = Element.ofStem(p.dayPillar().charAt(0));
-        double[] s = Element.strengths(p);
-        double total = 0;
-        for (double v : s) total += v;
-        List<Element> byStrength = java.util.Arrays.stream(Element.values())
-                .sorted(java.util.Comparator.comparingDouble((Element e) -> -s[e.ordinal()])).toList();
-        String strong = byStrength.subList(0, 2).stream().map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
-        double weakCut = total * 0.1;
-        String weak = byStrength.stream().filter(e -> s[e.ordinal()] < weakCut).map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
-        int spouseRole = gender == Gender.MALE ? 2 : 3; // 남 재성, 여 관성
-        int childRole = gender == Gender.MALE ? 3 : 1;  // 남 관성, 여 식상
-        Element spouse = null, child = null;
-        for (Element e : Element.values()) {
-            if (e.roleFor(me) == spouseRole) spouse = e;
-            if (e.roleFor(me) == childRole) child = e;
-        }
+        ElementProfile ep = ElementProfile.of(p, gender); // 화면에 보여주는 값과 같은 계산 (#55)
+        String strong = ep.strong().stream().map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
+        String weak = ep.weak().stream().map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
         StringBuilder sb = new StringBuilder()
                 .append("성별 ").append(gender == Gender.MALE ? "남성" : "여성").append("\n")
                 .append("년주 ").append(p.yearPillar())
                 .append(", 월주 ").append(p.monthPillar())
                 .append(", 일주 ").append(p.dayPillar())
                 .append(", 시주 ").append(p.hourPillar() == null ? "모름" : p.hourPillar()).append("\n")
-                .append("나의 기운: ").append(PLAIN[me.ordinal()]).append("\n")
+                .append("나의 기운: ").append(PLAIN[ep.mine().ordinal()]).append("\n")
                 .append("강한 기운: ").append(strong).append(" / 약한 기운: ").append(weak.isEmpty() ? "없음" : weak).append("\n")
-                .append("배우자 기운: ").append(PLAIN[spouse.ordinal()])
+                .append("배우자 기운: ").append(PLAIN[ep.spouse().ordinal()])
                 .append(" / 배우자 자리의 기운: ").append(PLAIN[Element.ofBranch(p.dayPillar().charAt(1)).ordinal()]).append("\n")
-                .append("자녀 기운: ").append(PLAIN[child.ordinal()]);
+                .append("자녀 기운: ").append(PLAIN[ep.children().ordinal()]);
         for (ReadingCategory c : ReadingCategory.values()) {
             sb.append("\n").append(c.korean()).append(" 등급: ").append(grades.get(c).label());
         }

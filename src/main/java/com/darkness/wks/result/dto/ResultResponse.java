@@ -7,6 +7,7 @@ import com.darkness.wks.result.entity.Reading;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.DailyLucky;
 import com.darkness.wks.saju.DestinyTitle;
+import com.darkness.wks.saju.ElementProfile;
 import com.darkness.wks.saju.LuckyPlace;
 import com.darkness.wks.saju.Grade;
 import com.darkness.wks.saju.SajuPillars;
@@ -33,6 +34,9 @@ public record ResultResponse(
         @Schema(description = "십이간지 띠. 입춘 기준이라 양력 연도와 다를 수 있다", example = "HORSE")
         Zodiac zodiac,
 
+        @Schema(description = "원국 오행 요약. 나의·배우자·자녀 기운과 오행별 세력 %. 해석 문장이 말하는 기운의 근거")
+        ElementProfile elements,
+
         DestinyResponse destiny,
 
         @Schema(description = "결혼운, 자녀운, 연애운 순서")
@@ -41,7 +45,7 @@ public record ResultResponse(
         @Schema(description = "오늘의 행운 아이템. 팔자 + 오늘 일진으로 계산, 매일 바뀜", example = "파란 부채")
         String luckyItem,
 
-        @Schema(description = "행운의 장소(동국대 안). 원국 기준이라 사람마다 고정", example = "팔정도")
+        @Schema(description = "행운의 장소(동국대 안). 보완 오행은 사람마다 고정, 장소는 그 오행 풀 안에서 매일 바뀜", example = "팔정도")
         String luckyPlace,
 
         @Schema(description = "생성 시 빈 배열, 조회 시 createdAt 내림차순")
@@ -63,6 +67,7 @@ public record ResultResponse(
                 result.getShareId(),
                 result.getNickname(),
                 Zodiac.fromYearPillar(result.getYearPillar()),
+                ElementProfile.of(pillars, result.getGender()),
                 new DestinyResponse(
                         DestinyTitle.of(reading.getMarriageScore(), reading.getChildrenScore(), reading.getLoveScore()),
                         reading.getDestinyContent()),

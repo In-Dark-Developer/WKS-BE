@@ -97,6 +97,12 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "shareId": "7b91d26f-....",
     "nickname": "도윤",
     "zodiac": "HORSE",
+    "elements": {
+      "mine": "EARTH",
+      "spouse": "WATER",
+      "children": "WOOD",
+      "strength": { "WOOD": 10, "FIRE": 35, "EARTH": 20, "METAL": 5, "WATER": 30 }
+    },
     "destiny": {
       "title": "오래 사랑할 운명",
       "description": "당신은 특별한 운명을 타고났습니다. 앞으로 좋은 흐름을 맞이하게 됩니다."
@@ -117,6 +123,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - `fortunes` 순서는 `MARRIAGE` → `CHILDREN` → `LOVE`로 고정한다
 - `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
   **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
+- `elements` 는 **원국 오행 요약**. `mine` 나의 기운(일간), `spouse` 배우자 인연을 뜻하는 기운(남 재성·여 관성), `children` 자녀 인연을 뜻하는 기운(남 관성·여 식상). `strength` 는 오행별 세력 % 로 합 100 (시간 모름이면 3주 기준). 값은 `WOOD` `FIRE` `EARTH` `METAL` `WATER`. 한글(나무·불·흙·쇠·물)·색은 프론트 매핑. 해석 문장이 말하는 기운과 같은 계산이라 항상 일치. 공유 응답(`GET /api/shares/{shareId}`)엔 없다
 - `grade` 는 6단계 고정: `SS` 94~100 · `S` 84~93 · `A+` 74~83 · `A` 64~73 · `B+` 52~63 · `B` 0~51 (점수 기준, 2026-09-13 기획 확정)
 - `destiny.title` 은 8종 고정: 연애·결혼·자녀 각각 상(`SS`/`S`/`A+`)·하(`A`/`B+`/`B`) 조합 2×2×2. 유형 번호는 기능명세서 순서(1 상상상 … 8 하하하, 연애→결혼→자녀). 제목 문구는 기획(영채) 피드백 1차 (2026-09-15) 반영. 점수로 계산하므로 저장하지 않는다
 - `luckyItem` 은 **오늘의 행운 아이템**. 기능명세서 방식: 오행별 점수 = 사용자 궁합(일간 기준 십성, 인성>비겁>식상>재성>관성) 40% + 오늘 일진 활성도(일진 천간·지지 오행과 생극) 60%. 최고 오행의 풀에서 `생년월일·시간·성별 + 날짜 + 오행` 해시로 하나. **매일 바뀌고**, 같은 입력이면 같은 날 같은 아이템(다시 생성해도 동일). 저장하지 않고 조회 시점에 계산하므로 `POST` 응답과 다음 날 `GET` 응답이 다를 수 있다
@@ -143,6 +150,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "shareId": "7b91d26f-....",
     "nickname": "도윤",
     "zodiac": "HORSE",
+    "elements": { "mine": "EARTH", "spouse": "WATER", "children": "WOOD", "strength": { "WOOD": 10, "FIRE": 35, "EARTH": 20, "METAL": 5, "WATER": 30 } },
     "destiny": { "title": "오래 사랑할 운명", "description": "..." },
     "fortunes": [ ... ],
     "luckyItem": "파란색 팔찌",
