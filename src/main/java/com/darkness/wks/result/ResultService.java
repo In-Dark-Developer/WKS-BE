@@ -5,6 +5,7 @@ import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.compatibility.CompatibilityRepository;
 import com.darkness.wks.compatibility.entity.Compatibility;
 import com.darkness.wks.result.dto.CreateResultRequest;
+import com.darkness.wks.result.dto.ResultInputResponse;
 import com.darkness.wks.result.dto.ResultResponse;
 import com.darkness.wks.result.dto.SharedResultResponse;
 import com.darkness.wks.result.entity.Reading;
@@ -50,7 +51,10 @@ public class ResultService {
                 analysis.pillars().yearPillar(),
                 analysis.pillars().monthPillar(),
                 analysis.pillars().dayPillar(),
-                analysis.pillars().hourPillar()
+                analysis.pillars().hourPillar(),
+                request.calendarType(),
+                request.birthDate(), // 입력 원본. 폼 자동 채움용 (#66)
+                request.leapMonth()
         ));
 
         ResultAnalysisPort.Fortune marriage = analysis.fortune(FortuneCategory.MARRIAGE);
@@ -83,6 +87,13 @@ public class ResultService {
                         new ResultAnalysisPort.Fortune(FortuneCategory.LOVE, r.getLoveScore(), r.getLoveContent())
                 )
         );
+    }
+
+    /** 입력 폼 자동 채움용. 저장된 입력값을 그대로 돌려준다 (#66) */
+    public ResultInputResponse getResultInput(String resultId) {
+        Result result = resultRepository.findById(parseResultId(resultId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
+        return ResultInputResponse.from(result);
     }
 
     public ResultResponse getResult(String resultId) {
