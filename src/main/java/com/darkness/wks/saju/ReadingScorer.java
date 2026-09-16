@@ -17,6 +17,9 @@ import java.util.Map;
  */
 public class ReadingScorer {
 
+    /** 점수 로직(가중치·보정 상수) 바꾸면 올린다. 저장된 해석 재사용 여부 판단용 (#62) */
+    public static final int VERSION = 1;
+
     /** 십성 역할 인덱스: 0 비겁, 1 식상, 2 재성, 3 관성, 4 인성 */
     private static final int BIGYEOP = 0, SIKSANG = 1, JAESEONG = 2, GWANSEONG = 3, INSEONG = 4;
     /** 일지 십성 → 결혼 보너스. 배우자성 30, 재·관 중 나머지 18. 배우자궁에 재·관·인이 있으면 배우자 인연이 뚜렷하다 */

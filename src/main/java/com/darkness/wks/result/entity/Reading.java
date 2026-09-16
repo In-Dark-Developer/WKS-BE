@@ -52,6 +52,10 @@ public class Reading {
     @Column(name = "love_content", nullable = false, columnDefinition = "TEXT")
     private String loveContent;
 
+    /** 프롬프트·점수 로직 버전. 같은 입력 재사용은 같은 버전끼리만 (#62). 0 = 버전 도입 전 행 */
+    @Column(name = "version", nullable = false)
+    private int version;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -64,9 +68,11 @@ public class Reading {
             int childrenScore,
             String childrenContent,
             int loveScore,
-            String loveContent
+            String loveContent,
+            int version
     ) {
         this.result = result;
+        this.version = version;
         this.destinyContent = destinyContent;
         this.marriageScore = (short) marriageScore;
         this.marriageContent = marriageContent;

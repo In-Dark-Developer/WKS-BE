@@ -21,7 +21,7 @@
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
 | 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V6 |
+| Flyway 최신 버전 | V8 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -42,6 +42,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V8 | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
 | V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
 | V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
@@ -250,6 +251,32 @@
 
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
+### 2026-09-16 (수) · 차은호 · result/ 같은 입력 해석 재사용 (#62) · Claude Code
+
+**한 일**
+- `createResult`: 같은 생년월일·시간·성별 + 같은 버전의 `reading` 이 있으면 팔자·점수·문장을 복사. Gemini 호출 없음. `resultId`·`shareId`·닉네임·행운 아이템은 새로
+- `reading.version` (V8): `ReadingGenerator.promptVersion()`(시스템 프롬프트+모델 해시) × 31 + `ReadingScorer.VERSION`(손으로 올리는 상수). 프롬프트 고치면 자동으로 재사용 끊김, 점수 로직 고치면 `ReadingScorer.VERSION` 올릴 것. 기존 행은 0 이라 재사용 안 됨
+- `ResultAnalysisPort.analysisVersion()` 추가. `ReadingRepository.findReusable` 은 날짜·성별·버전으로 후보를 가져와 시간은 자바에서 비교
+- 로컬 실검증: 같은 입력 2회 → 2번째 Gemini 호출 없음·문장 동일. 시간 모름/입력, 성별·시간 다르면 각각 새 호출
+
+**건드린 파일/패키지**
+- `result/ResultService.java`, `result/ReadingRepository.java`, `result/entity/Reading.java`, `result/ResultAnalysisPort.java`, `result/SajuResultAnalysisAdapter.java` — 최선우 리뷰
+- `saju/ReadingGenerator.java`(`promptVersion`), `saju/ReadingScorer.java`(`VERSION`), `db/migration/V8__add_reading_version.sql`, `ResultServiceTest`, 문서 3개
+
+**다음 사람이 알아야 할 것**
+- **`LocalTime` 을 JPQL 파라미터로 비교하면 안 맞는다.** `Result.birthTime` 은 `@JdbcTypeCode(SqlTypes.LOCAL_TIME)` 인데 쿼리 파라미터는 그 매핑을 안 타서 14:30 이 매치 안 됨. 그래서 시간은 자바에서 거른다. 다른 곳에서 `birthTime` 으로 조회할 일 있으면 같은 함정
+- 같은 사주인 두 사람은 문장까지 같다. 2,000명 규모에서 약 5% (몰라요 비율 50% 가정). 기획이 감수하기로 함
+- Postgres 는 JPQL `(:p is null and col is null)` 을 "could not determine data type of parameter" 로 거부. 쿼리 분리하거나 자바에서 처리
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2, `docs/architecture.md` DDL·흐름, `docs/handoff.md` Flyway 표
+
+**프론트에 알려야 할 것**
+- 없음 (응답 스키마 동일). 같은 입력 재생성 시 문장이 같아지는 건 의도
 
 ### 2026-09-16 (수) · 차은호 · Gemini 무료 티어 부하 실측 (#60, Day 6 항목) · Claude Code
 
