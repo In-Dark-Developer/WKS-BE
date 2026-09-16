@@ -52,11 +52,22 @@ public class ReadingGenerator {
 
     private final Client geminiClient;
     private final String model;
+    private final CallBudget budget;
     private final JsonMapper mapper = JsonMapper.builder().build();
 
-    public ReadingGenerator(Client geminiClient, @Value("${gemini.model:gemini-3.5-flash-lite}") String model) {
+    @org.springframework.beans.factory.annotation.Autowired // 생성자가 둘이라 스프링용을 명시
+    public ReadingGenerator(Client geminiClient,
+                            @Value("${gemini.model:gemini-3.5-flash-lite}") String model,
+                            @Value("${gemini.max-per-minute:60}") int maxPerMinute,
+                            @Value("${gemini.max-per-day:1600}") int maxPerDay) {
         this.geminiClient = geminiClient;
         this.model = model;
+        this.budget = new CallBudget(maxPerMinute, maxPerDay, java.time.Clock.systemUTC());
+    }
+
+    /** 테스트·스모크용. 상한은 기본값(60/1,600) */
+    ReadingGenerator(Client geminiClient, String model) {
+        this(geminiClient, model, 60, 1600);
     }
 
     /** 시스템 프롬프트·모델이 바뀌면 달라진다. 저장된 해석 재사용 여부 판단용 (#62) */
@@ -67,6 +78,10 @@ public class ReadingGenerator {
     public Reading generate(SajuPillars pillars, Map<ReadingCategory, Grade> grades, Gender gender) {
         String prompt = buildPrompt(pillars, grades, gender);
         for (int attempt = 1; attempt <= 2; attempt++) {
+            if (!budget.tryAcquire()) { // 총량 상한. 재시도도 한도를 쓰므로 시도마다 확인 (#64)
+                log.warn("gemini budget exhausted. {}", budget.status());
+                break;
+            }
             try {
                 return call(prompt);
             } catch (RuntimeException e) { // SDK 예외(ApiException·GenAiIOException)·Jackson·필드 누락 전부 unchecked
