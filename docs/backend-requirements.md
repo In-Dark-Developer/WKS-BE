@@ -255,13 +255,13 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 | FR-SU-08 | P0 | 만료·위조·재사용 토큰 → `INVALID_TOKEN` 400 |
 | FR-SU-09 | P0 | 인증 성공 시 프론트 완료 페이지로 **302**. 대상 URL은 설정값 |
 | FR-SU-10 | P0 | 쿠폰은 **1인 1회** |
-| FR-SU-11 | P0 | **(2026-09-15 정책 변경, 피그마 사전신청 화면 반영)** 이름·연락처(전화번호 또는 인스타그램)·학과·MBTI·자기소개를 수집한다. `signup` 테이블에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가(V7). **⚠️ 6개 필드 모두 필수/선택 여부가 기획 미확정**이라 서버는 전부 `nullable`로 구현했다(값이 있을 때만 형식 검증). 피그마 화면 자체가 사전신청 전체 화면이라는 것은 확인됨(2026-09-15) — 단 필수 표시(*)가 없어 현재로선 어떤 필드가 Must인지 알 수 없다. **결정되면 DB 컬럼에 `NOT NULL` 제약 추가 + DTO에 `@NotBlank`/`@NotNull` 추가하는 후속 마이그레이션 필요**. 사진 업로드는 **2차 릴리즈로 보류** — 이번 MVP API에는 포함하지 않는다 |
+| FR-SU-11 | P0 | **(2026-09-15 정책 변경, 피그마 사전신청 화면 반영)** 이름·연락처(전화번호 또는 인스타그램)·학과·MBTI·자기소개를 수집한다. `signup` 테이블에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가(V7). **⚠️ 6개 필드 모두 필수/선택 여부가 기획 미확정**이라 서버는 전부 `nullable`로 구현했다(값이 있을 때만 형식 검증). 피그마 화면 자체가 사전신청 전체 화면이라는 것은 확인됨(2026-09-15) — 단 필수 표시(*)가 없어 현재로선 어떤 필드가 Must인지 알 수 없다. **결정되면 DB 컬럼에 `NOT NULL` 제약 추가 + DTO에 `@NotBlank`/`@NotNull` 추가하는 후속 마이그레이션 필요** |
 | FR-SU-11A | P0 | `contactMethod`가 `PHONE`이면 `contactValue`는 한국 휴대폰 번호 형식이어야 한다(값이 있을 때만 검증). `INSTAGRAM`이면 형식 제약 없음 |
 | FR-SU-12 | P0 | **메일 발송 실패가 signup 생성을 롤백시키지 않는다.** 재발송 가능해야 한다 |
 | FR-SU-13 | P0 | 재발송 API 제공. 이미 인증된 이메일이면 400 |
 | FR-SU-14 | P1 | 신청자 수·성비 조회 쿼리를 문서화 |
 | FR-SU-15 | P1 | SMTP 발송 계정의 일일 한도를 확인하고 기록 |
-| FR-SU-16 | P2 | 프로필 사진 업로드 — 2차 릴리즈. 스토리지(S3 등) 연동, 용량·포맷 검증 필요 |
+| FR-SU-16 | P0 | **(2026-09-16 정책 변경, #54)** 프로필 사진 업로드를 이번 릴리즈에 포함한다. S3 presigned URL 방식(`POST /api/signups/photo-upload-url` → S3 직접 PUT → `photoKey`를 `POST /api/signups`에 전달). `signup.photo_key`(V8) 선택 컬럼. 허용 포맷 `image/jpeg`·`image/png`·`image/webp`만, 용량 제한은 서버에서 강제하지 않음(S3 정책·프론트에서 처리 필요 — 미정) |
 
 ### 인수 조건
 

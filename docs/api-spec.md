@@ -201,6 +201,37 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ## 5. 소개팅 사전등록
 
+### `POST /api/signups/photo-upload-url`
+
+사진은 서버를 경유하지 않고 프론트가 S3에 직접 PUT 한다. 흐름: 이 엔드포인트 호출 → 응답의 `uploadUrl`에 파일 바이트를 `PUT`(Content-Type 헤더는 요청과 동일하게) → 응답의 `photoKey`를 `POST /api/signups`에 그대로 전달.
+
+**Request**
+
+```json
+{ "contentType": "image/jpeg" }
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `contentType` | string | ✅ | `image/jpeg` \| `image/png` \| `image/webp` |
+
+- 허용되지 않는 `contentType` → `INVALID_INPUT` 400
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "uploadUrl": "https://wks-photos.s3.ap-northeast-2.amazonaws.com/signup-photos/3f2a9c1e-....jpg?X-Amz-...",
+    "photoKey": "signup-photos/3f2a9c1e-....jpg",
+    "expiresInSeconds": 600
+  }
+}
+```
+
+`uploadUrl`은 `expiresInSeconds` 동안만 유효한 presigned URL이다 (S3Presigner, `app.aws.s3.presigned-url-ttl-minutes` 설정값).
+
 ### `POST /api/signups`
 
 **Request**
@@ -216,7 +247,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "contactValue": "010-1234-5678",
   "department": "컴퓨터공학과",
   "mbti": "INFP",
-  "bio": "축제를 좋아하는 컴공생입니다."
+  "bio": "축제를 좋아하는 컴공생입니다.",
+  "photoKey": "signup-photos/3f2a9c1e-....jpg"
 }
 ```
 
@@ -228,13 +260,15 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `department` | string \| `null` | ⚠️ 미정 | 최대 100자 |
 | `mbti` | string \| `null` | ⚠️ 미정 | 16유형(`^[EI][SN][TF][JP]$`) |
 | `bio` | string \| `null` | ⚠️ 미정 | 최대 500자 |
+| `photoKey` | string \| `null` | 선택 | `POST /api/signups/photo-upload-url` 응답값 그대로. 생략하면 사진 없이 신청 |
 
 - `resultId` **nullable** — 사주 없이 신청하는 경로 허용
 - 도메인 화이트리스트 위반 → `INVALID_EMAIL_DOMAIN` 400
 - 중복 이메일 → `DUPLICATE_SIGNUP` 409
 - `contactMethod: PHONE` + 휴대폰 번호 형식이 아닌 `contactValue` → `INVALID_INPUT` 400
+- `photoKey`가 실제 S3 오브젝트와 매칭되지 않으면(미업로드·만료·위조) → `INVALID_INPUT` 400 (`PhotoUploadService.verifyPhotoExists`, headObject 조회)
 - **(2026-09-15 변경)** 이름·연락처·학과·MBTI·자기소개를 수집한다 — 프론트 피그마 사전신청 화면에 맞춘 정책 변경. 단 **어느 필드를 필수로 할지는 기획 미확정**이라 서버는 6개 필드 전부 `null` 허용으로 구현했다. 빈 문자열(`""`)을 보내도 서버가 `null`로 처리한다. 필수 필드가 확정되면 서버 검증을 강화하고 이 표를 갱신한다
-- **사진 업로드는 이번 릴리즈 범위 아님** (2차 예정)
+- **(2026-09-16 변경)** 사진 업로드를 이번 릴리즈에 추가한다 (사용자/곽도윤 결정, 기획 변경). presigned URL 방식, `photoKey`는 선택값
 
 **Response 201**
 

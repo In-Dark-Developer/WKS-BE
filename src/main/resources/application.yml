@@ -58,3 +58,9 @@ app:
   signup:
     email-verification-ttl-minutes: 30
     allowed-email-domains: ${SIGNUP_ALLOWED_EMAIL_DOMAINS:}
+  aws:
+    region: ${AWS_REGION:ap-northeast-2}
+    s3:
+      bucket: ${AWS_S3_BUCKET:}
+      photo-prefix: signup-photos/
+      presigned-url-ttl-minutes: 10

@@ -208,6 +208,35 @@
 
 ## 4. 소개팅 사전등록
 
+### `POST /api/signups/photo-upload-url` — 사진 업로드 URL 발급
+
+사진은 서버를 거치지 않고 프론트가 S3에 직접 올린다. 순서: 이 엔드포인트로 업로드용 URL 발급 → 받은 `uploadUrl`에 파일 바이트를 그대로 `PUT` → 응답의 `photoKey`를 아래 `POST /api/signups` 요청에 담아 보낸다.
+
+**Request**
+```json
+{ "contentType": "image/jpeg" }
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `contentType` | string | ✅ | `image/jpeg` \| `image/png` \| `image/webp` 중 하나 |
+
+**Response 200**
+```json
+{
+  "success": true,
+  "data": {
+    "uploadUrl": "https://wks-photos.s3.ap-northeast-2.amazonaws.com/signup-photos/3f2a9c1e-....jpg?X-Amz-...",
+    "photoKey": "signup-photos/3f2a9c1e-....jpg",
+    "expiresInSeconds": 600
+  }
+}
+```
+
+- `uploadUrl`로 `PUT` 요청 시 **`Content-Type` 헤더를 요청에 보낸 값과 동일하게** 설정해야 한다 (다르면 S3가 서명 불일치로 거부함)
+- `uploadUrl`은 발급 후 `expiresInSeconds`(현재 600초) 동안만 유효
+- 허용되지 않는 `contentType` → `INVALID_INPUT` 400
+
 ### `POST /api/signups` — 사전등록 신청
 
 **Request**
@@ -222,7 +251,8 @@
   "contactValue": "010-1234-5678",
   "department": "컴퓨터공학과",
   "mbti": "INFP",
-  "bio": "축제를 좋아하는 컴공생입니다."
+  "bio": "축제를 좋아하는 컴공생입니다.",
+  "photoKey": "signup-photos/3f2a9c1e-....jpg"
 }
 ```
 
@@ -238,14 +268,16 @@
 | `department` | string \| `null` | ⚠️ 미정 | 최대 100자 |
 | `mbti` | string \| `null` | ⚠️ 미정 | 16유형만 허용 (예: `INFP`) |
 | `bio` | string \| `null` | ⚠️ 미정 | 자기소개, 최대 500자 |
+| `photoKey` | string \| `null` | 선택 | `POST /api/signups/photo-upload-url` 응답에서 받은 값 그대로. 안 보내면 사진 없이 신청 |
 
 - 도메인 화이트리스트 위반 → `INVALID_EMAIL_DOMAIN` 400 (⚠️ 현재 화이트리스트가 팀 결정 전이라 **검증 자체를 건너뛰는 중** — 학교 도메인 확정되면 서버 설정만 바뀌고 API 형태는 그대로임)
 - `resultId`를 보냈는데 존재하지 않으면 `RESULT_NOT_FOUND` 404
 - 중복 이메일 → `DUPLICATE_SIGNUP` 409
 - `contactMethod: "PHONE"`인데 휴대폰 번호 형식이 아니면 `INVALID_INPUT` 400 (값을 아예 안 보내면 검증 생략)
 - `mbti`를 보냈는데 16유형 형식이 아니면 `INVALID_INPUT` 400
+- `photoKey`를 보냈는데 실제로 S3에 업로드된 적 없으면(만료됐거나 위조된 key) `INVALID_INPUT` 400
 - ⚠️ **(2026-09-15 변경)** 이전에는 "이름·전화번호는 받지 않음"이었으나, 피그마 사전신청 화면에 맞춰 정책이 변경됐다. **다만 이 6개 필드가 필수인지 선택인지는 아직 기획 미확정** — 지금은 서버가 전부 `null`(빈 문자열 `""`도 `null`로 처리)을 허용한다. 프론트는 일단 값이 있으면 보내고, 없으면 필드째로 생략하거나 `null`로 보내면 된다. 필수 여부 확정되면 이 문서와 서버 검증을 같이 갱신함
-- **사진 업로드는 이번 릴리즈에 없음** — 프론트에서 사진 필드는 2차 릴리즈 전까지 UI만 두거나 비활성화 처리 필요
+- **(2026-09-16 변경)** 사진 업로드가 이번 릴리즈에 추가됐다(기획 결정). `photoKey`는 선택값 — 안 보내도 신청 가능
 
 **Response 201**
 ```json

@@ -21,7 +21,7 @@
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
 | 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V6 |
+| Flyway 최신 버전 | V8 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -43,6 +43,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V8 | 곽도윤 | signup에 `photo_key` 컬럼 추가 (S3 사진 업로드, 선택값) | 구현 완료 |
 | V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
 | V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
@@ -108,6 +109,48 @@
 ---
 
 ## 기록
+
+### 2026-09-16 (수) · 곽도윤 · signup/ 사진 업로드 S3 연동 (#54) · Claude Code
+
+**한 일**
+- 9/15에 "사진 업로드는 2차 릴리즈로 보류"로 결정했던 걸 번복 — 기획 변경으로 이번 릴리즈에 사진도 선택값으로 받기로 함
+- 업로드 방식은 **presigned URL**로 결정 (서버가 파일 바이트를 직접 받지 않음): `POST /api/signups/photo-upload-url`로 S3 PUT용 presigned URL·`photoKey` 발급 → 프론트가 S3에 직접 업로드 → `photoKey`를 기존 `POST /api/signups` 요청에 실어 보냄
+- `software.amazon.awssdk:s3`(BOM 2.29.52) 신규 의존성 추가 — **convention.md의 "AI가 새 라이브러리 추천하면 일단 거절, 팀에 물어본다" 규칙에 걸려서 진행 전에 사용자(곽도윤 본인) 확인 받음**
+- `common/config/S3Config.java` 신규 — `S3Client`/`S3Presigner` 빈. 자격증명은 하드코딩하지 않고 AWS 기본 자격증명 체인(`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` 환경변수 또는 EC2 IAM 역할)에 위임. `S3Client`는 `apiCallTimeout(5s)` 명시 (외부 호출 타임아웃 필수 규칙)
+- `signup/PhotoUploadService.java` 신규 — `createUploadUrl(contentType)`: `image/jpeg`·`image/png`·`image/webp`만 허용, 아니면 `INVALID_INPUT`. 키는 `signup-photos/{UUID}.{ext}`. `verifyPhotoExists(photoKey)`: `SignupService.createSignup`에서 호출 — `photoKey`가 실제 S3에 없으면(미업로드·만료·위조) `INVALID_INPUT` 400으로 막음 (resultId 검증과 동일 패턴)
+- `Signup` 엔티티·`CreateSignupRequest`에 `photoKey` 추가 (마지막 파라미터로 추가해서 기존 호출부는 `null` 하나만 붙이면 되게 함). `V8__add_signup_photo_key.sql` — `photo_key VARCHAR(255)` nullable 컬럼
+- `SignupServiceTest`·`SignupControllerTest` 기존 생성자 호출부 전부 갱신(11번째 인자 추가) + `PhotoUploadServiceTest` 신규 + 사진 검증 성공/실패 케이스 `SignupServiceTest`에 추가. `./gradlew test --tests "com.darkness.wks.signup.*"` 통과 확인
+- 새 `ErrorCode`는 추가하지 않음 — `INVALID_INPUT` 재사용 (resend의 "이미 인증됨" 케이스와 같은 패턴)이라 `common/ErrorCode.java`는 안 건드림
+
+**건드린 파일/패키지**
+- `build.gradle` — AWS SDK BOM + s3 모듈 추가
+- `common/config/S3Config.java` (신규)
+- `signup/PhotoUploadService.java` (신규), `signup/PhotoUploadServiceTest.java` (신규)
+- `signup/dto/PhotoUploadUrlRequest.java`, `signup/dto/PhotoUploadUrlResponse.java` (신규)
+- `signup/entity/Signup.java`, `signup/dto/CreateSignupRequest.java`, `signup/SignupService.java`, `signup/SignupController.java`
+- `signup/SignupServiceTest.java`, `signup/SignupControllerTest.java`
+- `db/migration/V8__add_signup_photo_key.sql` (신규)
+- `application.yml`(`app.aws.*`), `.env.prod.example`, `docker-compose.prod.yml` — `AWS_REGION`·`AWS_S3_BUCKET`·`AWS_ACCESS_KEY_ID`·`AWS_SECRET_ACCESS_KEY` 추가
+- `api.md` §4, `docs/api-spec.md` §5, `docs/backend-requirements.md` FR-SU-16, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- **실제 S3 버킷·IAM 자격증명이 아직 없다.** `AWS_S3_BUCKET`이 비어있으면(현재 기본값) 이 기능은 호출 시 에러난다 — 배포 전에 버킷 생성 + IAM 사용자(또는 EC2 역할) 발급 + `.env` 채우기 필요. 로컬에서 이 엔드포인트 테스트하려면 각자 로컬에 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_S3_BUCKET` 환경변수 설정 필요 (`application-local.yml.example`엔 안 넣었음 — 필수 아니라 기동엔 안 막힘)
+- 버킷 CORS 설정도 필요함 (프론트가 브라우저에서 presigned URL로 직접 PUT 하려면 S3 버킷에 프론트 origin CORS 허용 필요) — **아직 안 함, 배포 전 확인**
+- **서버가 업로드 용량 제한을 강제하지 않는다.** presigned PUT은 POST policy와 달리 `content-length-range` 조건을 못 건다 — 프론트가 파일 선택 시 용량 제한하거나, S3 버킷 정책/Lambda로 후처리 검증 필요 (FR-SU-16에 명시)
+- `photoKey`는 선택값. 안 보내면 사진 없이 신청 가능 (기존 6개 프로필 필드와 동일하게 전부 nullable 기조 유지)
+- presigned URL 만료는 10분(`app.aws.s3.presigned-url-ttl-minutes`) — 프론트가 URL 발급 후 오래 끌다 업로드하면 만료돼서 S3가 거부함. 재발급은 그냥 엔드포인트 재호출
+
+**막힌 것 / 넘기는 것**
+- S3 버킷 생성·IAM 자격증명 발급·버킷 CORS 설정 — AWS 콘솔 작업이라 코드로 대신 못 함. 배포 전 필수
+- 사진 용량 상한이 기획 미정 — 정해지면 프론트 검증 로직에 반영 필요
+
+**문서 변경**
+- `api.md` §4, `docs/api-spec.md` §5, `docs/backend-requirements.md` FR-SU-16, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `POST /api/signups/photo-upload-url` 신규 — `{ contentType }` → `{ uploadUrl, photoKey, expiresInSeconds }`. `uploadUrl`에 파일을 `PUT`(Content-Type 헤더 동일하게) → `photoKey`를 `POST /api/signups`의 `photoKey` 필드에 실어 보내면 됨
+- `photoKey`는 선택값 — 사진 없이도 신청 가능
+- `api.md` §4 갱신함
 
 ### 2026-09-14 (월) · 차은호 · saju/ 등급 노출 완화 (#32) · Codex
 
