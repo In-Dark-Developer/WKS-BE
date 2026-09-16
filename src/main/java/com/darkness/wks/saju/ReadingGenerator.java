@@ -144,7 +144,7 @@ public class ReadingGenerator {
                 .append(", 월주 ").append(p.monthPillar())
                 .append(", 일주 ").append(p.dayPillar())
                 .append(", 시주 ").append(p.hourPillar() == null ? "모름" : p.hourPillar()).append("\n")
-                .append("나의 기운: ").append(PLAIN[me.ordinal()]).append("\n")
+                .append("나의 기운(태어난 날의 기운): ").append(PLAIN[me.ordinal()]).append("\n")
                 .append("많은 기운: ").append(strong).append(" / 없는 기운: ").append(weak.isEmpty() ? "없음" : weak).append("\n")
                 .append("배우자 기운: ").append(PLAIN[spouse.ordinal()])
                 .append(" / 배우자 자리의 기운: ").append(PLAIN[Element.ofBranch(p.dayPillar().charAt(1)).ordinal()]).append("\n")

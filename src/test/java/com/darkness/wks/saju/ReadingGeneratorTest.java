@@ -22,7 +22,7 @@ class ReadingGeneratorTest {
         assertThat(prompt).isEqualTo("""
                 성별 남성
                 년주 임오, 월주 계묘, 일주 신사, 시주 을미
-                나의 기운: 쇠
+                나의 기운(태어난 날의 기운): 쇠
                 많은 기운: 나무, 불, 물 / 없는 기운: 없음
                 배우자 기운: 나무 / 배우자 자리의 기운: 불
                 자녀 기운: 불
