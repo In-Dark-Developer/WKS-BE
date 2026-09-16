@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import com.darkness.wks.common.ContactMethod;
 import com.darkness.wks.common.Gender;
 import com.darkness.wks.result.entity.Result;
 import lombok.AccessLevel;
@@ -46,6 +47,26 @@ public class Signup {
     @Column(name = "prefer_gender", length = 10, nullable = false)
     private Gender preferGender;
 
+    // 필수/선택 여부가 기획 미확정 상태(2026-09-15 기준) — 전부 nullable
+    @Column(name = "name", length = 50)
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "contact_method", length = 10)
+    private ContactMethod contactMethod;
+
+    @Column(name = "contact_value", length = 100)
+    private String contactValue;
+
+    @Column(name = "department", length = 100)
+    private String department;
+
+    @Column(name = "mbti", length = 4)
+    private String mbti;
+
+    @Column(name = "bio", length = 500)
+    private String bio;
+
     @Column(name = "coupon_issued", nullable = false)
     private boolean couponIssued = false;
 
@@ -56,11 +77,19 @@ public class Signup {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Signup(String email, Result result, Gender gender, Gender preferGender) {
+    public Signup(String email, Result result, Gender gender, Gender preferGender,
+                  String name, ContactMethod contactMethod, String contactValue,
+                  String department, String mbti, String bio) {
         this.email = email;
         this.result = result;
         this.gender = gender;
         this.preferGender = preferGender;
+        this.name = name;
+        this.contactMethod = contactMethod;
+        this.contactValue = contactValue;
+        this.department = department;
+        this.mbti = mbti;
+        this.bio = bio;
     }
 
     public void issueCoupon() {

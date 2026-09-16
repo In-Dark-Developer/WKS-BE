@@ -213,14 +213,31 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "email": "dev@dgu.ac.kr",
   "resultId": "3f2a9c1e-....",
   "gender": "MALE",
-  "preferGender": "FEMALE"
+  "preferGender": "FEMALE",
+  "name": "김동국",
+  "contactMethod": "PHONE",
+  "contactValue": "010-1234-5678",
+  "department": "컴퓨터공학과",
+  "mbti": "INFP",
+  "bio": "축제를 좋아하는 컴공생입니다."
 }
 ```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `name` | string \| `null` | ⚠️ 미정 | 최대 50자 |
+| `contactMethod` | `PHONE` \| `INSTAGRAM` \| `null` | ⚠️ 미정 | |
+| `contactValue` | string \| `null` | ⚠️ 미정 | `contactMethod`가 `PHONE`이면 휴대폰 번호 형식(`010-1234-5678` 등) 검증. `INSTAGRAM`이면 형식 제약 없음. 최대 100자 |
+| `department` | string \| `null` | ⚠️ 미정 | 최대 100자 |
+| `mbti` | string \| `null` | ⚠️ 미정 | 16유형(`^[EI][SN][TF][JP]$`) |
+| `bio` | string \| `null` | ⚠️ 미정 | 최대 500자 |
 
 - `resultId` **nullable** — 사주 없이 신청하는 경로 허용
 - 도메인 화이트리스트 위반 → `INVALID_EMAIL_DOMAIN` 400
 - 중복 이메일 → `DUPLICATE_SIGNUP` 409
-- **이름·전화번호는 받지 않는다**
+- `contactMethod: PHONE` + 휴대폰 번호 형식이 아닌 `contactValue` → `INVALID_INPUT` 400
+- **(2026-09-15 변경)** 이름·연락처·학과·MBTI·자기소개를 수집한다 — 프론트 피그마 사전신청 화면에 맞춘 정책 변경. 단 **어느 필드를 필수로 할지는 기획 미확정**이라 서버는 6개 필드 전부 `null` 허용으로 구현했다. 빈 문자열(`""`)을 보내도 서버가 `null`로 처리한다. 필수 필드가 확정되면 서버 검증을 강화하고 이 표를 갱신한다
+- **사진 업로드는 이번 릴리즈 범위 아님** (2차 예정)
 
 **Response 201**
 

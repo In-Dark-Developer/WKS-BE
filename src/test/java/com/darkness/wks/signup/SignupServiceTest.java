@@ -1,5 +1,6 @@
 package com.darkness.wks.signup;
 
+import com.darkness.wks.common.ContactMethod;
 import com.darkness.wks.common.Gender;
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
@@ -55,12 +56,12 @@ class SignupServiceTest {
             ReflectionTestUtils.setField(signup, "id", 1024L);
             return signup;
         });
-        Signup savedSignup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE);
+        Signup savedSignup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         when(emailVerificationService.issueToken(any()))
                 .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
 
         SignupResponse response = signupService.createSignup(
-                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE));
+                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개"));
 
         assertThat(response.signupId()).isEqualTo(1024L);
         assertThat(response.couponIssued()).isTrue();
@@ -72,14 +73,14 @@ class SignupServiceTest {
     void marksMailSentFalseWhenSendFails() {
         when(signupRepository.existsByEmail(anyString())).thenReturn(false);
         when(signupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        Signup savedSignup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE);
+        Signup savedSignup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         when(emailVerificationService.issueToken(any()))
                 .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
         doThrow(new EmailVerificationService.MailSendFailedException(new RuntimeException("smtp down")))
                 .when(emailVerificationService).sendVerificationEmail(anyString(), anyString());
 
         SignupResponse response = signupService.createSignup(
-                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE));
+                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개"));
 
         assertThat(response.mailSent()).isFalse();
     }
@@ -89,7 +90,7 @@ class SignupServiceTest {
         when(signupRepository.existsByEmail("dev@dgu.ac.kr")).thenReturn(true);
 
         assertThatThrownBy(() -> signupService.createSignup(
-                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE)))
+                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개")))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DUPLICATE_SIGNUP));
 
@@ -102,7 +103,7 @@ class SignupServiceTest {
         ReflectionTestUtils.setField(signupService, "allowedEmailDomainsRaw", "dgu.ac.kr");
 
         assertThatThrownBy(() -> signupService.createSignup(
-                new CreateSignupRequest("dev@gmail.com", null, Gender.MALE, Gender.FEMALE)))
+                new CreateSignupRequest("dev@gmail.com", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개")))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_EMAIL_DOMAIN));
 
@@ -113,12 +114,57 @@ class SignupServiceTest {
     void allowsAnyDomainWhenWhitelistNotConfigured() {
         when(signupRepository.existsByEmail(anyString())).thenReturn(false);
         when(signupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        Signup savedSignup = new Signup("dev@gmail.com", null, Gender.MALE, Gender.FEMALE);
+        Signup savedSignup = new Signup("dev@gmail.com", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         when(emailVerificationService.issueToken(any()))
                 .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
 
         SignupResponse response = signupService.createSignup(
-                new CreateSignupRequest("dev@gmail.com", null, Gender.MALE, Gender.FEMALE));
+                new CreateSignupRequest("dev@gmail.com", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개"));
+
+        assertThat(response.couponIssued()).isTrue();
+    }
+
+    @Test
+    void createsSignupWithAllOptionalProfileFieldsOmitted() {
+        when(signupRepository.existsByEmail("dev@dgu.ac.kr")).thenReturn(false);
+        when(signupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Signup savedSignup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE,
+                null, null, null, null, null, null);
+        when(emailVerificationService.issueToken(any()))
+                .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
+
+        SignupResponse response = signupService.createSignup(
+                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE,
+                        null, null, null, null, null, null));
+
+        assertThat(response.couponIssued()).isTrue();
+    }
+
+    @Test
+    void rejectsMalformedPhoneContact() {
+        when(signupRepository.existsByEmail(anyString())).thenReturn(false);
+
+        assertThatThrownBy(() -> signupService.createSignup(
+                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE,
+                        "김동국", ContactMethod.PHONE, "not-a-phone-number", "컴퓨터공학과", "INFP", "자기소개")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
+
+        verify(signupRepository, never()).save(any());
+    }
+
+    @Test
+    void allowsInstagramContactWithoutPhoneFormat() {
+        when(signupRepository.existsByEmail(anyString())).thenReturn(false);
+        when(signupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Signup savedSignup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE,
+                "김동국", ContactMethod.INSTAGRAM, "my_ig_handle", "컴퓨터공학과", "INFP", "자기소개");
+        when(emailVerificationService.issueToken(any()))
+                .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
+
+        SignupResponse response = signupService.createSignup(
+                new CreateSignupRequest("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE,
+                        "김동국", ContactMethod.INSTAGRAM, "my_ig_handle", "컴퓨터공학과", "INFP", "자기소개"));
 
         assertThat(response.couponIssued()).isTrue();
     }
@@ -130,7 +176,8 @@ class SignupServiceTest {
         when(resultRepository.findById(resultId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> signupService.createSignup(
-                new CreateSignupRequest("dev@dgu.ac.kr", resultId.toString(), Gender.MALE, Gender.FEMALE)))
+                new CreateSignupRequest("dev@dgu.ac.kr", resultId.toString(), Gender.MALE, Gender.FEMALE,
+                        "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개")))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESULT_NOT_FOUND));
 
@@ -146,12 +193,13 @@ class SignupServiceTest {
         when(signupRepository.existsByEmail(anyString())).thenReturn(false);
         when(resultRepository.findById(resultId)).thenReturn(Optional.of(result));
         when(signupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        Signup savedSignup = new Signup("dev@dgu.ac.kr", result, Gender.MALE, Gender.FEMALE);
+        Signup savedSignup = new Signup("dev@dgu.ac.kr", result, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         when(emailVerificationService.issueToken(any()))
                 .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
 
         SignupResponse response = signupService.createSignup(
-                new CreateSignupRequest("dev@dgu.ac.kr", resultId.toString(), Gender.MALE, Gender.FEMALE));
+                new CreateSignupRequest("dev@dgu.ac.kr", resultId.toString(), Gender.MALE, Gender.FEMALE,
+                        "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개"));
 
         assertThat(response.couponIssued()).isTrue();
     }
@@ -167,7 +215,7 @@ class SignupServiceTest {
 
     @Test
     void resendRejectsAlreadyVerifiedEmail() {
-        Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE);
+        Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         signup.markVerified(Instant.now());
         when(signupRepository.findByEmail("dev@dgu.ac.kr")).thenReturn(Optional.of(signup));
 
@@ -180,7 +228,7 @@ class SignupServiceTest {
 
     @Test
     void resendIssuesNewTokenForUnverifiedEmail() {
-        Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE);
+        Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         when(signupRepository.findByEmail("dev@dgu.ac.kr")).thenReturn(Optional.of(signup));
         when(emailVerificationService.issueToken(signup))
                 .thenReturn(new EmailVerification("token2", signup, Instant.now().plusSeconds(1800)));
@@ -193,7 +241,7 @@ class SignupServiceTest {
 
     @Test
     void verifyEmailMarksSignupVerified() {
-        Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE);
+        Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
         EmailVerification verification = new EmailVerification("token", signup, Instant.now().plusSeconds(1800));
         when(emailVerificationService.verify("token")).thenReturn(verification);
 
