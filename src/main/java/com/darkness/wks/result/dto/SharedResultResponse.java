@@ -11,6 +11,7 @@ public record SharedResultResponse(
         Zodiac zodiac,
         ResultResponse.DestinyResponse destiny,
         List<ResultResponse.FortuneResponse> fortunes,
+        ResultResponse.ElementResponse elements,
         String luckyItem,
         String luckyPlace,
         List<ResultResponse.CompatibilityResponse> compatibilities
@@ -22,6 +23,7 @@ public record SharedResultResponse(
                 result.zodiac(),
                 result.destiny(),
                 result.fortunes(),
+                result.elements(),
                 result.luckyItem(),
                 result.luckyPlace(),
                 result.compatibilities()
