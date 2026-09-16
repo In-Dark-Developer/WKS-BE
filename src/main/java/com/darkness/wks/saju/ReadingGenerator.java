@@ -113,18 +113,24 @@ public class ReadingGenerator {
 
     /**
      * 팔자·등급·성별·오행 사실뿐. 개인정보 미포함은 테스트로 고정한다 (TR-03).
-     * 오행 사실(나의 기운·강한/약한 기운·배우자·자녀 기운)을 코드가 정해 넘긴다. 팔자 글자만 주면 LLM 이 매번 다른 오행을 집어 말한다 (#48)
+     * 오행 사실(나의 기운·많은/없는 기운·배우자·자녀 기운)을 코드가 정해 넘긴다. 팔자 글자만 주면 LLM 이 매번 다른 오행을 집어 말한다 (#48)
      */
     static String buildPrompt(SajuPillars p, Map<ReadingCategory, Grade> grades, Gender gender) {
         Element me = Element.ofStem(p.dayPillar().charAt(0));
-        double[] s = Element.strengths(p);
-        double total = 0;
-        for (double v : s) total += v;
-        List<Element> byStrength = java.util.Arrays.stream(Element.values())
-                .sorted(java.util.Comparator.comparingDouble((Element e) -> -s[e.ordinal()])).toList();
-        String strong = byStrength.subList(0, 2).stream().map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
-        double weakCut = total * 0.1;
-        String weak = byStrength.stream().filter(e -> s[e.ordinal()] < weakCut).map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
+        // 강한/약한 기운은 화면(ResultResponse.ElementResponse)과 같은 글자 개수 기준이다 (#70).
+        // 자리 가중치(Element.strengths)로 고르면 "수 3개인데 왜 화 얘기?" 가 19% 에서 생긴다. 점수·행운 장소는 가중치 그대로
+        int[] count = new int[5];
+        for (String pillar : List.of(p.yearPillar(), p.monthPillar(), p.dayPillar(),
+                p.hourPillar() == null ? "" : p.hourPillar())) {
+            if (pillar.isEmpty()) continue;
+            count[Element.ofStem(pillar.charAt(0)).ordinal()]++;
+            count[Element.ofBranch(pillar.charAt(1)).ordinal()]++;
+        }
+        int max = java.util.Arrays.stream(count).max().orElse(0);
+        String strong = java.util.Arrays.stream(Element.values()).filter(e -> count[e.ordinal()] == max)
+                .map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
+        String weak = java.util.Arrays.stream(Element.values()).filter(e -> count[e.ordinal()] == 0)
+                .map(e -> PLAIN[e.ordinal()]).collect(Collectors.joining(", "));
         int spouseRole = gender == Gender.MALE ? 2 : 3; // 남 재성, 여 관성
         int childRole = gender == Gender.MALE ? 3 : 1;  // 남 관성, 여 식상
         Element spouse = null, child = null;
@@ -139,7 +145,7 @@ public class ReadingGenerator {
                 .append(", 일주 ").append(p.dayPillar())
                 .append(", 시주 ").append(p.hourPillar() == null ? "모름" : p.hourPillar()).append("\n")
                 .append("나의 기운: ").append(PLAIN[me.ordinal()]).append("\n")
-                .append("강한 기운: ").append(strong).append(" / 약한 기운: ").append(weak.isEmpty() ? "없음" : weak).append("\n")
+                .append("많은 기운: ").append(strong).append(" / 없는 기운: ").append(weak.isEmpty() ? "없음" : weak).append("\n")
                 .append("배우자 기운: ").append(PLAIN[spouse.ordinal()])
                 .append(" / 배우자 자리의 기운: ").append(PLAIN[Element.ofBranch(p.dayPillar().charAt(1)).ordinal()]).append("\n")
                 .append("자녀 기운: ").append(PLAIN[child.ordinal()]);
