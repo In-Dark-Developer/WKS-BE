@@ -16,13 +16,14 @@ class ReadingGeneratorTest {
 
     @Test
     void promptContainsGenderPillarsElementFactsAndGrades() {
+        // 임오 계묘 신사 을미: 목 2(묘·을) 화 2(오·사) 토 1(미) 금 1(신) 수 2(임·계) → 많은 기운 목·화·수, 없는 기운 없음
         // 일간 신(쇠). 남자: 배우자성 재성 = 나무, 자녀성 관성 = 불. 일지 사 = 불
         String prompt = ReadingGenerator.buildPrompt(new SajuPillars("임오", "계묘", "신사", "을미"), GRADES, Gender.MALE);
         assertThat(prompt).isEqualTo("""
                 성별 남성
                 년주 임오, 월주 계묘, 일주 신사, 시주 을미
                 나의 기운: 쇠
-                강한 기운: 나무, 물 / 약한 기운: 없음
+                많은 기운: 나무, 불, 물 / 없는 기운: 없음
                 배우자 기운: 나무 / 배우자 자리의 기운: 불
                 자녀 기운: 불
                 결혼운 등급: SS
@@ -31,7 +32,13 @@ class ReadingGeneratorTest {
         // 여자: 배우자성 관성 = 불, 자녀성 식상 = 물
         assertThat(ReadingGenerator.buildPrompt(new SajuPillars("임오", "계묘", "신사", "을미"), GRADES, Gender.FEMALE))
                 .contains("배우자 기운: 불 /").contains("자녀 기운: 물");
-        assertThat(prompt).doesNotContainPattern("\\d{4}"); // 생년 등 숫자 정보 없음 (TR-03)
+    }
+
+    @Test
+    void strongAndWeakElementsMatchCharacterCounts() {
+        // 갑인 갑인 갑인 갑인: 목 8, 나머지 0
+        assertThat(ReadingGenerator.buildPrompt(new SajuPillars("갑인", "갑인", "갑인", "갑인"), GRADES, Gender.MALE))
+                .contains("많은 기운: 나무 / 없는 기운: 불, 흙, 쇠, 물");
     }
 
     @Test
