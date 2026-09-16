@@ -183,6 +183,37 @@ class ResultServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESULT_NOT_FOUND);
     }
 
+    @Test
+    void renamesNicknameKeepingEverythingElse() {
+        UUID resultId = UUID.randomUUID();
+        Result result = result(resultId);
+        UUID shareId = result.getShareId();
+        when(resultRepository.findById(resultId)).thenReturn(Optional.of(result));
+        when(readingRepository.findById(resultId)).thenReturn(Optional.of(reading(result)));
+        when(compatibilityRepository.findAllByResultIdOrderByCreatedAtDesc(resultId)).thenReturn(List.of());
+
+        ResultResponse response = resultService.updateNickname(resultId.toString(),
+                new com.darkness.wks.result.dto.UpdateNicknameRequest("민수"));
+
+        assertThat(response.nickname()).isEqualTo("민수");
+        assertThat(result.getNickname()).isEqualTo("민수");
+        assertThat(response.resultId()).isEqualTo(resultId);
+        assertThat(response.shareId()).isEqualTo(shareId); // 링크 유지
+        assertThat(response.fortunes()).extracting(ResultResponse.FortuneResponse::grade)
+                .containsExactly("SS", "A+", "B"); // 점수·해석 그대로
+        verifyNoInteractions(resultAnalysisPort);
+    }
+
+    @Test
+    void throwsResultNotFoundWhenRenamingMissingResult() {
+        UUID missing = UUID.randomUUID();
+        when(resultRepository.findById(missing)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> resultService.updateNickname(missing.toString(),
+                new com.darkness.wks.result.dto.UpdateNicknameRequest("민수")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESULT_NOT_FOUND);
+    }
+
     private static CreateResultRequest request(String nickname) {
         return new CreateResultRequest(nickname, CalendarType.SOLAR, "2002-03-14", null, null, Gender.MALE);
     }
