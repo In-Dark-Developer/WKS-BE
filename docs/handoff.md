@@ -21,7 +21,7 @@
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
 | 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V8 |
+| Flyway 최신 버전 | V9 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -29,7 +29,6 @@
 
 | 내용 | 담당 | 필요한 것 |
 |---|---|---|
-| Gemini 무료 티어 RPM·RPD 실측 | 차은호 | Day 6 부하 테스트 |
 | 프론트 배포 도메인 (CORS용) | 곽도윤 | 프론트 팀 확인 |
 | 축제 D-day 확정 | 곽도윤 | 학생처 확인 |
 | 개발 서버 별도 운영 여부 | 곽도윤 | Day 1 결정 |
@@ -43,7 +42,8 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V8 | 곽도윤 | signup에 `photo_key` 컬럼 추가 (S3 사진 업로드, 선택값) | 구현 완료 |
+| V9 | 곽도윤 | signup에 `photo_key` 컬럼 추가 (S3 사진 업로드, 선택값). **원래 V8로 예약했었으나 dev 병합 중 차은호의 V8(#62)과 충돌 발견 — V9로 재번호** | 구현 완료 |
+| V8 | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
 | V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
 | V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
@@ -118,7 +118,7 @@
 - `software.amazon.awssdk:s3`(BOM 2.29.52) 신규 의존성 추가 — **convention.md의 "AI가 새 라이브러리 추천하면 일단 거절, 팀에 물어본다" 규칙에 걸려서 진행 전에 사용자(곽도윤 본인) 확인 받음**
 - `common/config/S3Config.java` 신규 — `S3Client`/`S3Presigner` 빈. 자격증명은 하드코딩하지 않고 AWS 기본 자격증명 체인(`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` 환경변수 또는 EC2 IAM 역할)에 위임. `S3Client`는 `apiCallTimeout(5s)` 명시 (외부 호출 타임아웃 필수 규칙)
 - `signup/PhotoUploadService.java` 신규 — `createUploadUrl(contentType)`: `image/jpeg`·`image/png`·`image/webp`만 허용, 아니면 `INVALID_INPUT`. 키는 `signup-photos/{UUID}.{ext}`. `verifyPhotoExists(photoKey)`: `SignupService.createSignup`에서 호출 — `photoKey`가 실제 S3에 없으면(미업로드·만료·위조) `INVALID_INPUT` 400으로 막음 (resultId 검증과 동일 패턴)
-- `Signup` 엔티티·`CreateSignupRequest`에 `photoKey` 추가 (마지막 파라미터로 추가해서 기존 호출부는 `null` 하나만 붙이면 되게 함). `V8__add_signup_photo_key.sql` — `photo_key VARCHAR(255)` nullable 컬럼
+- `Signup` 엔티티·`CreateSignupRequest`에 `photoKey` 추가 (마지막 파라미터로 추가해서 기존 호출부는 `null` 하나만 붙이면 되게 함). `V9__add_signup_photo_key.sql`(원래 V8 예약, dev 병합 중 차은호의 V8과 충돌해 V9로 재번호) — `photo_key VARCHAR(255)` nullable 컬럼
 - `SignupServiceTest`·`SignupControllerTest` 기존 생성자 호출부 전부 갱신(11번째 인자 추가) + `PhotoUploadServiceTest` 신규 + 사진 검증 성공/실패 케이스 `SignupServiceTest`에 추가. `./gradlew test --tests "com.darkness.wks.signup.*"` 통과 확인
 - 새 `ErrorCode`는 추가하지 않음 — `INVALID_INPUT` 재사용 (resend의 "이미 인증됨" 케이스와 같은 패턴)이라 `common/ErrorCode.java`는 안 건드림
 
@@ -129,7 +129,7 @@
 - `signup/dto/PhotoUploadUrlRequest.java`, `signup/dto/PhotoUploadUrlResponse.java` (신규)
 - `signup/entity/Signup.java`, `signup/dto/CreateSignupRequest.java`, `signup/SignupService.java`, `signup/SignupController.java`
 - `signup/SignupServiceTest.java`, `signup/SignupControllerTest.java`
-- `db/migration/V8__add_signup_photo_key.sql` (신규)
+- `db/migration/V9__add_signup_photo_key.sql` (신규)
 - `application.yml`(`app.aws.*`), `.env.prod.example`, `docker-compose.prod.yml` — `AWS_REGION`·`AWS_S3_BUCKET`·`AWS_ACCESS_KEY_ID`·`AWS_SECRET_ACCESS_KEY` 추가
 - `api.md` §4, `docs/api-spec.md` §5, `docs/backend-requirements.md` FR-SU-16, `docs/handoff.md`
 
@@ -294,6 +294,88 @@
 
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
+### 2026-09-16 (수) · 차은호 · saju/ Gemini 호출 총량 상한 (#64) · Claude Code
+
+**한 일**
+- `saju/CallBudget`: 분당·일일 호출 카운터. 상한이면 Gemini 호출 없이 `LLM_UNAVAILABLE`. `ReadingGenerator` 재시도 루프에서 시도마다 확인
+- 설정 `gemini.max-per-minute`(60, env `GEMINI_MAX_PER_MINUTE`)·`gemini.max-per-day`(1600, env `GEMINI_MAX_PER_DAY`). 실측(90 RPM·2,000 RPD 이상 통과)의 안전값
+- 일일 창은 태평양 자정 기준 (`America/Los_Angeles` 날짜). Google 무료 한도 리셋과 동일
+- 로컬 실검증: 분당 1로 띄워 새 입력 2건 → 2번째 503, 같은 입력 재사용(#62)은 카운트 안 하고 통과
+
+**건드린 파일/패키지**
+- `saju/CallBudget.java`(신규), `saju/ReadingGenerator.java`, `application.yml`, `CallBudgetTest`(신규), `docs/api-spec.md` 에러표, `docs/architecture.md`
+
+**다음 사람이 알아야 할 것**
+- 무료 한도는 **프로젝트 단위**. 로컬 테스트 키가 운영과 같은 프로젝트면 한도 공유. 축제 당일 로컬 스모크 금지
+- 정확한 RPD·RPM 은 https://aistudio.google.com/rate-limit 에서 확인 후 env 로 조정. 유료 전환하면 상한 크게 올릴 것
+- `ReadingGenerator` 생성자가 둘(스프링용 4-arg `@Autowired`, 테스트용 2-arg)
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: nginx `limit_req` — `POST /api/results` IP당 분당 30·burst 60 (NAT 고려해 넓게). 폭주만 차단, 총량은 앱이 지킴
+- 곽도윤: 유료 전환 시 Google 콘솔 일일 예산 상한
+
+**문서 변경**
+- `docs/api-spec.md` 에러 코드표, `docs/architecture.md` §Gemini, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `LLM_UNAVAILABLE`(503) 에 "잠시 후 다시 시도" 안내 UI 필요. 총량 상한 걸리면 1분 뒤 풀림
+
+### 2026-09-16 (수) · 차은호 · result/ 같은 입력 해석 재사용 (#62) · Claude Code
+
+**한 일**
+- `createResult`: 같은 생년월일·시간·성별 + 같은 버전의 `reading` 이 있으면 팔자·점수·문장을 복사. Gemini 호출 없음. `resultId`·`shareId`·닉네임·행운 아이템은 새로
+- `reading.version` (V8): `ReadingGenerator.promptVersion()`(시스템 프롬프트+모델 해시) × 31 + `ReadingScorer.VERSION`(손으로 올리는 상수). 프롬프트 고치면 자동으로 재사용 끊김, 점수 로직 고치면 `ReadingScorer.VERSION` 올릴 것. 기존 행은 0 이라 재사용 안 됨
+- `ResultAnalysisPort.analysisVersion()` 추가. `ReadingRepository.findReusable` 은 날짜·성별·버전으로 후보를 가져와 시간은 자바에서 비교
+- 로컬 실검증: 같은 입력 2회 → 2번째 Gemini 호출 없음·문장 동일. 시간 모름/입력, 성별·시간 다르면 각각 새 호출
+
+**건드린 파일/패키지**
+- `result/ResultService.java`, `result/ReadingRepository.java`, `result/entity/Reading.java`, `result/ResultAnalysisPort.java`, `result/SajuResultAnalysisAdapter.java` — 최선우 리뷰
+- `saju/ReadingGenerator.java`(`promptVersion`), `saju/ReadingScorer.java`(`VERSION`), `db/migration/V8__add_reading_version.sql`, `ResultServiceTest`, 문서 3개
+
+**다음 사람이 알아야 할 것**
+- **`LocalTime` 을 JPQL 파라미터로 비교하면 안 맞는다.** `Result.birthTime` 은 `@JdbcTypeCode(SqlTypes.LOCAL_TIME)` 인데 쿼리 파라미터는 그 매핑을 안 타서 14:30 이 매치 안 됨. 그래서 시간은 자바에서 거른다. 다른 곳에서 `birthTime` 으로 조회할 일 있으면 같은 함정
+- 같은 사주인 두 사람은 문장까지 같다. 2,000명 규모에서 약 5% (몰라요 비율 50% 가정). 기획이 감수하기로 함
+- Postgres 는 JPQL `(:p is null and col is null)` 을 "could not determine data type of parameter" 로 거부. 쿼리 분리하거나 자바에서 처리
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2, `docs/architecture.md` DDL·흐름, `docs/handoff.md` Flyway 표
+
+**프론트에 알려야 할 것**
+- 없음 (응답 스키마 동일). 같은 입력 재생성 시 문장이 같아지는 건 의도
+
+### 2026-09-16 (수) · 차은호 · Gemini 무료 티어 부하 실측 (#60, Day 6 항목) · Claude Code
+
+**한 일**
+- `gemini-3.5-flash-lite` 무료 키로 실제 프롬프트 크기(약 2,100토큰/건) 요청을 분당 30·60·90건씩 1분간 전송
+
+| RPM | 전송 | 성공 | 429 | p50 | p95 | 토큰/분 |
+|---|---|---|---|---|---|---|
+| 30 | 30 | 30 | 0 | 4.5s | 5.5s | 67,894 |
+| 60 | 60 | 60 | 0 | 4.6s | 5.8s | 135,212 |
+| 90 | 90 | 90 | 0 | 4.7s | 5.3s | 204,446 |
+
+- 90 RPM·분당 20만 토큰까지 한도 없음. 지연은 부하와 무관하게 4.5~5.8초. 그 이상은 미측정
+- "막혀 있는 것"의 Gemini 실측 행 제거
+
+**건드린 파일/패키지**
+- `docs/handoff.md`, `docs/architecture.md` (Gemini 한도 문구)
+
+**다음 사람이 알아야 할 것**
+- 축제 피크가 분당 90건을 넘길 것 같으면 그 구간만 다시 재면 됨. 스크립트는 세션 스크래치라 저장 안 함. 실제 크기 요청 순차 전송 + 429 집계면 충분
+- 운영 키와 로컬 키가 같으면 일일 한도를 공유함. 축제 당일엔 로컬 테스트 금지
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/handoff.md`, `docs/architecture.md`
+
+**프론트에 알려야 할 것**
+- 없음
 
 ### 2026-09-15 (화) · 차은호 · saju/ 운명 제목 기획 문구 반영 (#52) · Claude Code
 

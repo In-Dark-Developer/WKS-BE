@@ -41,7 +41,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `DUPLICATE_SIGNUP` | 409 | 이미 신청한 이메일 |
 | `INVALID_EMAIL_DOMAIN` | 400 | 학교 웹메일 아님 |
 | `INVALID_TOKEN` | 400 | 인증 토큰 만료·위조·재사용 |
-| `LLM_UNAVAILABLE` | 503 | 해석 생성 실패 |
+| `LLM_UNAVAILABLE` | 503 | 해석 생성 실패. Gemini 오류·타임아웃, 또는 서버 호출 총량 상한(분당 60·일 1,600) 초과. 잠시 후 재시도 안내 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
 
@@ -106,6 +106,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
       { "category": "CHILDREN", "grade": "A+", "content": "자녀운에 대한 설명" },
       { "category": "LOVE",     "grade": "B",  "content": "연애운에 대한 설명" }
     ],
+    "elements": { "wood": 3, "fire": 2, "earth": 1, "metal": 1, "water": 1 },
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": []
@@ -118,9 +119,11 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
   **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
 - `grade` 는 6단계 고정: `SS` 94~100 · `S` 84~93 · `A+` 74~83 · `A` 64~73 · `B+` 52~63 · `B` 0~51 (점수 기준, 2026-09-13 기획 확정)
+- `elements` 는 사주 원국 각 글자의 오행 개수다. 출생 시간이 있으면 합계 8, 모르면 시주를 제외해 합계 6이다
 - `destiny.title` 은 8종 고정: 연애·결혼·자녀 각각 상(`SS`/`S`/`A+`)·하(`A`/`B+`/`B`) 조합 2×2×2. 유형 번호는 기능명세서 순서(1 상상상 … 8 하하하, 연애→결혼→자녀). 제목 문구는 기획(영채) 피드백 1차 (2026-09-15) 반영. 점수로 계산하므로 저장하지 않는다
 - `luckyItem` 은 **오늘의 행운 아이템**. 기능명세서 방식: 오행별 점수 = 사용자 궁합(일간 기준 십성, 인성>비겁>식상>재성>관성) 40% + 오늘 일진 활성도(일진 천간·지지 오행과 생극) 60%. 최고 오행의 풀에서 `생년월일·시간·성별 + 날짜 + 오행` 해시로 하나. **매일 바뀌고**, 같은 입력이면 같은 날 같은 아이템(다시 생성해도 동일). 저장하지 않고 조회 시점에 계산하므로 `POST` 응답과 다음 날 `GET` 응답이 다를 수 있다
 - `luckyPlace` 는 **행운의 장소**. 원국 오행 세력으로 일간 강약을 보고 균형을 보완하는 오행을 정해 그 오행의 장소 풀(3~4곳)에서 `팔자 + 날짜` 해시로 하나. 오행은 사람마다 고정, 장소는 **매일 바뀐다** (2026-09-15 결정). 동국대 캠퍼스 안
+- 같은 생년월일·시간·성별로 다시 생성하면 **해석 문장·점수를 이전 결과에서 복사**한다 (LLM 호출 없음). 프롬프트나 점수 로직이 바뀐 뒤엔 다시 생성한다. `resultId`·`shareId`·닉네임·행운 아이템은 새로 만든다
 - 사주 팔자는 저장하지만 API 응답에는 노출하지 않는다
 - 본인 결과 조회에는 `resultId`, 친구 공유 URL에는 `shareId`를 사용한다
 
@@ -145,6 +148,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "zodiac": "HORSE",
     "destiny": { "title": "오래 사랑할 운명", "description": "..." },
     "fortunes": [ ... ],
+    "elements": { "wood": 3, "fire": 2, "earth": 1, "metal": 1, "water": 1 },
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": [

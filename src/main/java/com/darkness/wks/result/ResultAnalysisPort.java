@@ -19,6 +19,9 @@ public interface ResultAnalysisPort {
      */
     AnalysisResult analyze(LocalDate solarBirthDate, LocalTime birthTime, Gender gender);
 
+    /** 프롬프트·모델·점수 로직이 바뀌면 달라지는 값. 같은 입력 해석 재사용은 이 값이 같을 때만 (#62) */
+    int analysisVersion();
+
     record AnalysisResult(
             SajuPillars pillars,
             String destinyDescription,

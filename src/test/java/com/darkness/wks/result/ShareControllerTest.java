@@ -31,6 +31,7 @@ class ShareControllerTest {
                 Zodiac.HORSE,
                 new com.darkness.wks.result.dto.ResultResponse.DestinyResponse("제목", "설명"),
                 List.of(),
+                new com.darkness.wks.result.dto.ResultResponse.ElementResponse(2, 2, 2, 1, 1),
                 "부채",
                 "팔정도",
                 List.of()

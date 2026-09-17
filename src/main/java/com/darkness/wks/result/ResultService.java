@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import com.darkness.wks.saju.SajuPillars;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,7 +34,12 @@ public class ResultService {
     @Transactional
     public ResultResponse createResult(CreateResultRequest request) {
         LocalDate birthDate = toSolar(request);
-        ResultAnalysisPort.AnalysisResult analysis = resultAnalysisPort.analyze(birthDate, request.birthTime(), request.gender());
+        int version = resultAnalysisPort.analysisVersion();
+        // 같은 입력·같은 버전이면 저장된 해석을 복사한다. Gemini 호출 없음 (#62)
+        ResultAnalysisPort.AnalysisResult analysis = readingRepository
+                .findReusable(birthDate, request.birthTime(), request.gender(), version)
+                .map(ResultService::toAnalysis)
+                .orElseGet(() -> resultAnalysisPort.analyze(birthDate, request.birthTime(), request.gender()));
 
         Result result = resultRepository.save(new Result(
                 request.nickname(),
@@ -58,11 +64,25 @@ public class ResultService {
                 children.score(),
                 children.content(),
                 love.score(),
-                love.content()
+                love.content(),
+                version
         );
         readingRepository.save(reading);
 
         return ResultResponse.from(result, reading);
+    }
+
+    private static ResultAnalysisPort.AnalysisResult toAnalysis(Reading r) {
+        Result src = r.getResult();
+        return new ResultAnalysisPort.AnalysisResult(
+                new SajuPillars(src.getYearPillar(), src.getMonthPillar(), src.getDayPillar(), src.getHourPillar()),
+                r.getDestinyContent(),
+                List.of(
+                        new ResultAnalysisPort.Fortune(FortuneCategory.MARRIAGE, r.getMarriageScore(), r.getMarriageContent()),
+                        new ResultAnalysisPort.Fortune(FortuneCategory.CHILDREN, r.getChildrenScore(), r.getChildrenContent()),
+                        new ResultAnalysisPort.Fortune(FortuneCategory.LOVE, r.getLoveScore(), r.getLoveContent())
+                )
+        );
     }
 
     public ResultResponse getResult(String resultId) {

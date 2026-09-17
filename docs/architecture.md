@@ -184,6 +184,7 @@ CREATE TABLE reading (
     children_content   TEXT         NOT NULL,
     love_score         SMALLINT     NOT NULL,
     love_content       TEXT         NOT NULL,
+    version            INTEGER      NOT NULL DEFAULT 0,  -- 프롬프트·점수 로직 버전. 같은 입력 해석 재사용은 같은 버전끼리만 (#62). 0 = 도입 전 행
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
     -- 행운 아이템·장소는 저장하지 않는다. 아이템은 조회 시 팔자 + 오늘 일진 + 생년월일·시간·성별 (saju/DailyLucky), 장소는 원국 강약 (saju/LuckyPlace)
 );
@@ -234,6 +235,7 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 
 ```
 CreateResultRequest
+  → ReadingRepository   같은 생년월일·시간·성별 + 같은 버전의 해석이 있으면 복사하고 아래 분석은 건너뜀 (#62)
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
   → ReadingScorer       결혼·자녀·연애 점수 산출 (성별로 배우자성·자녀성 결정)   ← 결정적
@@ -271,8 +273,10 @@ SDK: `com.google.genai:google-genai` (Gemini Developer API).
 API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 모델 `gemini-3.5-flash-lite` (설정 `gemini.model`), 타임아웃 30초 (`gemini.timeout-seconds`).
 `gemini-2.5-flash` 는 2026-09 기준 신규 키에 404 ("no longer available to new users").
-모델별 무료 한도가 크게 다르다: `gemini-3.6-flash` 는 하루 20건, `gemini-3.5-flash-lite` 는 하루 2,000건 이상·분당 85건 이상 실측(2026-09-13, 1토큰 요청). 그래서 lite 를 기본으로 쓴다.
+모델별 무료 한도가 크게 다르다: `gemini-3.6-flash` 는 하루 20건, `gemini-3.5-flash-lite` 는 하루 2,000건 이상 실측(2026-09-13, 1토큰 요청). 실제 크기 요청(약 2,100토큰/건)으로도 분당 90건·20만 토큰까지 429 없음 (2026-09-16, p95 5.8초). 그래서 lite 를 기본으로 쓴다.
 3.x 는 `thinkingBudget` 을 거부하므로 `thinkingLevel: MINIMAL` 로 사고 토큰을 줄인다.
+
+**호출 총량 상한** (`saju/CallBudget`, #64): 분당 `gemini.max-per-minute`(기본 60)·일일 `gemini.max-per-day`(기본 1,600) 넘으면 Gemini 를 부르지 않고 `LLM_UNAVAILABLE`. 무료 한도는 키가 아니라 **프로젝트 단위**이고 **태평양 자정에 리셋**(KST 16:00, 서머타임 땐 17:00)이라 일일 창도 그 기준. 재시도도 한도를 쓰니 시도마다 센다. 같은 입력 재사용(#62)은 카운트 안 함. 메모리 카운터라 재시작하면 0 부터. IP 제한은 축제장 NAT 때문에 좁게 못 잡아서 총량으로 지킨다 (nginx `limit_req` 는 폭주 차단용으로 넓게, 곽도윤).
 
 > SDK 2.0.0부터 Java 17 이상이 필수다. 우리는 Java 17이라 문제없다.
 
