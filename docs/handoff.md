@@ -42,7 +42,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V9 | 곽도윤 | signup에 `photo_key` 컬럼 추가 (S3 사진 업로드, 선택값). **원래 V8로 예약했었으나 dev 병합 중 차은호의 V8(#62)과 충돌 발견 — V9로 재번호** | 구현 완료 |
+| V9 | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
 | V8 | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
 | V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
 | V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
@@ -68,6 +68,8 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-17 | `PATCH /api/results/{resultId}` 추가 (닉네임만 변경, 공유 링크·궁합 유지) | ❌ |
+| 2026-09-17 | `GET /api/results/{resultId}/input` 추가 (폼 자동 채움). `resultId` 는 URL 노출 금지 | ❌ |
 | 2026-09-13 | 본인용 `resultId`와 공개용 `shareId` 분리. `GET /api/shares/{shareId}`, 궁합 POST 추가 | ❌ |
 | 2026-09-13 | `luckyItem`·`luckyPlace` 가 오늘 기준으로 매일 바뀜 (조회마다 재계산) | ❌ |
 | 2026-09-13 | 궁합 `tier` 구간 변경: 90/75/61 경계 (25점 구간 아님) | ❌ |
@@ -294,6 +296,113 @@
 
 **프론트에 알려야 할 것**
 - `resend` 응답 바디 형식: `{ "success": true, "data": { "mailSent": true, "message": "..." } }` (api-spec.md §5 에 추가함, 기존엔 예시 없었음)
+
+### 2026-09-17 (목) · 차은호 · 배포 설정에서 Gemini 키 평문 제거 (#72) · Claude Code
+
+**한 일**
+- `application-prod.yml` 의 `gemini.api-key` 가 평문으로 커밋돼 있었다. `${GOOGLE_API_KEY}` 로 되돌림. `docker-compose.prod.yml` 이 이미 그 환경변수를 주입하고 있어 서버 동작에는 영향 없음
+- 유입 경로: `74f202c`(2026-09-13, 배포/CI-CD 세팅)에서 줄이 처음 들어왔고, `6df9cf0`(2026-09-17, #66 작업)에서 `git add -A` 로 값이 교체돼 함께 담겼다
+
+**건드린 파일/패키지**
+- `src/main/resources/application-prod.yml` 1줄 — 곽도윤 확인 필요
+
+**다음 사람이 알아야 할 것**
+- **키 값 자체는 아직 살아 있다.** 폐기·재발급이 필요하다. 저장소 접근 권한이 있는 사람 전원이 값을 볼 수 있었다
+- **과거 커밋에 값이 남아 있다.** 최신 커밋에서 지워도 `git log -p` 로 읽힌다. `git filter-repo` + force push 로 정리해야 하고, 그러면 팀 전원이 재클론해야 한다
+- **저장소 public 전환은 위 둘을 끝낸 뒤에만.** 공개 즉시 크롤링 대상이 된다
+- 앞으로 커밋할 때 `git add -A` 대신 변경 파일을 지정한다. 이번 사고의 직접 원인
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: 키 폐기·재발급, 서버 `.env` 의 `GOOGLE_API_KEY` 확인, 히스토리 정리 시점 조율
+
+**문서 변경**
+- `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음
+
+### 2026-09-17 (목) · 차은호 · saju/ 해설의 '많은 기운' 을 글자 개수 기준으로 (#70) · Claude Code
+
+**한 일**
+- 화면(`elements`)은 글자 개수인데 해설 프롬프트는 자리 가중치(`Element.strengths`) 1위를 "강한 기운"으로 말해, 독자에게 "수 3개인데 왜 화 얘기?" 로 보였음
+- `buildPrompt`: 많은 기운 = 개수 최다(동점이면 전부 나열), 없는 기운 = 개수 0. 항목 이름도 "강한/약한" → "많은/없는" 으로 바꿔 개수 뉘앙스에 맞춤
+- 점수·행운 장소의 가중치 계산은 그대로. 응답에 안 나오므로 화면과 충돌하지 않는다
+
+**측정 (2001~2007년생 고유 팔자 30,672개)**
+| 항목 | 값 |
+|---|---|
+| 개수 1위와 가중치 1위 불일치 | 19.0% |
+| 그중 개수 차이 2 이상 | 0.0% |
+| 개수 0 인 기운이 "강한 기운" 으로 언급됨 | 0.0% |
+
+가중치 최대 자리(월간 1.3·월지 1.105)를 다 차지해도 2배 개수를 못 넘어서, 어긋남은 항상 개수 차이 1 에서만 생긴다.
+
+**건드린 파일/패키지**
+- `saju/ReadingGenerator.java`, `resources/prompts/reading-system.txt`, `ReadingGeneratorTest`, `docs/api-spec.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 개수 기준이라 동점이 잦다. "많은 기운: 나무, 불, 물" 처럼 여럿이 나열될 수 있고 그대로 자연스럽다
+- 실호출 2회 확인: 개수 1위(물)를 성격 근거로 사용, 합쇼체 0
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §2 `elements` 설명, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (스키마 동일). 화면의 오행 개수와 해설 문장이 이제 같은 기준
+
+### 2026-09-17 (목) · 차은호 · result/ 닉네임 변경 API (#68) · Claude Code
+
+**한 일**
+- `PATCH /api/results/{resultId}` 로 닉네임만 수정. 검증은 생성과 동일(필수·8자)
+- 닉네임이 `compatibility` 에 복사돼 있지 않고 조회 시 `result` 에서 읽는 구조라, 공유 페이지와 친구 궁합 목록까지 자동 반영. 별도 갱신 로직 불필요
+- `Result.rename()` 도메인 메서드 추가 (엔티티에 setter 없음)
+- 로컬 실검증: A·B 궁합을 맺은 뒤 A 닉네임 변경 → B 의 궁합 목록·공유 페이지에 새 닉네임, `shareId`·등급·궁합 수 유지. 9자 400, 없는 ID 404
+
+**건드린 파일/패키지**
+- `result/ResultController.java`, `result/ResultService.java`, `result/entity/Result.java`, `result/dto/UpdateNicknameRequest.java`(신규) — 최선우 리뷰
+- `ResultServiceTest` 2건, `docs/api-spec.md` §3, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- **인증이 없다.** `resultId` 를 아는 사람이 바꿀 수 있다. 공유해서 궁합을 맺은 뒤 욕설로 바꾸면 상대 목록에 그대로 보인다. 변경 횟수 제한(결과당 3회)·닉네임 금칙어 필터는 넣지 않았다. 필요하면 별건
+- 닉네임은 행운 아이템 해시 키(생년월일·시간·성별)와 무관하고 궁합 점수(팔자만)에도 안 쓰이므로 변경해도 결과값이 흔들리지 않는다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` §3 (새 엔드포인트), `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `PATCH /api/results/{resultId}` 추가. 닉네임 오타 수정에 재생성 대신 이걸 쓰면 공유 링크·궁합이 유지된다
+
+### 2026-09-17 (목) · 차은호 · result/ 입력값 조회 API (#66) · Claude Code
+
+**한 일**
+- `GET /api/results/{resultId}/input`: 결과를 만들 때 입력한 값을 그대로 반환. 재입력 폼 자동 채움용. 필드 구성은 `POST /api/results` 요청과 동일
+- **V9**: `result` 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 기존 `birth_date` 는 양력 변환값이라 음력 입력을 복원할 수 없었다. 기존 행은 SOLAR + 양력 문자열로 채움
+- `birthTime` 은 `@JsonFormat(pattern = "HH:mm")`. 기본 직렬화가 `14:30:00` 이라 요청 형식과 어긋났다
+- 로컬 실검증: 음력 입력(2002-03-14 윤달 아님, 양력 4/26 변환) → `/input` 이 음력 원본 그대로 반환. 시간 모름은 `null`, 없는 ID 는 404
+
+**건드린 파일/패키지**
+- `result/ResultController.java`, `result/ResultService.java`, `result/entity/Result.java`, `result/dto/ResultInputResponse.java`(신규) — 최선우 리뷰
+- `db/migration/V9__add_result_input_columns.sql`, `ResultServiceTest`, 문서 3개
+
+**다음 사람이 알아야 할 것**
+- **이 응답에는 생년월일·성별이 들어 있다.** `resultId` 는 본인만 아는 값이라는 전제이므로 프론트가 URL·화면에 노출하면 개인정보가 샌다. 공유는 `shareId`
+- `Result` 생성자가 둘. 9-arg 는 SOLAR 기본값으로 위임하고, 입력 원본을 저장하려면 12-arg 를 쓴다
+- V9 이전에 만들어진 결과는 음력 입력이어도 양력으로 표시된다 (원본이 남아 있지 않음)
+
+**막힌 것 / 넘기는 것**
+- 최선우: 궁합 점수로 상대 팔자·생년월일시를 역산할 수 있다. 별건으로 정리해 전달 예정
+
+**문서 변경**
+- `docs/api-spec.md` §3 (새 엔드포인트), `docs/architecture.md` result DDL, `docs/handoff.md` Flyway 표
+
+**프론트에 알려야 할 것**
+- `GET /api/results/{resultId}/input` 추가. 폼 자동 채움에 그대로 사용. `resultId` 는 URL 에 노출 금지
 
 ### 2026-09-16 (수) · 차은호 · saju/ Gemini 호출 총량 상한 (#64) · Claude Code
 

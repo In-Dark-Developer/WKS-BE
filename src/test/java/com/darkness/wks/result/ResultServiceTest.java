@@ -156,6 +156,64 @@ class ResultServiceTest {
         );
     }
 
+    @Test
+    void returnsStoredInputForFormPrefill() {
+        UUID resultId = UUID.randomUUID();
+        Result lunar = new Result("도윤", LocalDate.of(2002, 4, 26), java.time.LocalTime.of(14, 30), null, Gender.FEMALE,
+                "임오", "계묘", "갑진", "신미", CalendarType.LUNAR, "2002-03-14", true);
+        ReflectionTestUtils.setField(lunar, "id", resultId);
+        when(resultRepository.findById(resultId)).thenReturn(Optional.of(lunar));
+
+        var input = resultService.getResultInput(resultId.toString());
+
+        assertThat(input.calendarType()).isEqualTo(CalendarType.LUNAR);
+        assertThat(input.birthDate()).isEqualTo("2002-03-14"); // 양력 변환값(4/26)이 아니라 입력 원본
+        assertThat(input.isLeapMonth()).isTrue();
+        assertThat(input.birthTime()).isEqualTo(java.time.LocalTime.of(14, 30));
+        assertThat(input.gender()).isEqualTo(Gender.FEMALE);
+        assertThat(input.nickname()).isEqualTo("도윤");
+    }
+
+    @Test
+    void throwsResultNotFoundWhenInputDoesNotExist() {
+        UUID missing = UUID.randomUUID();
+        when(resultRepository.findById(missing)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> resultService.getResultInput(missing.toString()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESULT_NOT_FOUND);
+    }
+
+    @Test
+    void renamesNicknameKeepingEverythingElse() {
+        UUID resultId = UUID.randomUUID();
+        Result result = result(resultId);
+        UUID shareId = result.getShareId();
+        when(resultRepository.findById(resultId)).thenReturn(Optional.of(result));
+        when(readingRepository.findById(resultId)).thenReturn(Optional.of(reading(result)));
+        when(compatibilityRepository.findAllByResultIdOrderByCreatedAtDesc(resultId)).thenReturn(List.of());
+
+        ResultResponse response = resultService.updateNickname(resultId.toString(),
+                new com.darkness.wks.result.dto.UpdateNicknameRequest("민수"));
+
+        assertThat(response.nickname()).isEqualTo("민수");
+        assertThat(result.getNickname()).isEqualTo("민수");
+        assertThat(response.resultId()).isEqualTo(resultId);
+        assertThat(response.shareId()).isEqualTo(shareId); // 링크 유지
+        assertThat(response.fortunes()).extracting(ResultResponse.FortuneResponse::grade)
+                .containsExactly("SS", "A+", "B"); // 점수·해석 그대로
+        verifyNoInteractions(resultAnalysisPort);
+    }
+
+    @Test
+    void throwsResultNotFoundWhenRenamingMissingResult() {
+        UUID missing = UUID.randomUUID();
+        when(resultRepository.findById(missing)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> resultService.updateNickname(missing.toString(),
+                new com.darkness.wks.result.dto.UpdateNicknameRequest("민수")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESULT_NOT_FOUND);
+    }
+
     private static CreateResultRequest request(String nickname) {
         return new CreateResultRequest(nickname, CalendarType.SOLAR, "2002-03-14", null, null, Gender.MALE);
     }
@@ -194,6 +252,10 @@ class ResultServiceTest {
         ArgumentCaptor<Reading> saved = ArgumentCaptor.forClass(Reading.class);
         verify(readingRepository).save(saved.capture());
         assertThat(saved.getValue().getVersion()).isEqualTo(7);
+        ArgumentCaptor<Result> savedResult = ArgumentCaptor.forClass(Result.class);
+        verify(resultRepository).save(savedResult.capture());
+        assertThat(savedResult.getValue().getCalendarType()).isEqualTo(CalendarType.SOLAR);
+        assertThat(savedResult.getValue().getBirthDateInput()).isEqualTo("2002-03-14");
         verify(resultAnalysisPort).analyze(any(), any(), any());
     }
 }

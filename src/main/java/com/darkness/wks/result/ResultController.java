@@ -3,7 +3,9 @@ package com.darkness.wks.result;
 import com.darkness.wks.common.response.ApiResponse;
 import com.darkness.wks.common.response.ErrorResponse;
 import com.darkness.wks.result.dto.CreateResultRequest;
+import com.darkness.wks.result.dto.ResultInputResponse;
 import com.darkness.wks.result.dto.ResultResponse;
+import com.darkness.wks.result.dto.UpdateNicknameRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -15,6 +17,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -62,6 +65,24 @@ public class ResultController {
         return ApiResponse.success(resultService.createResult(request));
     }
 
+    @Operation(summary = "닉네임 변경", description = """
+            닉네임만 바꾼다. 팔자·점수·해석·궁합 기록과 `resultId`·`shareId` 는 그대로다.
+            공유 페이지와 친구의 궁합 목록에도 바로 반영된다. `resultId` 는 본인만 아는 값이라는 전제다.
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "닉네임 형식 오류 또는 UUID v4 형식 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "결과 없음")
+    })
+    @PatchMapping("/{resultId}")
+    public ApiResponse<ResultResponse> updateNickname(
+            @Parameter(description = "변경할 UUID v4 결과 ID", schema = @Schema(type = "string", format = "uuid"))
+            @PathVariable String resultId,
+            @Valid @RequestBody UpdateNicknameRequest request
+    ) {
+        return ApiResponse.success(resultService.updateNickname(resultId, request));
+    }
+
     @Operation(summary = "사주 결과 조회", description = "저장된 운명과 궁합을 조회한다. 외부 API를 호출하지 않는다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
@@ -105,5 +126,21 @@ public class ResultController {
             @PathVariable String resultId
     ) {
         return ApiResponse.success(resultService.getResult(resultId));
+    }
+
+    @Operation(summary = "입력값 조회", description = """
+            결과를 만들 때 입력한 값을 그대로 돌려준다. 재입력 폼 자동 채움용.
+            음력으로 입력했으면 음력 날짜가 나온다. `resultId` 는 본인만 아는 값이라는 전제다.
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "결과 없음")
+    })
+    @GetMapping("/{resultId}/input")
+    public ApiResponse<ResultInputResponse> getResultInput(
+            @Parameter(description = "조회할 UUID v4 결과 ID", schema = @Schema(type = "string", format = "uuid"))
+            @PathVariable String resultId
+    ) {
+        return ApiResponse.success(resultService.getResultInput(resultId));
     }
 }

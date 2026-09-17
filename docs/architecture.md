@@ -168,6 +168,9 @@ CREATE TABLE result (
     birth_time      TIME,                    -- NULL = 시간 모름
     birth_region    VARCHAR(50),             -- NULL = 지역 모름
     gender          VARCHAR(10)  NOT NULL,
+    calendar_type   VARCHAR(10)  NOT NULL DEFAULT 'SOLAR',  -- 아래 3개는 입력 폼 자동 채움용 원본 입력값 (#66)
+    birth_date_input VARCHAR(10),                           -- 입력한 날짜 문자열. LUNAR 면 음력 (birth_date 는 양력 변환값)
+    is_leap_month   BOOLEAN      NOT NULL DEFAULT false,
     year_pillar     CHAR(2)      NOT NULL,
     month_pillar    CHAR(2)      NOT NULL,
     day_pillar      CHAR(2)      NOT NULL,

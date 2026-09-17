@@ -1,6 +1,9 @@
 package com.darkness.wks.result.entity;
 
+import com.darkness.wks.saju.CalendarType;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -68,12 +71,42 @@ public class Result {
     @Column(name = "hour_pillar", length = 2)
     private String hourPillar;
 
+    /** 입력 폼 자동 채움용 원본 입력값 (#66). birth_date 는 양력 변환값이라 음력 입력을 복원할 수 없다 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "calendar_type", length = 10, nullable = false)
+    private CalendarType calendarType = CalendarType.SOLAR;
+
+    /** 입력한 날짜 문자열 그대로. LUNAR 면 음력 날짜 */
+    @Column(name = "birth_date_input", length = 10)
+    private String birthDateInput;
+
+    @Column(name = "is_leap_month", nullable = false)
+    private boolean leapMonth;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * 닉네임만 바꾼다 (#68). 팔자·점수·해석은 그대로라 재생성이 필요 없고 `resultId`·`shareId`·궁합 기록이 유지된다.
+     * 닉네임은 compatibility 에 복사돼 있지 않아 궁합 목록·공유 페이지에도 자동 반영된다.
+     */
+    public void rename(String nickname) {
+        this.nickname = nickname;
+    }
+
     public Result(String nickname, LocalDate birthDate, LocalTime birthTime, String birthRegion,
                   Gender gender, String yearPillar, String monthPillar, String dayPillar, String hourPillar) {
+        this(nickname, birthDate, birthTime, birthRegion, gender, yearPillar, monthPillar, dayPillar, hourPillar,
+                CalendarType.SOLAR, birthDate.toString(), false);
+    }
+
+    public Result(String nickname, LocalDate birthDate, LocalTime birthTime, String birthRegion,
+                  Gender gender, String yearPillar, String monthPillar, String dayPillar, String hourPillar,
+                  CalendarType calendarType, String birthDateInput, boolean leapMonth) {
+        this.calendarType = calendarType;
+        this.birthDateInput = birthDateInput;
+        this.leapMonth = leapMonth;
         this.nickname = nickname;
         this.birthDate = birthDate;
         this.birthTime = birthTime;

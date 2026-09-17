@@ -119,7 +119,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
   **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
 - `grade` 는 6단계 고정: `SS` 94~100 · `S` 84~93 · `A+` 74~83 · `A` 64~73 · `B+` 52~63 · `B` 0~51 (점수 기준, 2026-09-13 기획 확정)
-- `elements` 는 사주 원국 각 글자의 오행 개수다. 출생 시간이 있으면 합계 8, 모르면 시주를 제외해 합계 6이다
+- `elements` 는 사주 원국 각 글자의 오행 개수다. 출생 시간이 있으면 합계 8, 모르면 시주를 제외해 합계 6이다. **해설 문장이 말하는 "많은 기운"도 이 개수 기준**이라 화면과 어긋나지 않는다 (점수·행운 장소는 자리 가중치를 쓰지만 응답에 노출되지 않는다)
 - `destiny.title` 은 8종 고정: 연애·결혼·자녀 각각 상(`SS`/`S`/`A+`)·하(`A`/`B+`/`B`) 조합 2×2×2. 유형 번호는 기능명세서 순서(1 상상상 … 8 하하하, 연애→결혼→자녀). 제목 문구는 기획(영채) 피드백 1차 (2026-09-15) 반영. 점수로 계산하므로 저장하지 않는다
 - `luckyItem` 은 **오늘의 행운 아이템**. 기능명세서 방식: 오행별 점수 = 사용자 궁합(일간 기준 십성, 인성>비겁>식상>재성>관성) 40% + 오늘 일진 활성도(일진 천간·지지 오행과 생극) 60%. 최고 오행의 풀에서 `생년월일·시간·성별 + 날짜 + 오행` 해시로 하나. **매일 바뀌고**, 같은 입력이면 같은 날 같은 아이템(다시 생성해도 동일). 저장하지 않고 조회 시점에 계산하므로 `POST` 응답과 다음 날 `GET` 응답이 다를 수 있다
 - `luckyPlace` 는 **행운의 장소**. 원국 오행 세력으로 일간 강약을 보고 균형을 보완하는 오행을 정해 그 오행의 장소 풀(3~4곳)에서 `팔자 + 날짜` 해시로 하나. 오행은 사람마다 고정, 장소는 **매일 바뀐다** (2026-09-15 결정). 동국대 캠퍼스 안
@@ -161,6 +161,53 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 - `compatibilities` 는 `createdAt` 내림차순
 - **상대의 생년월일·성별·resultId 는 내려보내지 않는다.** 닉네임과 점수만
+
+### `GET /api/results/{resultId}/input`
+
+결과를 만들 때 **입력한 값을 그대로** 돌려준다. 재입력 폼 자동 채움용. 필드 구성은 `POST /api/results` 요청과 같아서 그대로 폼에 넣으면 된다.
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "nickname": "도윤",
+    "calendarType": "LUNAR",
+    "birthDate": "2002-03-14",
+    "isLeapMonth": false,
+    "birthTime": "14:30",
+    "gender": "FEMALE"
+  }
+}
+```
+
+- `birthDate` 는 **입력 원본**. 음력으로 입력했으면 음력 날짜가 나온다 (양력 변환값이 아니다)
+- `birthTime` 은 `HH:mm`, 모르면 `null`
+- 없는 `resultId` 면 `RESULT_NOT_FOUND` 404
+- **`resultId` 는 본인만 아는 값이라는 전제다.** 이 응답에는 생년월일·성별이 들어 있으므로 프론트는 `resultId` 를 URL·화면에 노출하지 않는다. 공유에는 `shareId` 를 쓴다
+
+---
+
+### `PATCH /api/results/{resultId}`
+
+닉네임만 바꾼다. 팔자·점수·해석·궁합 기록과 `resultId`·`shareId` 는 그대로다.
+
+**Request**
+
+```json
+{ "nickname": "도윤" }
+```
+
+- `nickname` 필수, 8자 이하 (생성과 같은 규칙)
+
+**Response 200** — `GET /api/results/{resultId}` 와 같은 구조
+
+- 닉네임은 `compatibility` 에 복사돼 있지 않고 조회 시 `result` 에서 읽으므로 **공유 페이지와 친구의 궁합 목록에도 바로 반영된다**
+- 형식 오류는 `INVALID_INPUT` 400, 없는 `resultId` 는 `RESULT_NOT_FOUND` 404
+- 인증이 없다. `resultId` 는 본인만 아는 값이라는 전제이므로 프론트는 URL·화면에 노출하지 않는다
+
+---
 
 ### `GET /api/shares/{shareId}`
 
