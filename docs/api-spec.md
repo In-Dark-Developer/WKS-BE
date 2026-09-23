@@ -24,7 +24,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 }
 ```
 
-- HTTP 상태코드도 함께 맞춘다 (200/201/302/400/404/409/500/503)
+- HTTP 상태코드도 함께 맞춘다 (200/201/302/400/401/404/409/500/503)
+- 인증이 필요한 API 는 `Authorization: Bearer <JWT>` 를 보낸다 (§9, 구현 전). 사주·궁합·공유 API 는 인증이 없다
 - `error.message` 는 **사용자에게 그대로 보여줄 수 있는 한국어**
 - 스택트레이스·SQL 오류를 `message` 에 절대 넣지 않는다
 - `traceId` 는 장애 문의 시 로그 추적용. 프론트가 화면에 노출해도 된다
@@ -252,6 +253,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ## 5. 소개팅 사전등록
 
+> **V1 에서 소개팅 프로필(`/api/dating/**`, 명세 확정 전)로 대체될 예정이다.** 대체될 때까지 이 API 는 그대로 동작하고, 대체 시점은 별도로 공지한다. 학교 메일 재학 인증은 소개팅에서도 유지된다.
+
 ### `POST /api/signups/photo-upload-url`
 
 사진은 서버를 경유하지 않고 프론트가 S3에 직접 PUT 한다. 흐름: 이 엔드포인트 호출 → 응답의 `uploadUrl`에 파일 바이트를 `PUT`(Content-Type 헤더는 요청과 동일하게) → 응답의 `photoKey`를 `POST /api/signups`에 그대로 전달.
@@ -403,6 +406,130 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | Day 3 | 해석 실제 생성 + `GET /api/results/{id}` |
 | Day 4 | 궁합 API |
 | Day 5 | 사전등록 API |
+| 2026-09-22 (예정) | 카카오 로그인 (§9). 초안은 지금 볼 수 있다 |
 
 목 데이터와 실제 응답이 어긋나면 **이 문서를 보고 잘못된 쪽을 고친다.**
 "백엔드가 이미 그렇게 짰으니까"는 근거가 아니다.
+
+---
+
+## 9. 카카오 로그인 (V1 · 구현 전 초안)
+
+> **초안이다.** 구현 PR 에서 확정하고 그때 이 표시를 지운다. 기획 원본은 `docs/plan.md` §1.1·§1.3·§8.1.
+> 사주·궁합·공유 API 는 **로그인 없이 지금처럼 동작한다.** 로그인은 (1) 소개팅 이용, (2) 브라우저 저장소를 잃어도 내 결과·궁합지도를 다시 찾기 위한 것이다.
+
+```
+프론트: 카카오 인가 → redirectUri(프론트 콜백)로 code 수신
+  → POST /api/auth/kakao {code, redirectUri, resultId?, ref?}
+  → 응답의 token 을 저장 → 이후 인증이 필요한 API 에 Authorization: Bearer <token>
+```
+
+### `POST /api/auth/kakao`
+
+프론트가 받은 카카오 인가 코드를 넘기면 서버가 카카오와 교환해 로그인시키고 JWT 를 내려준다. 인증이 필요 없는 API 다.
+
+**Request**
+
+```json
+{
+  "code": "카카오가 준 인가 코드",
+  "redirectUri": "https://threadoffate.site/auth/kakao/callback",
+  "resultId": "3f2a9c1e-....",
+  "ref": "PARTNER01"
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `code` | string | ✅ | 카카오 인가 코드 |
+| `redirectUri` | string | ✅ | 인가 요청에 쓴 것과 **같은 값**. 서버에 등록된 주소만 허용한다. 아니면 `INVALID_INPUT` 400 |
+| `resultId` | string \| `null` | 선택 | 브라우저에 저장된 사주 결과 id. 있으면 아래 표대로 계정에 연결·복원한다. 없거나 형식이 틀리거나 존재하지 않아도 **로그인은 성공**한다 (연결만 생략) |
+| `ref` | string \| `null` | 선택 | 제휴 코드. 잘못된 값은 조용히 무시하고 로그인은 성공한다 |
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOi...",
+    "isNewUser": true,
+    "restoredResultId": null,
+    "rewardGranted": null
+  }
+}
+```
+
+- `token`: JWT. 이후 `Authorization: Bearer <token>` 으로 보낸다. **만료 15일, 갱신 없음.** 만료되면 401 이 오고 다시 로그인한다. 로그아웃은 프론트가 이 토큰을 지우는 것으로 처리한다(서버 엔드포인트 없음, 2026-09-23) — 지우기 전 사본은 만료까지 유효하다
+- `isNewUser`: 이번 로그인으로 계정이 새로 만들어졌으면 `true`
+- `rewardGranted`: 제휴·가입 보상이 지급됐으면 `{ "partnerName": "OO", "amount": 10 }`, 아니면 `null`. **소개팅·실 기능이 구현되기 전에는 항상 `null`**
+- 카카오 동의항목은 받지 않는다. 서버는 회원번호만 쓴다. 이름·연락처는 소개팅 신청 폼에서 받는다
+
+**결과 연결·복원 규칙** (`docs/plan.md` §1.1: 계정 결과가 항상 우선)
+
+| 요청의 `resultId` | 계정에 결과 | 서버 동작 | `restoredResultId` |
+|---|---|---|---|
+| 있음 | 없음 | 브라우저 결과를 계정에 연결 | `null` (프론트는 브라우저 값을 그대로 쓴다) |
+| 있음 | 있음 | **계정 결과 복원.** 브라우저 결과는 삭제·병합하지 않는다 | 계정 결과 id (프론트는 브라우저 저장값을 이걸로 교체) |
+| 없음 | 있음 | 계정 결과 복원 | 계정 결과 id |
+| 없음 | 없음 | 아무것도 하지 않는다 (사주 입력으로 유도) | `null` |
+
+- 계정당 결과는 **1개**다. 이미 다른 계정에 연결된 `resultId` 는 연결하지 않는다 (로그인은 성공)
+- 브라우저 결과를 지우거나 합치지 않으므로 친구 궁합 기록은 잃지 않는다. 병합은 V2 과제다
+
+**에러**
+
+| code | HTTP | 상황 |
+|---|---|---|
+| `INVALID_INPUT` | 400 | `code`·`redirectUri` 누락, 등록되지 않은 `redirectUri` |
+| `INVALID_TOKEN` | 400 | 카카오 인가 코드 만료·이미 사용·위조 |
+| `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃. 잠시 후 재시도 안내 |
+
+### `GET /api/me`
+
+**인증 필요.** 로그인 상태와 내 계정 요약. 앱 진입 시 토큰이 유효한지 확인하는 용도로도 쓴다.
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "memberId": 12,
+    "hasResult": true,
+    "hasDatingProfile": false,
+    "threadBalance": 0
+  }
+}
+```
+
+- `hasResult`: 계정에 연결된 사주 결과가 있는지. 결과 자체는 `GET /api/me/result` 로 받는다
+- `hasDatingProfile`·`threadBalance`: 소개팅·실 기능이 구현되기 전에는 `false` / `0` 고정이다. **필드는 처음부터 존재하고 값만 나중에 채워진다**
+- 토큰이 없거나 만료·위조면 `UNAUTHENTICATED` 401
+
+### `GET /api/me/result`
+
+**인증 필요.** 계정에 연결된 **내 사주 결과**를 토큰만으로 돌려준다. 프론트가 `resultId` 를 저장해 두지 않았거나 잃어버렸어도, 로그인 상태면 내 결과를 다시 받을 수 있다.
+
+**Response 200** — `GET /api/results/{resultId}` 와 **같은 구조** (`resultId`·`shareId`·`compatibilities` 포함)
+
+- 응답의 `resultId` 로 `GET /api/results/{resultId}/input`, `PATCH /api/results/{resultId}` 등 기존 API 를 그대로 쓴다. 프론트는 이 값을 다시 저장하면 된다
+- 계정에 연결된 결과가 없으면 `RESULT_NOT_FOUND` 404. 토큰이 없거나 만료·위조면 `UNAUTHENTICATED` 401
+- 비로그인 사용자는 지금처럼 브라우저에 저장한 `resultId` 로 `GET /api/results/{resultId}` 를 쓴다. 이 API 는 **로그인 사용자의 복원용**이다
+- 로그인 응답의 `restoredResultId` 와 같은 결과를 가리킨다 (계정당 결과는 1개)
+
+### 인증 규칙
+
+- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 이후 소개팅(`/api/dating/**`)·실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 헤더 없이 동작하고, 보내도 무시된다**
+- `401 UNAUTHENTICATED` 를 받으면 저장된 토큰을 지우고 다시 로그인시킨다
+- 쿠키를 쓰지 않는다. 토큰을 URL 쿼리에 넣지 않는다
+- 프론트 콜백 주소(운영·로컬·netlify 등)를 **백엔드에 알려줘야 한다.** `redirectUri` 화이트리스트와 카카오 콘솔 등록에 필요하다
+
+### 추가 예정 에러 코드
+
+구현 PR 에서 이 표를 §1 에러 코드 표로 옮기고 `ErrorCode.java` 에 함께 추가한다 (**1:1 유지**).
+
+| code | HTTP | 상황 |
+|---|---|---|
+| `UNAUTHENTICATED` | 401 | 인증이 필요한 API 에 토큰이 없거나 만료·위조 |
+| `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃 (2026-09-21 확정) |

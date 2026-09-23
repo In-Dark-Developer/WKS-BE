@@ -21,3 +21,15 @@ spring:
 
 gemini:
   api-key: ${GOOGLE_API_KEY}
+
+# 카카오 로그인 — 값을 안 채우면 로그인 API 만 KAKAO_UNAVAILABLE 로 비활성화되고 나머지는 그대로 기동한다.
+# redirectUri 는 프론트가 실제로 쓰는 콜백 주소와 정확히 같아야 한다 (예: http://localhost:5173/dev/kakao-callback).
+app:
+  auth:
+    allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS:http://localhost:5173/dev/kakao-callback}
+    kakao:
+      client-id: ${KAKAO_CLIENT_ID:}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+    jwt:
+      # openssl rand -base64 48 로 생성. 32바이트 미만이면 기동 시 실패한다(JwtProvider).
+      secret: ${JWT_SECRET:}

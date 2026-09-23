@@ -83,6 +83,14 @@ public class Result {
     @Column(name = "is_leap_month", nullable = false)
     private boolean leapMonth;
 
+    /**
+     * 로그인 회원이 "저장"한 결과 (V11, 2026-09-22). 플랫 컬럼만 두고 {@code member} 패키지는
+     * 참조하지 않는다(architecture.md §4) — 익명 조회·궁합은 이 필드와 무관하게 그대로 동작한다.
+     * 계정당 결과 1개(부분 unique, DB 가 강제). 회원이 삭제되면 NULL 로 돌아간다.
+     */
+    @Column(name = "member_id")
+    private Long memberId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -93,6 +101,14 @@ public class Result {
      */
     public void rename(String nickname) {
         this.nickname = nickname;
+    }
+
+    /**
+     * 로그인 회원이 이 결과를 "내 결과"로 연결한다 (plan.md §1.1). 호출 전에 이미 다른 회원 것이 아닌지
+     * 확인돼 있어야 한다({@code ResultRepository.findByIdAndMemberIdIsNull}) — 여기서는 그냥 덮어쓴다.
+     */
+    public void linkMember(Long memberId) {
+        this.memberId = memberId;
     }
 
     public Result(String nickname, LocalDate birthDate, LocalTime birthTime, String birthRegion,
