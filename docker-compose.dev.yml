@@ -1,0 +1,31 @@
+# /opt/wks-dev 에서 실행한다. postgres·nginx는 운영 컴포즈(wks 프로젝트)의 컨테이너를 공유하고
+# wks-edge 네트워크로만 통신한다 — 이 파일은 wks-postgres·wks-nginx 를 만들지 않는다.
+#
+# 반드시 프로젝트 이름을 분리해서 실행한다. 안 하면 운영 컨테이너(wks 프로젝트)를 덮어쓸 수 있다:
+#   docker compose -p wks-dev -f docker-compose.dev.yml up -d
+services:
+  app-dev:
+    image: ${APP_IMAGE:-ghcr.io/in-dark-developer/wks-be:dev}
+    container_name: wks-app-dev
+    restart: unless-stopped
+    mem_limit: 450m
+    # DB_PASSWORD·GOOGLE_API_KEY·KAKAO_*·JWT_SECRET 등 앱 시크릿은 전부 여기서 온다.
+    # 운영과 동일 패턴(git-workflow.md "GitHub Secrets") — GitHub Actions 는 이 파일을 만들거나 건드리지 않는다.
+    env_file: .env
+    environment:
+      # 공유 postgres 컨테이너 이름 고정. .env 에서 실수로 바꿀 수 없게 여기 둔다
+      DB_HOST: wks-postgres
+      DB_PORT: 5432
+      JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=128m"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - wks-edge
+    # 호스트에 포트를 publish하지 않는다 — nginx가 wks-edge 네트워크로 접근한다
+
+networks:
+  wks-edge:
+    external: true

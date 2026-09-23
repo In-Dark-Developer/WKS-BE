@@ -61,3 +61,22 @@ app:
   signup:
     email-verification-ttl-minutes: 30
     allowed-email-domains: ${SIGNUP_ALLOWED_EMAIL_DOMAINS:}
+  aws:
+    region: ${AWS_REGION:ap-northeast-2}
+    s3:
+      bucket: ${AWS_S3_BUCKET:}
+      photo-prefix: signup-photos/
+      presigned-url-ttl-minutes: 10
+  auth:
+    # 값이 비어 있으면 로그인만 비활성(KAKAO_UNAVAILABLE)이고 나머지 서비스는 정상 기동한다 (AuthProperties 참고).
+    allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS:}
+    kakao:
+      client-id: ${KAKAO_CLIENT_ID:}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+      token-uri: https://kauth.kakao.com/oauth/token
+      user-info-uri: https://kapi.kakao.com/v2/user/me
+      connect-timeout-ms: 2000
+      read-timeout-ms: 3000
+    jwt:
+      secret: ${JWT_SECRET:}
+      ttl-days: 15
