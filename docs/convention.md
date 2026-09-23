@@ -39,11 +39,8 @@ AI는 자기 문맥 안에서만 일관되게 짜기 때문에, 합칠 때 어�
 | 궁합 점수 | `Compatibility` |
 | 궁합 4등급 (귀인·찰떡·벗·스침) | `CompatibilityTier` |
 | 사전등록 | `Signup` |
-| 로그인 회원 (카카오 계정 1개) | `Member`, `memberId` |
-| 실(재화) 원장 | `ThreadLedger` (`Thread` 단독 클래스명 금지 — `java.lang.Thread` 와 충돌) |
-| 소개팅 (프로필·후보·요청) | `dating/`, `DatingProfile`, `DatingRequest` |
 
-**금지어**: `saju`(클래스명으로), `user`(로그인 회원은 `Member`. 익명 방문자와 뭉뚱그리지 않는다. `user_id`·`users` 테이블도 금지), `match`(클래스·패키지명으로. 소개팅 요청은 `DatingRequest`), `fortune`
+**금지어**: `saju`(클래스명으로), `user`(유저 개념이 없다), `match`(2차 전용), `fortune`
 
 ---
 
@@ -117,25 +114,12 @@ throw new BusinessException(ErrorCode.RESULT_NOT_FOUND);
 
 ---
 
-## 인증
-
-- 로그인은 JWT 다 (`Authorization: Bearer`). **Spring Security 는 쓰지 않는다.** 인증이 필요한 경로(`/api/me`, `/api/dating/**`, `/api/wallet/**`)에만 인터셉터로 검증한다
-- 로그인 회원은 Controller 에서 `@CurrentMember` 인자로 받는다 (argument resolver). 토큰 파싱을 Controller·Service 에서 직접 하지 않는다
-- 사주·궁합·공유 API 는 `Authorization` 헤더를 읽지 않는다. 새 API 는 **익명 허용인지 인증 필수인지** PR 설명에 적는다
-- JWT 는 서명 알고리즘을 고정하고(헤더의 `alg` 를 믿지 않는다) 클레임은 `sub`(memberId)·`iat`·`exp` 만 담는다. 서명키는 환경변수
-- 인증 경로를 바꾸는 PR 은 **익명 API 스모크 테스트**(기존 엔드포인트 전부 헤더 없이 성공)가 통과해야 머지한다
-- 잠긴 정보(소개팅 해금 대상)는 서버가 응답에서 뺀다. 프론트 CSS 블러에 맡기지 않는다 (plan §9.1)
-
----
-
 ## Flyway
 
 - 파일명: `V{번호}__{설명}.sql` — `V2__add_signup_memo.sql`
 - **머지된 마이그레이션 파일은 절대 수정하지 않는다.** 새 파일을 추가한다
 - 번호 충돌 방지: 파일 만들기 **전에** `docs/handoff.md` 예약 표에 적는다
 - `V1__init.sql` 은 `docs/architecture.md` 의 스키마를 그대로 옮긴다
-- **같은 번호 파일이 둘이면 앱이 기동하지 못한다.** dev 를 머지한 직후 `ls src/main/resources/db/migration` 으로 중복을 확인한다 (2026-09-20 `V9__add_result_input_columns` / `V9__add_signup_photo_key` 중복 발견)
-- **낮은 번호가 높은 번호보다 늦게 머지돼도 기동하지 못한다.** `outOfOrder` 가 꺼져 있어 이미 적용된 번호보다 낮은 마이그레이션은 거부된다. 번호는 머지 순서대로 쓰고, 순서가 바뀌면 나중 PR 의 번호를 바꾼다
 
 ---
 
@@ -149,7 +133,6 @@ log.info("result created. id={}", result.getId());
 - `System.out.println` 금지
 - **생년월일시·이메일을 평문으로 찍지 않는다.** `resultId`, `signupId` 만
 - LLM 요청·응답 전문을 로그에 남기지 않는다. 토큰 수·소요 시간만
-- 카카오 `id`·인가 코드·액세스 토큰·client secret·JWT 를 로그에 남기지 않는다. `memberId` 만
 - 모든 로그에 `traceId` 가 찍힌다 (`TraceIdFilter` + MDC)
 
 ---
@@ -157,7 +140,6 @@ log.info("result created. id={}", result.getId());
 ## 설정
 
 - 시크릿은 환경변수. `application.yml` 하드코딩 금지
-- **`.env*.example`·`application-*.yml` 에도 실제 값을 넣지 않는다.** 플레이스홀더만 둔다 (`.env.prod.example` 에 실제 값이 커밋된 사고가 있었다, #72 후속)
 - 로컬 설정은 `application-local.yml` — **`.gitignore` 대상**.
   저장소에는 `application-local.yml.example` 만 둔다
 - `@Value` 를 흩뿌리지 말고 `@ConfigurationProperties` 로 묶는다
@@ -210,7 +192,6 @@ DB·SMTP·LLM 전부 명시적으로 설정한다.
 - DB 테스트는 **Testcontainers(PostgreSQL)**. H2는 문법이 달라 로컬 통과/배포 실패가 난다
 - 통합 테스트는 공통 베이스 클래스를 상속한다. 각자 `@SpringBootTest` 설정을 짜면 CI가 느려진다
 - `saju/` 는 스프링 컨텍스트 없이 순수 단위 테스트
-- 카카오 실서버는 테스트에서 호출하지 않는다. 카카오 호출은 목킹(`MockRestServiceServer` 등)하고, 실제 왕복은 개발 앱으로 수동 확인한다
 
 ---
 
@@ -244,7 +225,7 @@ test: 궁합 점수 대칭성 테스트 추가
 
 | 항목 | 왜 생기나 |
 |---|---|
-| Spring Security 추가 | "Spring Boot 세팅"의 기본값처럼 학습돼 있다. 로그인은 JWT 인터셉터로 처리한다 (architecture §4) |
+| Spring Security 추가 | "Spring Boot 세팅"의 기본값처럼 학습돼 있다 |
 | Entity에 `@Setter`, `@Data` | 예제 코드에 흔하다 |
 | `ddl-auto: update` | 튜토리얼 기본값 |
 | springdoc **2.x** | Boot 3 기준 학습. Boot 4에서는 기동 실패 |
@@ -255,12 +236,5 @@ test: 궁합 점수 대칭성 테스트 추가
 | 만세력 임의 구현 | "할 수 있을 것 같아서" |
 | 프롬프트에 생년월일·닉네임 삽입 | "정보가 많을수록 좋은 답이 나온다고 학습" |
 | 카테고리별 LLM 개별 호출 | 자연스러운 구조로 보인다. 무료 티어 한도를 5배로 태운다 |
-| 한 계정에 결과 여러 개 연결 | 계정당 결과는 1개(plan §1.1). 병합은 V2. `result.member_id` 부분 unique 가 막는다 |
-| 카카오 닉네임·이메일·프로필 저장 | "회원 정보니까". `member` 는 `kakao_id` 만 |
-| 사주·궁합 API 에 로그인 요구 | "회원 기능이 생겼으니 보호해야 할 것 같아서". 사주는 익명 유지가 원칙 |
-| 카카오 access token 저장 | 로그인 이후 카카오를 다시 부를 일이 없다. 저장하지 않는다 |
-| 잠긴 필드를 프론트 CSS 로만 블러 | 개발자도구로 이름·사진이 보인다. 서버가 값을 응답에서 뺀다 (plan §9.1) |
-| 사진 공개 URL·순번 파일명 | 열거로 남의 사진이 노출된다. 서명된 임시 URL (plan §9.2) |
-| `Thread` 클래스, `user_id`, `users` 테이블 | `java.lang.Thread` 충돌 / 금지어 `user` 와 Postgres 예약어 |
 
-**이 표는 실제로 겪은 것들이다.** (로그인·소개팅 관련 마지막 7행은 도입 전 예상 항목이다. 겪으면 갱신한다) PR 리뷰에서 이것부터 본다.
+**이 표는 실제로 겪은 것들이다.** PR 리뷰에서 이것부터 본다.

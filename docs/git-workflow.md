@@ -2,18 +2,12 @@
 
 백엔드 3인. **이슈 기반 브랜치 → dev 병합 → dev를 main으로 릴리즈** 구조.
 
-> **⚠️ 현재 운영 상태 (2026-09-21).** 아래 본문은 목표 구조이고, 실제와 다른 부분은 ⚠️ 로 표시했다.
->
-> - **`dev` 에 push 하면 EC2 로 자동 배포된다** (`.github/workflows/deploy.yml`). 개발 서버가 따로 없어서 `dev` push 가 곧 운영 도메인(`api.threadoffate.site`) 배포다. `main` 배포는 구성돼 있지 않다 (미정)
-> - **배포 파이프라인이 테스트를 돌리지 않는다.** Docker 이미지를 `bootJar -x test` 로 만든다. PR 용 CI 워크플로도 없다. 머지 전에 로컬에서 `./gradlew test` 를 직접 돌린다
-> - **브랜치 보호 설정은 할 수 없다** (private 저장소 무료 플랜, handoff 현재 상태). PR 리뷰가 유일한 방어선이다
-
 ---
 
 ## 브랜치 구조
 
 ```
-main                    ⚠️ 목표: 프로덕션 서버. 현재는 배포되지 않는다
+main                    프로덕션 서버. 배포되는 브랜치
  └── dev                통합 브랜치. 모든 작업이 여기로 모인다
       ├── feat/12-saju-calculator
       ├── feat/15-compatibility-api
@@ -22,8 +16,8 @@ main                    ⚠️ 목표: 프로덕션 서버. 현재는 배포되�
 
 | 브랜치 | 역할 | 직접 푸시 |
 |---|---|---|
-| `main` | 릴리즈 기록. ⚠️ 목표는 **프로덕션**이지만 현재는 배포되지 않는다 | 금지 (핫픽스 예외) |
-| `dev` | 통합. ⚠️ 현재 **push 가 곧 운영 배포**다 | 금지 (PR로만) |
+| `main` | **프로덕션.** 항상 동작해야 한다 | 금지 (핫픽스 예외) |
+| `dev` | 통합. 작업물이 합쳐지는 곳 | 금지 (PR로만) |
 | `feat/*`, `fix/*` | 개인 작업 | 자유 |
 
 **작업 브랜치는 항상 `dev` 에서 딴다.**
@@ -40,7 +34,7 @@ main                    ⚠️ 목표: 프로덕션 서버. 현재는 배포되�
 이슈에 쓸 것:
 - 무엇을 하는지 (한 줄)
 - 담당자 assign
-- 라벨: `backend` + `saju` / `result` / `compatibility` / `signup` / `auth` / `member` / `dating` / `wallet` / `infra`
+- 라벨: `backend` + `saju` / `result` / `compatibility` / `signup` / `infra`
 - **관련 요구사항 ID** (`FR-SJ-02` 등) — `docs/backend-requirements.md` 참조
 
 요구사항 ID를 적는 게 핵심이다. 나중에 "이거 왜 이렇게 만들었지"를 문서로 되짚을 수 있다.
@@ -88,14 +82,12 @@ PR 본문에 `Closes #12` 를 쓰면 머지 시 이슈가 자동으로 닫힌다
 - 리뷰어 1명 승인 후 머지 (3명이라 순환 리뷰가 자연스럽다)
 - **Squash and merge**
 - 머지 후 브랜치 삭제
-- CI(빌드 + 테스트) 통과 필수 — ⚠️ **아직 CI 가 없다.** 머지 전에 로컬에서 `./gradlew test` 를 돌리고 PR 에 결과를 적는다
+- CI(빌드 + 테스트) 통과 필수
 - **500줄 이하** 목표. 넘으면 이슈를 쪼갠다
 
 ---
 
 ## dev → main 릴리즈
-
-> ⚠️ 현재 `main` 으로 배포하는 워크플로가 없다. 운영 배포는 `dev` push 로 이미 일어난다. 이 절은 `main` 배포를 구성한 뒤의 절차다.
 
 `main` 은 프로덕션이므로 **아무 때나 머지하지 않는다.**
 
@@ -131,8 +123,6 @@ git push origin v0.1.0
 
 축제 당일 프로덕션 장애는 예외 경로다.
 
-⚠️ 현재 운영 배포는 `dev` 기준이라 핫픽스도 **`dev` 로 머지돼야 반영**된다.
-
 ```
 main → hotfix/<이슈번호>-<설명> → main (PR, 빠른 승인)
                                 → dev 에도 반드시 머지
@@ -167,8 +157,6 @@ main → hotfix/<이슈번호>-<설명> → main (PR, 빠른 승인)
 
 ## 브랜치 보호 설정 (Day 1 · 도윤)
 
-> ⚠️ private 저장소 무료 플랜이라 **지금은 설정할 수 없다** (handoff 현재 상태). 아래는 유료 전환·public 전환 시의 목표 설정이다. 지금은 PR 리뷰로 대체한다.
-
 GitHub → Settings → Branches
 
 **`main`**
@@ -186,36 +174,27 @@ GitHub → Settings → Branches
 
 ## CI/CD 매핑
 
-> **확정 (2026-09-23).** 개발 서버를 따로 둔다(`api-dev.threadoffate.site`, 같은 EC2·같은 postgres·nginx 컨테이너 공유,
-> `docker-compose.dev.yml` + `/opt/wks-dev`). 브랜치 → 배포 대상은 1:1로 고정: `main` → 운영, `dev` → 개발 서버.
-> 자세한 절차는 `docs/runbook-dev-server.md`.
-
 | 이벤트 | 동작 |
 |---|---|
-| `dev`·`main` 대상 PR 생성·갱신 | `ci.yml`: `./gradlew build`(컴파일 + 테스트). 배포 없음 |
-| `dev` push | `deploy-dev.yml`: Docker 이미지 빌드 → `:dev` 태그로 GHCR push → `/opt/wks-dev`에서 `docker compose -p wks-dev` 로 배포 → `api-dev.threadoffate.site/api/health` 헬스체크 |
-| `main` push | `deploy.yml`: Docker 이미지 빌드 → `:latest` 태그로 GHCR push → `/opt/wks`에서 배포. 트리거를 `dev`→`main`으로 바꾸는 변경은 **적용 완료**(2026-09-23, 곽도윤 확인) |
-| 태그 push | ⚠️ 현재 없음. (목표: 이미지 태깅) |
+| `feat/*` → `dev` PR 생성·갱신 | `./gradlew build` (컴파일 + 테스트) |
+| `dev` 머지 | 빌드 + 테스트 (+ 개발 서버 배포, 두는 경우) |
+| `dev` → `main` 머지 | 빌드 → Docker 이미지 → **EC2 프로덕션 배포** |
+| 태그 push | 이미지 태깅 |
 
-**⚠️ 머지 직후 공백 주의**: `deploy.yml` 트리거 변경이 `dev`에 머지되는 순간부터 **`dev` push는 더 이상 운영을
-배포하지 않는다** (deploy-dev.yml만 반응, 개발 서버로 감). 운영 배포는 이제 `dev`→`main` PR 머지로만 일어나는데,
-**아직 한 번도 `main`으로 릴리즈해본 적이 없다** — `main` 브랜치엔 이 워크플로 자체가 없던 상태였다. 즉 머지 후
-첫 `dev`→`main` 릴리즈 PR을 만들어 병합하기 전까지는 운영에 새 커밋이 전혀 배포되지 않는 공백이 생긴다.
-기존 운영 컨테이너는 계속 떠 있으니 서비스 중단은 아니지만, **핫픽스가 필요하면 이 공백 중엔 자동 배포가
-안 된다는 걸 팀이 알고 있어야 한다.** 이 변경을 머지하면 가급적 빨리 첫 `dev`→`main` PR을 만들어 파이프라인이
-실제로 동작하는지 확인할 것 — `docs/handoff.md`에도 남겨둠.
+**Day 1에 도윤이 이 파이프라인을 뚫는다.**
+Day 1 끝에 `/api/health` 가 프로덕션 도메인에서 200을 반환해야 한다.
+배포를 마지막 날로 미루면 그날 하루가 배포 삽질로 사라진다.
 
-**롤백을 실제로 한 번 해본다.** 문서로만 써두면 당일에 작동하지 않는다.
+**롤백을 Day 6에 실제로 한 번 해본다.** 문서로만 써두면 당일에 작동하지 않는다.
+
+> **미결정**: 개발 서버를 따로 둘지. EC2를 하나 더 띄우면 비용이 늘고,
+> 안 띄우면 `dev` 는 CI만 돌고 배포는 안 된다.
+> 안 두는 경우 프론트는 프로덕션(`main`)에 붙어야 하므로, **릴리즈 주기가 프론트 작업 속도를 좌우한다.**
+> Day 1에 도윤이 결정한다.
 
 ### GitHub Secrets
 
-**운영(`deploy.yml`)**: `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`, `EC2_APP_DIR`. 앱 시크릿(`DB_PASSWORD`, `GOOGLE_API_KEY`, `MAIL_*` 등)은 GitHub 가 아니라 **EC2 의 `/opt/wks/.env`** 에 둔다 (`docker-compose.prod.yml`)
-
-**개발(`deploy-dev.yml`)**: 같은 EC2·같은 SSH 키라 `EC2_HOST`·`EC2_USER`·`EC2_SSH_KEY`를 그대로 재사용한다.
-배포 경로(`/opt/wks-dev`)·컴포즈 프로젝트명(`wks-dev`)은 시크릿으로 안 두고 워크플로에 고정값으로 박아뒀다 —
-시크릿 값이 잘못 바뀌어 운영 경로를 가리키는 사고를 막기 위해서다. 앱 시크릿도 운영과 같은 패턴으로
-**EC2 의 `/opt/wks-dev/.env`** 에 둔다(`DEV_GOOGLE_API_KEY` 같은 GitHub Secrets는 만들지 않는다 — GitHub Actions가
-`.env`를 만들거나 건드리지 않으므로 애초에 쓸 곳이 없다).
+`DB_PASSWORD`, `GOOGLE_API_KEY`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `EC2_SSH_KEY`, `EC2_HOST`
 
 ---
 

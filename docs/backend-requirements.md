@@ -4,7 +4,7 @@
 > **범위**: 사주 계산·해석·공유·친구궁합 + 소개팅 사전등록(이메일 인증)
 > **관련 문서**: `product-plan.md` · `AGENTS.md` · `docs/architecture.md` · `docs/api-spec.md`
 >
-> 최종 수정: 2026-09-21 (V1 기획 반영: §16 카카오 로그인, §17 소개팅·실·궁합 이유. 기획 원본은 `docs/plan.md`)
+> 최종 수정: 2026-09-11
 
 ---
 
@@ -43,12 +43,12 @@ LLM 비용·지연·한도 통제, 데이터 무결성과 개인정보 보호, �
 ### 스택
 
 Java 17 · Spring Boot 4.1.1 · Gradle Groovy · PostgreSQL 16 · JPA · Flyway ·
-Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16) ·
+Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers ·
 `com.google.genai:google-genai` (Gemini Flash 무료 티어)
 
 패키지 루트: `com.darkness.wks`
 
-**제외**: Spring Security · Redis · QueryDSL · H2 (사유는 `docs/architecture.md` §2). JWT 는 2026-09-21 로그인 도입(§16)으로 편입
+**제외**: Spring Security · Redis · JWT · QueryDSL · H2 (사유는 `docs/architecture.md` §2)
 
 ---
 
@@ -65,10 +65,9 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | `GET` | `/api/signups/verify` | 도윤 |
 | `GET` | `/api/health` | 도윤 |
 
-> **V1(축제 2026-09-29 ~ 10-01) 추가 범위**는 `docs/plan.md` §8 에 있고, 요구사항은 §16·§17 이다. 아래 표는 1차 릴리즈(파일럿) 기준이다.
 ### 제외 (2차 이후)
 
-현금 결제(실 충전) / 푸시 알림 / 게스트·계정 결과 병합 / 실시간 채팅 / 관리자 페이지 / 이미지 생성 (로그인·소개팅 요청·실은 V1 에 편입, §16·§17)
+로그인·세션 / 매칭 배치 알고리즘 / WebSocket 채팅 / 관리자 API / 결과 수정·재계산 / 푸시 알림 / 이미지 생성
 
 ---
 
@@ -263,7 +262,6 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | FR-SU-14 | P1 | 신청자 수·성비 조회 쿼리를 문서화 |
 | FR-SU-15 | P1 | SMTP 발송 계정의 일일 한도를 확인하고 기록 |
 | FR-SU-16 | P0 | **(2026-09-16 정책 변경, #54)** 프로필 사진 업로드를 이번 릴리즈에 포함한다. S3 presigned URL 방식(`POST /api/signups/photo-upload-url` → S3 직접 PUT → `photoKey`를 `POST /api/signups`에 전달). `signup.photo_key`(V8) 선택 컬럼. 허용 포맷 `image/jpeg`·`image/png`·`image/webp`만, 용량 제한은 서버에서 강제하지 않음(S3 정책·프론트에서 처리 필요 — 미정) |
-| FR-SU-17 | P1 | **(2026-09-21)** 소개팅은 로그인 필수이며 V1 에서 **소개팅 프로필(§17)이 사전등록(`signup`)을 대체**한다. 대체될 때까지 파일럿 `/api/signups/**` 는 익명으로 유지하고 `signup.member_id` 는 추가하지 않는다. **학교 메일 재학 인증(FR-SU-02~09·12·13)은 폐기하지 않고 §17 FR-DT-02 로 이관**한다 |
 
 ### 인수 조건
 
@@ -315,8 +313,8 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | NFR-S-04 | P0 | **LLM 프롬프트에 개인정보 금지** (FR-GM-01) |
 | NFR-S-05 | P0 | 에러 응답에 스택트레이스·SQL 오류 노출 금지 |
 | NFR-S-06 | P0 | CORS 화이트리스트. 와일드카드 금지 |
-| NFR-S-07 | P0 | 축제 종료 +2주(2026-10-15) 전량 파기. **파기 스크립트를 미리 만든다.** 회원·소개팅 프로필·사진·실 원장이 대상인지는 미결정 (§15) |
-| NFR-S-08 | P0 | 사주 데이터는 기본적으로 익명이다. 회원과의 연결은 `result.member_id` 하나뿐이고 로그인 요청에 `resultId` 가 실렸을 때만 생긴다 (plan §1.1). 이메일·프로필·연락처와는 묶지 않는다 (§16) |
+| NFR-S-07 | P0 | 축제 종료 +2주 전량 파기. **파기 스크립트를 미리 만든다** |
+| NFR-S-08 | P0 | 사주 단계 데이터를 이메일과 묶지 않는다 |
 | NFR-S-09 | P0 | `application-local.yml` 은 `.gitignore`. 저장소엔 `.example` 만 |
 
 ### 운영
@@ -441,7 +439,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 
 | 가정 | 확인 필요 |
 |---|---|
-| 선릴리즈는 축제 D-day 이전이다 | ✅ 파일럿 완료. 축제는 2026-09-29 ~ 10-01 (2026-09-21 확정) |
+| 선릴리즈는 축제 D-day 이전이다 | D-day 미확정 |
 | MIT/Apache 만세력 라이브러리가 존재한다 | **Day 1 확인** |
 | Gemini 무료 티어 한도로 축제 트래픽을 감당할 수 있다 | **Day 6 실측** |
 | 학교 웹메일 도메인을 확정할 수 있다 | 미확정 |
@@ -453,6 +451,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 
 | 항목 | 시점 | 담당 |
 |---|---|---|
+| 축제 D-day / 선릴리즈 일자 | 즉시 | 도윤 |
 | 만세력 라이브러리 | **Day 1** | 은호 |
 | 프론트 배포 도메인 (CORS) | Day 1 | 도윤 |
 | 개발 서버 별도 운영 여부 | Day 1 | 도윤 |
@@ -464,134 +463,5 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | 데이터 파기 스크립트 | Day 5 | 도윤 |
 | Gemini 무료 티어 RPM·RPD 실측 | Day 6 | 은호 |
 | 무료 한도 부족 시 결제 계정 연결 여부 | Day 6 | 도윤 |
-| V1 로그인·소개팅 미결정 사항 | `docs/plan.md` §10 TBD, `docs/architecture.md` §9 | 도윤 + 기획 |
-| 데이터 파기 범위: 회원·소개팅 프로필·사진·실 원장 (NFR-S-07) | 소개팅 BE 전 | 도윤 + 기획 |
 
 **결정되면 표에서 지우고 본문에 반영한다.**
-
----
-
-## 16. 카카오 로그인 (FR-AU) · 도윤
-
-> **2026-09-21 기획 반영.** 기획 원본은 `docs/plan.md` §1.1·§1.3·§8.1. 사주·궁합의 모든 기능은 **비로그인으로 사용 가능**해야 한다.
-> 로그인의 목적은 (1) 소개팅 이용, (2) 브라우저 저장소를 잃어도 내 결과와 궁합 지도를 다시 찾는 것이다.
-> **구현 전.** API 초안은 `docs/api-spec.md` §9 에 있고 구현 PR 에서 확정한다.
-> **2026-09-21 결정:** JWT 채택(만료 30일·갱신 없음). 로그아웃·기기 관리·토큰 폐기·**탈퇴는 V1 에 없다.** 개인정보 삭제 요청은 운영자가 직접 처리한다.
-> **2026-09-23 조정:** 만료를 15일로 줄이고, 프론트 로그아웃 버튼을 추가했다(로컬 토큰 삭제뿐 — 서버 쪽 토큰 폐기·엔드포인트는 여전히 없다). 아래 FR-AU-09·§16.1 말미 참고.
-
-### 16.1 요구사항
-
-| ID | P | 요구사항 |
-|---|---|---|
-| FR-AU-01 | P0 | 사주·궁합·공유 API 는 로그인 도입 전과 동일하게 인증 없이 동작한다. `Authorization` 헤더를 요구하지도 읽지도 않는다 |
-| FR-AU-02 | P0 | `POST /api/auth/kakao {code, redirectUri, resultId?, ref?}`: 프론트가 받은 인가 코드를 백엔드가 카카오와 교환한다. client secret 은 서버에만 둔다 |
-| FR-AU-03 | P0 | `redirectUri` 는 화이트리스트 값만 허용한다. 목록 밖이면 400 `INVALID_INPUT` |
-| FR-AU-04 | P0 | 최초 로그인 시 `member` 를 만들고(`isNewUser: true`) 이후 로그인은 `last_login_at` 을 갱신한다. 식별자는 `kakao_id` 이고 카카오 프로필은 저장하지 않는다 |
-| FR-AU-05 | P0 | 결과 연결·복원은 plan §1.1 을 따른다. 요청에 `resultId` 가 있고 계정에 결과가 없으면 `result.member_id` 로 연결하고, 계정에 결과가 있으면 그 결과를 `restoredResultId` 로 응답한다. 브라우저 결과는 삭제·병합하지 않는다 |
-| FR-AU-06 | P0 | `resultId` 가 없거나 형식이 틀리거나 존재하지 않아도 로그인은 성공한다 (연결만 생략) |
-| FR-AU-07 | P0 | 이미 다른 회원에 연결된 결과는 연결하지 않는다. 로그인은 성공한다 |
-| FR-AU-08 | P0 | 잘못된 `ref`(제휴 코드)는 조용히 무시하고 로그인은 성공한다 |
-| FR-AU-09 | P0 | JWT: HS256, 서명키는 환경변수, 알고리즘 고정, 클레임은 `sub`·`iat`·`exp` 만. 만료 15일·갱신 없음(2026-09-21 결정, 2026-09-23 30일→15일 조정). 만료되면 재로그인 |
-| FR-AU-10 | P0 | 인증이 필요한 API 에 토큰이 없거나 무효면 401 + `UNAUTHENTICATED` (`ApiResponse` JSON, HTML 아님) |
-| FR-AU-11 | P0 | `GET /api/me` (인증 필요): 로그인 상태, 결과·프로필 보유 여부, 실 잔액 |
-| FR-AU-12 | P0 | 계정당 결과는 1개다. `result.member_id` 부분 unique 로 DB 가 강제한다 |
-| FR-AU-13 | P0 | `GET /api/me/result` (인증 필요): 계정에 연결된 결과를 `GET /api/results/{resultId}` 와 같은 구조로 돌려준다. 연결된 결과가 없으면 404 `RESULT_NOT_FOUND`. 클라이언트가 `resultId` 를 갖고 있지 않아도 내 결과를 찾을 수 있게 한다 |
-
-> 서버 쪽 토큰 폐기·기기 관리는 **하지 않는다** (2026-09-21 결정 유지). 로그아웃은 프론트가 로컬 토큰을 지우는 것으로 처리한다(2026-09-23) — 서버 엔드포인트는 없고, 지우지 않은 사본은 만료(15일)까지 유효하다. 가입 보너스 실 10 지급은 §17 FR-TH-04 에서 다룬다.
-> FR-AU-06·07·05 의 `restoredResultId` 응답(연결한 경우 `null`)은 plan.md 에 없던 부분을 채운 것이다 — 기획 확인 필요.
-
-### 16.2 비기능 (NFR-AU)
-
-| ID | P | 요구사항 |
-|---|---|---|
-| NFR-AU-01 | P0 | 카카오 access token·프로필·인가 코드를 저장하지 않는다 |
-| NFR-AU-02 | P0 | 카카오 `id`·인가 코드·토큰·client secret·JWT 원문을 로그에 남기지 않는다. `memberId` 만 |
-| NFR-AU-03 | P0 | 카카오 client secret·JWT 서명키는 환경변수. `.env*.example` 에도 실제 값을 넣지 않는다 |
-| NFR-AU-04 | P0 | 카카오 외부 호출(토큰·유저 정보)에 타임아웃을 명시한다 (NFR-P-04) |
-| NFR-AU-05 | P0 | JWT 라이브러리는 팀 승인 후 도입한다 (convention). Boot 4 의 Jackson 3 과 공존하는지 확인한다 |
-
-### 16.3 인수 조건
-
-- 인증 도입 후 기존 익명 API 가 `Authorization` 헤더 없이 이전과 같은 응답을 준다 (스모크 테스트)
-- 유효한 code 로 `POST /api/auth/kakao` → 200 + 토큰. 같은 카카오 계정으로 다시 로그인하면 `member` 1행이고 `last_login_at` 이 갱신된다
-- 브라우저 결과 O · 계정 비어 있음 → `result.member_id` 가 채워지고 `restoredResultId` 는 `null`
-- 브라우저 결과 O · 계정 결과 O → `restoredResultId` 가 계정 결과이고 브라우저 결과 행은 그대로다
-- 브라우저 결과 X · 계정 결과 O → `restoredResultId` 가 계정 결과
-- 화이트리스트 밖 `redirectUri` → 400. 잘못된 `ref` → 200
-- 토큰 없이·만료된 토큰으로 `GET /api/me` → 401 + `success:false` JSON + `UNAUTHENTICATED`
-- 연결된 결과가 있는 계정으로 `GET /api/me/result` → 200 + `resultId` 를 포함한 전체 결과. 결과가 없는 계정 → 404 `RESULT_NOT_FOUND`. 토큰 없이 → 401
-- 같은 계정에 결과 두 개 연결을 시도하면 DB 제약이 막는다 (테스트)
-- `member` 테이블에 닉네임·이메일·토큰 컬럼이 없고, 로그·응답 어디에도 JWT 원문과 카카오 토큰이 없다
-
-### 16.4 구현 순서
-
-**선행 조건**
-
-| 항목 | 내용 |
-|---|---|
-| P0-a | 카카오 디벨로퍼스 콘솔: 운영·개발 앱, redirect URI(**프론트 콜백 주소**), client secret, 동의항목 없이 진행 가능한지 확인 |
-| P0-b | `.env.prod.example` 의 실제 비밀값을 플레이스홀더로 바꾸고 키를 폐기·재발급. JWT 서명키·카카오 secret 을 같은 방식으로 다루면 안 된다 |
-| P0-c | JWT 라이브러리 도입 팀 승인 |
-| P0-d | 사진 PR #54: `V9` 중복을 `V10` 으로 개명 완료 (2026-09-21). PR 은 곽도윤이 올린다. **로그인 PR(V11)보다 먼저 머지한다** (Flyway 번호 순서, handoff 참고). 소개팅 프로필이 `signup` 을 대체하면 사진 업로드는 그쪽으로 이관한다 |
-
-**일정** (plan.md §11, 축제 2026-09-29 ~ 10-01)
-
-| 마감 | 내용 |
-|---|---|
-| 09/22 오전 | 로그인 구현: `auth/`·`member/`, V11(`member` + `result.member_id`), JWT, `POST /api/auth/kakao`, `GET /api/me`. 통합 테스트 기반(Testcontainers)은 이 PR 안에 최소한으로 |
-| 09/22 오전 | 사주 BE: 프롬프트 수정 + 계정 스키마 연결 |
-| 09/25 | 소개팅 BE 1차. **명세(plan §7·TBD)가 09/22 전에 확정되지 않으면 어렵다** |
-
----
-
-## 17. V1 소개팅·실·궁합 이유 (FR-DT · FR-TH · FR-CP-11~) · 담당 미정
-
-> **기획 원본은 `docs/plan.md` §1.2·§1.4·§7~§9.** 소개팅 기능 명세는 미확정이고 `TBD` 는 구현하지 않는다. 여기에는 **확정된 원칙만** 요구사항으로 옮긴다. 화면 동작은 plan.md 를 본다.
-> **구현 전.**
-
-### 17.1 소개팅 (FR-DT)
-
-| ID | P | 요구사항 |
-|---|---|---|
-| FR-DT-01 | P0 | 소개팅 API(`/api/dating/**`)는 로그인 필수다 |
-| FR-DT-02 | P0 | **학교 메일 재학 인증** (2026-09-21 확정). 도메인 화이트리스트(`INVALID_EMAIL_DOMAIN`), 매직링크(TTL 30분·1회용·`INVALID_TOKEN`), 메일 발송 실패가 프로필 저장을 롤백하지 않고 재발송 가능 — 기존 FR-SU-02~09·12·13 을 이관한다. 인증 시점·저장 위치·이후 게이트는 미정 (plan.md TBD-16) |
-| FR-DT-03 | P0 | **서버 측 블러.** 해금되지 않은 필드는 응답에 값을 넣지 않고 `locked: true` 만 내린다 (plan §9.1) |
-| FR-DT-04 | P0 | 사진 URL: 잠긴 상태에서는 내리지 않고, 해금 후에도 추측 가능한 경로·공개 버킷을 쓰지 않는다. 인증 경로 또는 서명된 임시 URL (plan §9.2) |
-| FR-DT-05 | P0 | `candidateId` 는 불투명한 값(UUID 등). `member.id` 를 그대로 쓰지 않는다 (plan §9.3) |
-| FR-DT-06 | P0 | 해금은 실 차감과 해금 기록을 한 트랜잭션으로 한다. 이미 해금한 필드는 차감 없이 값만 반환한다 (plan §8.5) |
-| FR-DT-07 | P0 | 해금·요청·출석의 중복은 DB 제약(UNIQUE)으로 막는다. "조회 후 삽입"만으로는 동시 요청에서 뚫린다 (plan §9.5) |
-| FR-DT-08 | P0 | 요청 수락·거절은 받는 사람 본인만 할 수 있다 (권한 검사) |
-| FR-DT-09 | P0 | 연락처는 매칭 성사 시에만 공개한다. 공개 범위는 미정 (plan.md TBD-9) |
-
-### 17.2 실 (FR-TH)
-
-| ID | P | 요구사항 |
-|---|---|---|
-| FR-TH-01 | P0 | 모든 증감은 원장(`thread_ledger`)에 기록한다. 잔액 컬럼만 두지 않는다 |
-| FR-TH-02 | P0 | `UNIQUE (member_id, reason, ref_id)` 이고 **`ref_id` 는 NOT NULL** (2026-09-21 결정). NULL 이면 unique 가 중복 지급을 못 막는다. reason 별 값 규칙은 `docs/architecture.md` §5 |
-| FR-TH-03 | P0 | 잔액은 원장 합계로 계산하거나, 잔액 컬럼을 두면 원장과 같은 트랜잭션에서 갱신한다 |
-| FR-TH-04 | P0 | 획득: 가입 10(첫 로그인 1회), 출석 5(1일 1회, KST 날짜 기준), 내 궁합지도에 친구 1명 등록 시 +3(공유자, 궁합 1건당 1회), 제휴처 유입(제휴처별 값). 소모: 사진 10 · 이름 7 · 학과 5 · 궁합 까닭 3 · 전체 25 (plan §1.4) |
-| FR-TH-05 | P0 | 현금 결제(충전)는 V1 에 없다 |
-| FR-TH-06 | P0 | 잔액 부족 시 `INSUFFICIENT_THREAD`. HTTP 상태는 미정 (plan.md TBD-11) |
-
-### 17.3 궁합 이유·사주 입력
-
-| ID | P | 요구사항 |
-|---|---|---|
-| FR-CP-11 | P0 | 궁합 상세 이유는 등록 시가 아니라 **처음 열어볼 때** LLM 으로 생성해 DB 에 캐싱한다. 재조회는 LLM 호출 0회 (plan §1.2) |
-| FR-CP-12 | P0 | 생성 실패 시 해당 영역만 미노출하고 화면 전체를 에러로 만들지 않는다. 재시도할 수 있다 |
-| FR-CP-13 | P0 | 세 질문을 **한 번의 호출**로 생성한다 (FR-GM-02) |
-| FR-CP-14 | P0 | 프롬프트에는 팔자·점수·관계유형만 넣는다 (FR-GM-01). 호출은 `CallBudget` 에 집계된다 |
-| FR-CP-15 | P1 | `GET /api/compatibilities/{id}/reason` 의 `id` 는 순번이다 (2026-09-21 수용). 열거해서 남의 궁합 이유를 읽거나 생성을 유발할 수 있고, 호출 총량은 `CallBudget` 이 막는다. 소개팅 "궁합 까닭"과 캐시를 공유하는 방식은 미정 (plan.md TBD-13) |
-| FR-VL-06 | P0 | 결과 생성 중복 요청을 서버에서도 방어한다 (plan §3: 1일차에 18초 안에 같은 사람이 3회 제출). 방식은 구현 시 정한다 |
-
-> 세부 해설 카테고리는 **변경 없음** (`MARRIAGE`·`CHILDREN`·`LOVE`, api-spec 기준). plan.md §3.8 의 카테고리 변경 문구는 오기라 2026-09-21 에 정정했다.
-
-### 17.4 인수 조건 (확정된 원칙만)
-
-- 잠긴 필드는 응답 JSON 에 값이 없다. 개발자도구로 이름·사진이 보이지 않는다
-- 이미 해금한 필드를 다시 해금해도 실이 차감되지 않는다
-- 같은 `(member_id, reason, ref_id)` 원장 행이 두 번 들어가지 않는다. `ref_id` 가 NULL 인 행은 만들 수 없다
-- 가입 보너스는 계정당 한 번만 지급된다
-- 궁합 상세를 두 번째 열면 LLM 호출이 0회다. LLM 실패 시 그 영역만 사라지고 나머지는 정상이다
-- 전송된 궁합 이유 프롬프트에 생년월일·닉네임이 없다

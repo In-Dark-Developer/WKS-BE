@@ -11,8 +11,6 @@ public enum ErrorCode {
     INVALID_EMAIL_DOMAIN(HttpStatus.BAD_REQUEST, "허용되지 않는 이메일 도메인입니다."),
     INVALID_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 토큰입니다."),
     LLM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "해석 서비스를 일시적으로 사용할 수 없습니다."),
-    UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
-    KAKAO_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "카카오 로그인을 일시적으로 사용할 수 없습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청하신 경로를 찾을 수 없습니다.");
 

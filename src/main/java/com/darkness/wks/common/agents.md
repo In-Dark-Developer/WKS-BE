@@ -29,4 +29,4 @@ Controller에 `try-catch` 를 뿌리지 마라.
 - `WebConfig` — CORS. `allowedOrigins` 에 와일드카드(`*`) 절대 금지
 - `OpenApiConfig` — Swagger. 운영에서 끌 수 있게 설정값으로 노출
 - `TraceIdFilter` — 요청마다 traceId 발급 → MDC → 로그·에러 응답에 포함
-- Spring Security는 쓰지 않는다. 로그인은 JWT 인터셉터(`auth/`)로 처리한다 (`docs/architecture.md` §4)
+- Spring Security는 쓰지 않는다. 인증 체인이 없다

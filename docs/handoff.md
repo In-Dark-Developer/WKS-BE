@@ -17,13 +17,11 @@
 
 | 항목 | 상태 |
 |---|---|
-| 릴리즈 D-day | 축제 2026-09-29 ~ 10-01 (2026-09-21 확정) |
+| 릴리즈 D-day | (미정) |
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
-| 배포 상태 | 🔧 파일상 확정(2026-09-23): `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버. **아직 커밋 전이고 EC2에도 미반영** — 커밋·머지 전까지는 실제로 `dev` push 가 운영을 배포하는 기존 동작 그대로다. 머지 직후엔 `main` 으로 한 번도 릴리즈 안 해봐서 첫 `dev`→`main` PR 전까지 운영 자동 배포 공백 생김(아래 기록) |
-| 개발 서버 (`api-dev.threadoffate.site`) | 🔧 인프라 파일 준비 완료(2026-09-23, 아래 기록) — **EC2 미적용.** `docs/runbook-dev-server.md` 대로 본인이 실행해야 실제로 뜬다 |
+| 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V9 (dev 기준). V10 은 #54(사진, 개명 완료), V11(로그인)은 **로컬 구현 완료·커밋 전**, V12(원장)는 예약만 — 아래 예약 표 |
-| 카카오 로그인 | ✅ 백엔드·프론트 **로컬 구현 완료 + 왕복 검증 완료**(2026-09-23). `auth/`·`common/auth/`·`member/`(BE), `features/auth/`(FE) 전부 **아직 커밋 안 됨** — 브랜치 정리 필요. 계획은 `docs/backend-requirements.md` §16, 세부는 아래 2026-09-23 기록 |
+| Flyway 최신 버전 | V9 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -32,13 +30,9 @@
 | 내용 | 담당 | 필요한 것 |
 |---|---|---|
 | 프론트 배포 도메인 (CORS용) | 곽도윤 | 프론트 팀 확인 |
-| 개발 서버 별도 운영 여부 | 곽도윤 | ✅ 2026-09-23 결정(둔다) + diff 승인 완료. 남은 건 커밋·PR과 `docs/runbook-dev-server.md` 실제 EC2 실행 — 아래 2026-09-23 인프라 기록 2건 |
+| 축제 D-day 확정 | 곽도윤 | 학생처 확인 |
+| 개발 서버 별도 운영 여부 | 곽도윤 | Day 1 결정 |
 | SMTP 발송 계정 | 곽도윤 | 발송 한도 확인 필요 |
-| **`.env.prod.example` 에 실제 비밀값이 들어가 있다** (DB 비번·Gemini 키·카카오 client-id/secret) | 곽도윤 | **2026-09-23, 본인 확인 후 "private 저장소라 상관없다"며 정리 보류 결정.** AGENTS.md·#72 재발 사고와 같은 패턴이라 다음 사람은 참고할 것 — 저장소 public 전환 얘기 나오면 반드시 재검토 |
-| 카카오 디벨로퍼스 앱 설정 | 곽도윤 | ✅ 완료(2026-09-23). REST API 키·Client Secret 발급, Redirect URI `localhost:3000/dev/kakao-callback` 등록(주의: 5173 아님, 아래 기록 참고), 카카오 로그인 활성화 |
-| JWT 라이브러리 도입 승인 | 곽도윤 | `nimbus-jose-jwt` 로컬에 이미 추가돼 동작 확인함(2026-09-23). **팀 채널 공지는 아직 안 함** — convention 규칙상 커밋 전에 알릴 것 |
-| plan.md 미결정 항목 (TBD-13~16 등) | 기획 | 소개팅 BE 1차(09/25)에 영향. 명세가 09/22 전에 확정돼야 함 |
-| **CI 없음.** PR 용 빌드·테스트 워크플로가 없고 `deploy.yml` 은 `bootJar -x test` | 곽도윤 | `dev` push 가 테스트 없이 운영에 배포된다. PR CI(`./gradlew build`) 추가와 배포 전 테스트 단계 결정 |
 
 ---
 
@@ -48,9 +42,6 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V12 | 미정 | `thread_ledger` (실 원장, `ref_id NOT NULL`). 소개팅 BE 와 함께 | 예약 |
-| V11 | 곽도윤 | `member`(`kakao_id` 만) + `result.member_id`(계정당 1개, 부분 unique). 로그인 마감 09/22 | 로컬 적용·검증 완료(2026-09-23), **커밋 전** |
-| V10 | 곽도윤 | signup 에 `photo_key` 추가 (#54). `V9__add_signup_photo_key.sql` 을 개명 (dev 의 V9 와 중복이었다) | 개명 완료 (2026-09-21), PR 대기 |
 | V9 | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
 | V8 | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
 | V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
@@ -61,10 +52,6 @@
 | V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
 | V1 | 곽도윤 | init schema (5개 테이블) | 완료 |
 
-> V13 이상은 소개팅·궁합 이유 캐시 등이 예약한다. 사주 리팩토링(차은호)도 번호를 이 표에 먼저 적는다.
-
-> **머지 순서 = 번호 순서.** Flyway 의 `outOfOrder` 가 꺼져 있어(기본값) V11 이 운영에 적용된 뒤 V10 이 들어오면 앱이 기동하지 못한다. `dev` push 가 곧 운영 배포이므로 **#54(V10)를 로그인(V11)보다 먼저 머지**한다. 순서가 바뀌면 나중 PR 의 번호를 바꾼다.
-
 ---
 
 ## ErrorCode 추가 현황
@@ -74,9 +61,6 @@
 | code | 추가자 | api-spec 반영 |
 |---|---|---|
 | (문서 기준 8종) | - | ✅ |
-| `UNAUTHENTICATED` (401) | 곽도윤 (예정, 로그인 PR) | 📄 `api-spec.md` §9 "추가 예정 에러 코드"에 기재. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 (1:1 유지) |
-| `KAKAO_UNAVAILABLE` (503) | 곽도윤 (확정 2026-09-21, 로그인 PR) | 📄 `api-spec.md` §9 에 기재. 카카오 서버 오류·타임아웃. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 |
-| `INSUFFICIENT_THREAD` | 소개팅 BE (예정) | ❌ HTTP 상태 미정 (plan.md TBD-11). 명세 확정 후 |
 
 ---
 
@@ -84,7 +68,6 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
-| 2026-09-21 | **(예정, 미구현)** `POST /api/auth/kakao`(프론트가 code 전달, 응답에 JWT)·`GET /api/me`·`GET /api/me/result`. **초안이 `api-spec.md` §9 / `api.md` §6 에 있음.** 사주·궁합·공유 API 는 **변경 없음**(비로그인 그대로). 인증 API 는 `Authorization: Bearer`. 프론트 콜백 주소(운영·로컬)를 백엔드에 받아야 한다. 구현 PR 에서 확정 후 재공지 | ❌ |
 | 2026-09-17 | `PATCH /api/results/{resultId}` 추가 (닉네임만 변경, 공유 링크·궁합 유지) | ❌ |
 | 2026-09-17 | `GET /api/results/{resultId}/input` 추가 (폼 자동 채움). `resultId` 는 URL 노출 금지 | ❌ |
 | 2026-09-13 | 본인용 `resultId`와 공개용 `shareId` 분리. `GET /api/shares/{shareId}`, 궁합 POST 추가 | ❌ |
@@ -128,191 +111,6 @@
 ---
 
 ## 기록
-
-### 2026-09-23 (수) · 곽도윤 · 인프라: 운영 compose·main 배포 트리거 diff 승인·적용 · Claude Code
-
-**한 일**
-- 바로 아래 기록(같은 날, "인프라 파일 준비")에서 diff로만 제시했던 두 변경을 본인이 확인 후 승인해
-  실제로 적용했다:
-  - `docker-compose.prod.yml`: `postgres`·`app`·`nginx` 세 서비스에 `wks-edge`(external) 네트워크 추가,
-    `nginx`에 `./nginx/api-dev.conf.active:/etc/nginx/conf.d/api-dev.conf:ro` 볼륨 마운트 추가, `app`에
-    `JAVA_TOOL_OPTIONS`(`-Xmx300m -XX:MaxMetaspaceSize=128m`)와 로그 rotate(json-file, max-size 10m,
-    max-file 3) 추가. `certbot` 서비스는 wks-edge에 안 붙였다(네트워크로 다른 컨테이너와 통신할 필요가
-    없음 — named volume으로만 nginx와 인증서를 공유)
-  - `.github/workflows/deploy.yml`: 트리거를 `push: branches: [dev]` → `[main]`으로 변경. 그 외(이미지
-    태그 `:latest`, 배포 경로, concurrency 그룹)는 그대로 유지
-- 더미 값으로 `docker compose -f docker-compose.prod.yml config` 통과 확인, `deploy.yml` YAML 파싱 확인
-- `docs/git-workflow.md`·`docs/runbook-dev-server.md`의 "diff 승인 대기" 문구를 "적용 완료"로 갱신하고,
-  **머지 직후 공백**을 명시했다: `deploy.yml` 트리거 변경이 `dev`에 머지되는 순간부터 `dev` push는 더 이상
-  운영을 배포하지 않는데, `main`으로 릴리즈해본 적이 아직 한 번도 없어서 **첫 `dev`→`main` PR을 병합하기
-  전까지는 운영에 새 커밋이 전혀 배포되지 않는 공백이 생긴다.** 기존 컨테이너는 계속 떠 있으니 서비스
-  중단은 아니지만, 이 공백 동안은 핫픽스 자동 배포가 안 된다
-
-**건드린 파일**
-- `docker-compose.prod.yml`, `.github/workflows/deploy.yml`, `docs/git-workflow.md`, `docs/runbook-dev-server.md`
-
-**다음 사람이 알아야 할 것**
-- **이 변경들은 로컬 작업 트리에만 있고 아직 커밋되지 않았다.** 다른 미커밋 작업(auth/member 등, 위쪽
-  기록 참고)과 섞이지 않게 인프라 변경만 따로 브랜치를 따서 커밋·PR 올릴 것
-- `docker-compose.prod.yml`을 EC2에 실제로 반영하면(runbook 2-2단계) 운영 컨테이너 3개가 재생성되며
-  약 30~60초 다운타임이 생긴다 — 그 시점에 `nginx/api-dev.conf.active` 파일이 EC2에 먼저 있어야 한다
-  (runbook 2-1, 없으면 Docker가 빈 디렉터리를 만들어 nginx가 기동 실패한다)
-- **머지 후 되도록 빨리 첫 `dev`→`main` 릴리즈 PR을 만들어 병합할 것.** 안 그러면 운영이 자동 배포 공백
-  상태로 남는다 (위 "한 일" 참고)
-
-**막힌 것 / 넘기는 것**
-- 곽도윤: 이 변경들 커밋·PR, `docs/runbook-dev-server.md` 실제 EC2 실행, 첫 `dev`→`main` 릴리즈 PR
-
-**문서 변경**
-- `docs/git-workflow.md`, `docs/runbook-dev-server.md`, `docs/handoff.md`(이 항목)
-
-**프론트에 알려야 할 것**
-- 없음
-
-### 2026-09-23 (수) · 곽도윤 · 인프라(EC2 운영·개발 서버 nginx 분리) 파일 준비 · Claude Code
-
-**한 일**
-- 하나의 EC2에서 `api.threadoffate.site`(운영)·`api-dev.threadoffate.site`(개발)를 nginx server_name으로
-  나누는 구성을 준비했다. **EC2 원격 접속·명령 실행은 하지 않았다** — 레포 파일만 만들었고, 실행은 본인이
-  `docs/runbook-dev-server.md` 순서대로 한다
-- 현재 구조 확인 결과: `dev` push가 **이미 운영에 배포되고 있다** (`deploy.yml` 트리거가 `dev`).
-  `main` 트리거 워크플로는 없다 — 이번 작업 브리핑이 "main이 이미 운영 배포 중"이라고 가정했던 부분과
-  실제가 달라서, 트리거를 `dev`→`main`으로 바꾸는 `deploy.yml` 변경은 **diff만 만들고 적용하지 않았다**
-  (아래 "막힌 것" 참고 — 팀 전체 릴리즈 방식이 바뀌는 결정이라 확인 필요)
-- postgres 계정 격리(`db/init/init-wks-dev.sql`)를 로컬 postgres:16 컨테이너로 직접 검증하다가, `wks`가
-  이 postgres 컨테이너의 슈퍼유저라 `REVOKE CONNECT`가 `wks_dev → wks` 방향만 막고 `wks → wks_dev`는
-  못 막는다는 걸 확인했다. 더 중요한 방향(개발 환경에서 운영 개인정보 접근)은 막힌다 — SQL 주석·runbook에 반영
-- `.env.dev.example`에 값 뒤에 인라인 `#` 주석을 썼다가 `docker compose config`로 직접 검증하는 과정에서
-  주석이 값 문자열에 그대로 붙는 걸 발견해 고쳤다 (`.env` 파일은 인라인 주석을 지원하지 않는다 — 값 앞
-  줄에 주석을 둬야 한다)
-- nginx 설정 2종(bootstrap 80번 전용 / 최종 80+443)은 로컬에서 `docker run nginx:1.27-alpine nginx -t`로
-  문법·인증서 로딩까지 검증함(더미 자체서명 인증서로 확인). `proxy_pass` 대상 컨테이너가 로컬 테스트
-  네트워크엔 없어서 "host not found in upstream"이 나오는데, 이건 기존 `nginx/default.conf`도 로컬 단독
-  테스트에서 똑같이 나는 현상이라 문법 문제가 아님을 대조 확인함
-- **`.env.prod.example`에 실제 비밀값이 있는 걸 다시 확인했다** — 이미 위 표·2026-09-23 다른 기록에 있는
-  것과 같은 항목. 본인이 이미 보류 결정을 내린 사안이라 추가 조치는 안 함, 재확인만
-
-**건드린/새로 만든 파일**
-- `nginx/api-dev.bootstrap.conf`(신규), `nginx/api-dev.conf`(신규) — 기존 `nginx/default.conf`는 **안 건드림**
-- `docker-compose.dev.yml`(신규, `/opt/wks-dev`용), `.env.dev.example`(신규)
-- `db/init/init-wks-dev.sql`(신규) — Flyway 아님, 수동 1회 실행용
-- `src/main/resources/application-dev.yml`(신규)
-- `.github/workflows/deploy-dev.yml`(신규), `.github/workflows/ci.yml`(신규, PR 빌드+테스트)
-- `docs/runbook-dev-server.md`(신규) — EC2에서 실행할 순서. ⚠️ 운영 영향 단계 표시, 각 단계 확인·롤백 포함
-- `docs/git-workflow.md` — CI/CD 매핑 표를 확정된 구조로 갱신, 과도기(트리거 미전환 구간) 위험 명시
-- **아직 안 건드림(승인 대기)**: `docker-compose.prod.yml`(wks-edge 네트워크 추가), `.github/workflows/deploy.yml`(트리거 `dev`→`main`) — diff는 세션 응답에 남겨둠, 이 파일엔 미반영
-
-**다음 사람이 알아야 할 것**
-- **`docker-compose.prod.yml`·`deploy.yml` 두 파일은 diff만 있고 적용 안 됐다.** 적용하면 운영 컨테이너
-  3개(postgres·app·nginx)가 재생성되며 약 30~60초 다운타임이 생긴다 (`docs/runbook-dev-server.md` 2-2단계)
-- **`deploy.yml` 트리거를 바꾸기 전까지는 `dev` push가 여전히 운영을 배포한다.** `deploy-dev.yml`이 먼저
-  머지되면 `dev` push 한 번이 운영·개발 양쪽에 동시 배포되는 과도기가 생긴다 — `git-workflow.md`에 명시함
-- nginx 인증서 발급 전에 443 블록을 먼저 넣으면 운영까지 같이 죽는다 — runbook 5~7단계 순서(80번 먼저 →
-  인증서 발급 → 443번)를 반드시 지킬 것. 볼륨 마운트 파일(`nginx/api-dev.conf.active`, git 비추적)을
-  네트워크 변경 전에 미리 만들어둬야 하는 이유도 runbook 2-1에 적어둠(안 그러면 Docker가 빈 디렉터리를
-  대신 만들어 nginx가 기동 실패한다)
-- 카카오 디벨로퍼스에 개발용 앱을 별도로 만들어 Redirect URI(`https://dev.threadoffate.site/...`, 로컬
-  콜백 포함)를 등록해야 `.env.dev.example`의 `KAKAO_CLIENT_ID`/`SECRET`을 채울 수 있다 — DNS 제외하고
-  이 범위 밖 수동 작업
-
-**막힌 것 / 넘기는 것**
-- 곽도윤: `docker-compose.prod.yml`·`deploy.yml` diff 검토·승인, 승인 후 이 세션이나 다음 작업에서 적용
-- 곽도윤: `docs/runbook-dev-server.md` 실제 실행(이 세션은 EC2를 건드리지 않음), Route53 A레코드, 카카오
-  개발용 앱 등록, GitHub Secrets는 기존 것(`EC2_HOST` 등) 재사용이라 신규 추가 없음(재확인 요망)
-- 팀: `deploy.yml` 트리거 전환 시점 — 전환하면 그날부터 운영 릴리즈가 `dev`→`main` PR 머지 방식으로
-  바뀐다는 걸 전원이 알아야 함
-
-**문서 변경**
-- `docs/git-workflow.md`(CI/CD 매핑 표, GitHub Secrets 절), `docs/handoff.md`(이 항목)
-
-**프론트에 알려야 할 것**
-- 없음 (백엔드 배포 인프라 변경, API 계약 변경 없음). 개발 서버 도메인(`api-dev.threadoffate.site`)이
-  뜨면 프론트가 dev 환경에서 쓸 base URL로 공유 가능
-
-### 2026-09-23 (수) · 곽도윤 · auth/·member/·common/auth/ 카카오 로그인 로컬 구현·검증 + 로그아웃 추가 · Claude Code
-
-**한 일**
-- 2026-09-21 문서화 단계였던 카카오 로그인을 실제로 구현하고 로컬에서 왕복 검증했다. `auth/`(AuthController·AuthService·KakaoClient·KakaoConfig·RedirectUriPolicy)·`common/auth/`(JwtProvider·JwtAuthInterceptor·CurrentMemberArgumentResolver·AuthWebConfig)·`member/`(Member·MemberService·MeController·MeService) 전부 이번에 처음 로컬 검증됨. `ErrorCode` 에 `UNAUTHENTICATED`·`KAKAO_UNAVAILABLE` 추가돼 있었다
-- 카카오 디벨로퍼스 콘솔 설정 완료: REST API 키·Client Secret 발급, 카카오 로그인 활성화. **Redirect URI 는 5173 이 아니라 3000 이다** — `docs/plan.md`/ADR 이 Vite 기본 포트(5173)를 가정했지만 프론트 `vite.config.ts` 는 포트를 3000 으로 고정해뒀다(WKS-FE `docs/phases/03-saju-reading/RESULT.md` 가 2026-09-15 에 이미 이 불일치를 기록해 뒀었음). 실제 등록값: `http://localhost:3000/dev/kakao-callback`
-- 왕복 검증(로컬): `/dev/kakao` → 카카오 인가 → 콜백 → `isNewUser`/`restoredResultId` 정상, `GET /api/me` 200(토큰 있음)/401 `UNAUTHENTICATED`(토큰 없음), DB `member` 테이블에 `kakao_id` 만 저장됨(개인정보 없음, AGENTS.md 규칙 준수) 확인. 사주 결과 생성(`POST /api/results`)도 실제 Gemini 키로 성공 확인 — 계정 결과 연결·복원(`restoredResultId`)도 실제 UUID로 동작 확인
-- **로그아웃 추가 (2026-09-21 "로그아웃 없음" 결정을 일부 뒤집음, 사용자 본인 지시).** 서버 쪽 토큰 폐기는 여전히 없다 — 클라이언트가 로컬 토큰을 지우는 방식뿐이다(`features/auth/LogoutButton.tsx` → `clearAuthToken()`). 지우기 전 사본은 만료까지 유효함을 화면에 안내 문구로 명시
-- JWT 만료를 **30일 → 15일**로 줄였다(`application.yml` `app.auth.jwt.ttl-days`). refresh token 은 미구현 — 카카오 재로그인이 원클릭이라 마찰이 적다고 판단(축제 특성상 사용 기간도 짧음)
-- 프론트 로컬 저장 필드명을 `token` → `accessToken` 으로 바꿨다(`wks:auth` 의 내부 필드만, API 응답 필드 `KakaoLoginResponse.token` 은 그대로 — 프론트-백엔드 계약은 안 건드림)
-- **`.env.prod.example` 에 실제 비밀값(DB 비번·Gemini 키·카카오 client-id/secret)이 들어갔다.** 정리하자고 제안했으나 본인이 "private 저장소라 상관없다"며 보류 결정. 위 "막힌 것" 표에 남겨둠 — public 전환 논의 시 반드시 재확인할 것
-- 로컬 `application-local.yml`에 카카오 client-id/secret·JWT secret·Gemini 실키를 채워 넣었다(이 파일은 `.gitignore` 대상이라 커밋 안 됨)
-
-**건드린 파일/패키지 (백엔드, 전부 미커밋)**
-- `application.yml`(`app.auth.jwt.ttl-days: 15`), `application-local.yml`(로컬 전용, 커밋 안 됨), `common/auth/JwtProvider.java`(주석), `docs/api-spec.md`·`api.md`·`docs/architecture.md`·`docs/backend-requirements.md`(만료 30→15일, 로그아웃 문구 정정), `docs/handoff.md`
-- `auth/`·`common/auth/`·`member/` 자체는 이번 세션 이전부터 로컬에 있던 것(누가 작성했는지는 이 세션에서 확인 못 함) — 이번에 처음으로 실제 기동·검증함
-
-**건드린 파일/패키지 (프론트, WKS-FE, 전부 미커밋)**
-- `src/api/authToken.ts`(필드명 `token`→`accessToken`, 주석), `src/api/authToken.test.ts`
-- `src/features/auth/LogoutButton.tsx`(신규)·`LogoutButton.test.tsx`(신규)·`index.ts`(export 추가)
-- `src/app/dev/KakaoLoginTestPage.tsx`(로그인 상태면 로그아웃 버튼 토글)·`KakaoLoginTestPage.test.tsx`
-- `docs/decisions/ADR-20260922-kakao-login-and-jwt-session.md`(Amendment 섹션 추가: 포트 정정, 로그아웃, TTL, 필드명)
-- `.env.local`(신규, 커밋 안 됨) — `VITE_KAKAO_CLIENT_ID`
-
-**다음 사람이 알아야 할 것**
-- **아직 아무것도 커밋되지 않았다.** 백엔드는 현재 `Fix/#54/PreRegistration` 브랜치 위에 사전신청 변경(V10 개명 등)과 이번 auth 작업이 섞여 있다 — `dev`에서 새 브랜치를 따서 auth 만 분리해 커밋할 것. 프론트도 별도 브랜치/PR 필요
-- **redirect URI 는 3000 이다, 5173 이 아니다.** ADR·이전 기록의 5173 언급은 틀렸다(수정은 ADR Amendment 에 반영함). 운영 배포 시에도 실제 프론트 배포 포트/도메인 기준으로 카카오 콘솔·`allowed-redirect-uris` 를 맞출 것
-- **로그아웃은 클라이언트 전용이다.** 서버는 토큰을 폐기하지 않는다 — 로그아웃 버튼을 눌러도 탈취된 토큰 사본은 만료(15일)까지 유효하다. 진짜 서버 측 무효화(jti 블록리스트 등)가 필요하면 별도 작업(새 DB 테이블·V13 마이그레이션 필요)
-- **JWT 라이브러리(`nimbus-jose-jwt`) 팀 공지가 아직 안 됐다.** convention.md 규칙상 커밋 전에 팀 채널에 알릴 것
-- `.env.prod.example` 에 실제 비밀값이 남아 있다 — 위 "막힌 것" 표 참고
-- Gemini 키는 2026-09-17 #72 사고 때 남았던, 아직 폐기 안 한 그 키를 로컬 테스트에 그대로 재사용했다. 운영 배포 전 재발급 필요는 그대로 유효
-
-**막힌 것 / 넘기는 것**
-- 팀: JWT 라이브러리 승인 공지, 브랜치 분리·PR
-- 곽도윤: `.env.prod.example` 정리 여부(본인이 보류 결정했으나 재확인 필요), Gemini 키 폐기·재발급
-
-**문서 변경**
-- `docs/api-spec.md`(§9 만료·로그아웃 문구), `api.md`(같음), `docs/architecture.md`(JWT 절), `docs/backend-requirements.md`(§16 FR-AU-09 등), `docs/handoff.md`(이 항목, 현재 상태 표, 막힌 것 표, Flyway 표)
-- WKS-FE: `docs/decisions/ADR-20260922-kakao-login-and-jwt-session.md` Amendment 섹션
-
-**프론트에 알려야 할 것**
-- 로그인 API 계약(`docs/api-spec.md` §9)은 안 바뀌었다(필드 삭제·타입 변경 없음) — `token` 필드명 그대로. 바뀐 건 프론트 로컬 저장 방식뿐이라 백엔드 관점에서 새로 공지할 계약 변경은 없음
-- JWT 만료가 30일에서 15일로 줄었다 — 프론트가 어딘가에 30일을 하드코딩해 안내 문구를 썼다면 확인 필요
-
-### 2026-09-21 (월) · 곽도윤 · 문서 (V1 기획 반영: 카카오 로그인·소개팅·실) · Claude Code
-
-**한 일**
-- `docs/plan.md`(V1 기획 원본)에 맞춰 문서를 정렬했다 (구현 전). 같은 날 오전에 쓴 문서에서 **정정된 것**:
-  - 인증: 서버 사이드 세션 + Spring Security·Session JDBC → **프론트 주도 code 교환 + JWT** (`POST /api/auth/kakao`). Spring Security·Session JDBC·CSRF·쿠키·`spring_session`(V12) 계획은 폐기
-  - 결과 연결: `member_result` 테이블·N개 저장 → **`result.member_id`(계정당 1개, 부분 unique)**. "`result` 에 `member_id` 금지" 규칙 폐기
-  - 이름: plan.md 의 `user_id` → `member_id` (`user` 는 금지어이자 Postgres 예약어)
-  - 소개팅이 `signup` 을 대체한다. **학교 메일 재학 인증은 유지**하고 매직링크를 재사용한다 (위치·저장 미정, TBD-16)
-- 결정 (2026-09-21): JWT 채택(만료 30일·갱신 없음), 로그아웃·기기 관리·토큰 폐기·**탈퇴 없음**(삭제 요청은 운영자 수동 처리) / 카테고리는 api-spec 기준(`MARRIAGE`·`CHILDREN`·`LOVE`)이며 plan §3.8 의 변경 문구는 오기 / 궁합 id 는 순번 그대로(열거 위험 수용) / 원장 `ref_id NOT NULL` / 축제 09-29 ~ 10-01 확정 / plan.md 에 없던 3가지를 보완한 부분(아래 참고)은 그대로 유지
-- `docs/plan.md` 수정: `user_id`→`member_id`, 로그인 요청에 `resultId?` 추가, JWT 명시, ledger `ref_id NOT NULL`, §3.8 정정, TBD-3·12·17 종료, TBD-13~16 추가, §12 에 로그아웃·탈퇴 추가 (수정한 곳에 날짜 표시)
-- Flyway 번호 정리: `V9__add_signup_photo_key.sql` → **`V10`** 으로 개명 완료(`git mv`, PR 은 곽도윤이 올린다). 로그인은 V11, 원장은 V12 로 예약
-- 루트 `AGENTS.md` 를 작성했다 (이전엔 0바이트였다). 도구가 달라도 읽는 규칙 원본이다
-- 로그인 API 초안을 `docs/api-spec.md` §9 와 `api.md` §6 에 추가했다 (`POST /api/auth/kakao`, `GET /api/me`). §5 사전등록에는 "소개팅 프로필로 대체 예정" 표시
-- 로그인 API 에 `GET /api/me/result`(토큰 기반 내 결과 조회)를 추가했다. 브라우저가 `resultId` 를 잃어도 로그인 상태면 복원할 수 있다. `plan.md` §8.1·architecture·requirements(FR-AU-13)에도 반영. `KAKAO_UNAVAILABLE`(503)은 확정
-- `api.md` 를 `api-spec.md` 와 맞췄다 (`GET /api/results/{id}/input`·`PATCH` 누락, 응답의 `elements` 누락, `destiny.title` 문구). 줄바꿈은 다른 문서처럼 CRLF 로 통일
-- `docs/git-workflow.md` 를 실제에 맞게 정정: `dev` push 가 운영 배포, 배포 파이프라인이 테스트를 건너뜀, PR CI 없음, 브랜치 보호 불가, GitHub Secrets 목록
-- `common/agents.md`("인증 체인이 없다" 문구)와 `docs/git-workflow.md`(이슈 라벨에 `auth`·`member`·`dating`·`wallet`) 정정
-
-**건드린 파일/패키지**
-- 코드 변경 없음. `docs/architecture.md`, `docs/convention.md`, `docs/backend-requirements.md`(§16 재작성, §17 신설), `docs/handoff.md`, `docs/plan.md`
-
-**다음 사람이 알아야 할 것**
-- **문서만 바뀌었고 코드는 그대로다.** 로그인 API 는 `api-spec.md` §9·`api.md` §6 에 **초안**이 있다 (구현 PR 에서 확정, `ErrorCode` 도 그때 추가). 소개팅·실 API 는 명세 확정 전이라 아직 없다. `KAKAO_UNAVAILABLE`(503)은 2026-09-21 확정했다
-- **JWT 라이브러리는 미정이고 팀 승인이 필요하다.** Boot 4 는 Jackson 3 이라 Jackson 2 에 의존하는 라이브러리는 공존 여부를 확인할 것. 만료는 30일·갱신 없음으로 확정
-- **`V9` 중복은 해소했다.** `V9__add_signup_photo_key.sql` 을 `V10__add_signup_photo_key.sql` 로 개명했다 (dev 에는 V9 가 하나뿐이라 머지해도 기동에 문제없다). **이 브랜치로 로컬 DB 를 이미 기동해 예전 V9(photo_key)를 적용했다면 Flyway 이력이 어긋난다.** 로컬 DB 를 초기화(`docker compose down -v`)하거나 `flyway repair` 후 재기동할 것. 운영은 dev 브랜치 기준으로 배포되고 dev 에는 사진 마이그레이션이 없어서 영향 없다
-- **`.env.prod.example`(git 추적 중)에 실제 값으로 보이는 DB 비밀번호·Gemini 키가 있다.** #72 는 `application-prod.yml` 만 고쳤다. 폐기·재발급하고 플레이스홀더로 바꿔야 한다
-- **`GET /api/compatibilities/{id}/reason` 의 id 는 순번이다** (수용된 위험). 열거로 남의 궁합 이유 열람·LLM 생성 유발이 가능하고, 총량은 `CallBudget` 이 막는다
-- **PR 용 CI 가 없고 배포 파이프라인이 테스트를 건너뛴다.** `deploy.yml` 은 `bootJar -x test` 로 이미지를 만들어 `dev` push 마다 운영에 배포한다. 머지 전에 로컬에서 `./gradlew test` 를 돌릴 것. NFR-T-07·TR-E-05(CI 필수)는 아직 충족되지 않았다
-- plan.md 에서 비어 있던 부분을 채운 것(기획 확인 필요): 연결한 경우 `restoredResultId` 는 `null`, 존재하지 않는 `resultId` 로도 로그인은 성공, 이미 다른 회원에 연결된 결과는 연결하지 않음
-- 이번 범위 밖이라 **고치지 않고 남긴 문서 불일치**: architecture §5 의 `signup` DDL 이 V7·photo_key 를 반영하지 않음 / "`name`·`phone` 컬럼은 없다" 문구가 V7 이후 사실과 다름 / `TraceIdFilter` 가 architecture 에 있으나 코드에 없음 / `common/agents.md` 의 "인증 체인이 없다" 문구가 JWT 도입 후 사실과 다름
-
-**막힌 것 / 넘기는 것**
-- 팀: JWT 라이브러리 승인, `auth/`·`member/`·`wallet/`·`dating/` 담당 확정
-- 곽도윤: 카카오 디벨로퍼스 콘솔(redirect URI 는 프론트 콜백), `.env.prod.example` 정리, #54 PR 생성 (V10 개명 완료)
-- 기획: plan.md TBD-13~16(궁합 캐시 위치, 로그인 상태 결과 연결·5.8 중복 방지, 성별·선호성별, 학교 메일 인증 위치), 데이터 파기 범위, 처리방침 개정(삭제 요청 창구 포함)
-
-**문서 변경**
-- `docs/architecture.md`(머리말·§1·§2·§3·§4·§5·§6·§8·§9), `docs/convention.md`(용어·금지어·인증·로깅·테스트·AI 표), `docs/backend-requirements.md`(§2·§3·§10·§11·§15·§16·§17), `docs/handoff.md`, `docs/plan.md`, **`AGENTS.md`(신규 작성)**, `docs/api-spec.md`(§1·§5·§8·§9), `api.md`(§1·§4·§6), `src/main/java/com/darkness/wks/common/agents.md`, `docs/git-workflow.md`, `src/main/resources/db/migration/V10__add_signup_photo_key.sql`(개명)
-
-**프론트에 알려야 할 것**
-- 로그인 API 초안이 `api-spec.md` §9 / `api.md` §6 에 있다 (**구현 전, 확정 아님**). 공지 표는 아직 ❌ 다. 프론트에서 받아야 할 것: 콜백 주소(운영·로컬·netlify). 사전 예고: 사주·궁합·공유 API 는 바뀌지 않는다. 인증 API 는 `Authorization: Bearer` 이고 쿠키를 쓰지 않는다
 
 ### 2026-09-16 (수) · 곽도윤 · signup/ 사진 업로드 S3 연동 (#54) · Claude Code
 
