@@ -35,7 +35,6 @@ public class SignupService {
     private final SignupRepository signupRepository;
     private final ResultRepository resultRepository;
     private final EmailVerificationService emailVerificationService;
-    private final PhotoUploadService photoUploadService;
 
     // 팀 결정 전 임시 설정값. 비워두면(로컬 기본값) 도메인 검증을 건너뛴다 — docs/todo.md §3 "학교 웹메일 도메인 화이트리스트" 미결정 참고
     @Value("${app.signup.allowed-email-domains}")
@@ -50,14 +49,12 @@ public class SignupService {
         }
         String contactValue = blankToNull(request.contactValue());
         validateContact(request.contactMethod(), contactValue);
-        String photoKey = blankToNull(request.photoKey());
-        photoUploadService.verifyPhotoExists(photoKey);
 
         Result result = resolveResult(request.resultId());
 
         Signup signup = new Signup(email, result, request.gender(), request.preferGender(),
                 blankToNull(request.name()), request.contactMethod(), contactValue,
-                blankToNull(request.department()), normalizeMbti(request.mbti()), blankToNull(request.bio()), photoKey);
+                blankToNull(request.department()), normalizeMbti(request.mbti()), blankToNull(request.bio()));
         signup.issueCoupon();
         signupRepository.save(signup);
 

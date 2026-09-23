@@ -51,10 +51,6 @@ public record CreateSignupRequest(
 
         @Schema(description = "자기소개", example = "축제를 좋아하는 컴공생입니다.", nullable = true)
         @Size(max = 500, message = "자기소개는 500자 이하여야 합니다.")
-        String bio,
-
-        @Schema(description = "`POST /api/signups/photo-upload-url` 로 발급받아 S3에 업로드한 사진의 key. 선택값", example = "signup-photos/3f2a9c1e-....jpg", nullable = true)
-        @Size(max = 255, message = "photoKey는 255자 이하여야 합니다.")
-        String photoKey
+        String bio
 ) {
 }

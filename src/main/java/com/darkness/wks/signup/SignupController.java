@@ -3,8 +3,6 @@ package com.darkness.wks.signup;
 import com.darkness.wks.common.response.ApiResponse;
 import com.darkness.wks.common.response.ErrorResponse;
 import com.darkness.wks.signup.dto.CreateSignupRequest;
-import com.darkness.wks.signup.dto.PhotoUploadUrlRequest;
-import com.darkness.wks.signup.dto.PhotoUploadUrlResponse;
 import com.darkness.wks.signup.dto.ResendSignupRequest;
 import com.darkness.wks.signup.dto.ResendSignupResponse;
 import com.darkness.wks.signup.dto.SignupResponse;
@@ -37,32 +35,11 @@ import java.net.URI;
 public class SignupController {
 
     private final SignupService signupService;
-    private final PhotoUploadService photoUploadService;
 
     @Value("${app.frontend.verify-redirect-url}")
     private String verifyRedirectUrl;
 
-    @Operation(summary = "사진 업로드 URL 발급", description = "S3에 직접 업로드할 presigned URL을 발급한다. 응답의 photoKey를 이후 POST /api/signups 요청에 그대로 담아 보낸다.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "발급 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "허용되지 않는 contentType",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "success": false,
-                                      "error": {
-                                        "code": "INVALID_INPUT",
-                                        "message": "입력값이 올바르지 않습니다."
-                                      }
-                                    }
-                                    """)))
-    })
-    @PostMapping("/photo-upload-url")
-    public ApiResponse<PhotoUploadUrlResponse> createPhotoUploadUrl(@Valid @RequestBody PhotoUploadUrlRequest request) {
-        return ApiResponse.success(photoUploadService.createUploadUrl(request.contentType()));
-    }
-
-    @Operation(summary = "사전등록 신청", description = "이름·이메일·연락처·학과·MBTI·자기소개·성별·선호성별·사진으로 신청하고 인증 메일을 발송한다.")
+    @Operation(summary = "사전등록 신청", description = "이름·이메일·연락처·학과·MBTI·자기소개·성별·선호성별로 신청하고 인증 메일을 발송한다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "신청 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 또는 허용되지 않는 이메일 도메인",

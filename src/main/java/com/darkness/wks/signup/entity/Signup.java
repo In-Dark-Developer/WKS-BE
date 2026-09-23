@@ -67,10 +67,6 @@ public class Signup {
     @Column(name = "bio", length = 500)
     private String bio;
 
-    // 선택값. S3 오브젝트 키만 저장 (2026-09-16 결정, #54)
-    @Column(name = "photo_key", length = 255)
-    private String photoKey;
-
     @Column(name = "coupon_issued", nullable = false)
     private boolean couponIssued = false;
 
@@ -83,7 +79,7 @@ public class Signup {
 
     public Signup(String email, Result result, Gender gender, Gender preferGender,
                   String name, ContactMethod contactMethod, String contactValue,
-                  String department, String mbti, String bio, String photoKey) {
+                  String department, String mbti, String bio) {
         this.email = email;
         this.result = result;
         this.gender = gender;
@@ -94,7 +90,6 @@ public class Signup {
         this.department = department;
         this.mbti = mbti;
         this.bio = bio;
-        this.photoKey = photoKey;
     }
 
     public void issueCoupon() {

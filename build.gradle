@@ -28,10 +28,6 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
 	implementation 'com.google.genai:google-genai:1.70.0'
 	implementation 'cn.6tail:lunar:1.7.4'
-	// JWT 발급·검증 (#로그인). Jackson 에 의존하지 않는다(내부 Gson shaded) — Boot 4(Jackson 3)와 충돌 없음
-	implementation 'com.nimbusds:nimbus-jose-jwt:10.10'
-	implementation platform('software.amazon.awssdk:bom:2.29.52')
-	implementation 'software.amazon.awssdk:s3'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
