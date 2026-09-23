@@ -68,6 +68,10 @@ class ResultServiceTest {
         assertThat(response.fortunes()).extracting(ResultResponse.FortuneResponse::grade)
                 .containsExactly("SS", "A+", "B");
         assertThat(response.elements()).isEqualTo(new ResultResponse.ElementResponse(2, 1, 1, 0, 2));
+        // 잘 맞는 오행은 행운의 장소와 같은 보완 오행(코드), 이유 문장은 저장된 것 (#82)
+        assertThat(response.elementMatch().element()).isEqualTo(com.darkness.wks.saju.LuckyPlace.luckyElement(
+                new com.darkness.wks.saju.SajuPillars("임오", "계묘", "갑진", null)));
+        assertThat(response.elementMatch().reason()).isEqualTo("잘 맞는 기운 설명");
         assertThat(response.compatibilities()).isEmpty();
         verifyNoInteractions(resultAnalysisPort);
     }
@@ -152,8 +156,22 @@ class ResultServiceTest {
                 "자녀운 설명",
                 30, // B
                 "연애운 설명",
+                "잘 맞는 기운 설명",
                 7
         );
+    }
+
+    @Test
+    void oldReadingWithoutElementMatchReasonYieldsNullSection() {
+        // V14 이전 행: 이유 문장이 없으면 화면이 영역을 그리지 않도록 필드 자체가 null (#82)
+        UUID resultId = UUID.randomUUID();
+        Result result = result(resultId);
+        Reading old = new Reading(result, "운명", 95, "결혼", 75, "자녀", 30, "연애", null, 0);
+        when(resultRepository.findById(resultId)).thenReturn(Optional.of(result));
+        when(readingRepository.findById(resultId)).thenReturn(Optional.of(old));
+        when(compatibilityRepository.findAllByResultIdOrderByCreatedAtDesc(resultId)).thenReturn(List.of());
+
+        assertThat(resultService.getResult(resultId.toString()).elementMatch()).isNull();
     }
 
     @Test
@@ -243,7 +261,7 @@ class ResultServiceTest {
                 new SajuPillars("임오", "계묘", "갑진", null), "설명",
                 List.of(new ResultAnalysisPort.Fortune(FortuneCategory.MARRIAGE, 95, "a"),
                         new ResultAnalysisPort.Fortune(FortuneCategory.CHILDREN, 75, "b"),
-                        new ResultAnalysisPort.Fortune(FortuneCategory.LOVE, 30, "c"))));
+                        new ResultAnalysisPort.Fortune(FortuneCategory.LOVE, 30, "c")), "잘 맞는 기운 설명"));
         when(resultRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(readingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class ReadingGenerator {
 
     private static final List<String> FIELDS =
-            List.of("destinyDescription", "marriage", "children", "love");
+            List.of("destinyDescription", "marriage", "children", "love", "elementMatch");
     private static final String SYSTEM_PROMPT = GeminiJson.loadResource("prompts/reading-system.txt");
 
     private final GeminiJson gemini;
@@ -37,6 +37,10 @@ public class ReadingGenerator {
 
     /** 프롬프트용 오행 이름. 시스템 프롬프트의 "나무·불·흙·쇠·물의 기운"과 맞춘다 */
     static final String[] PLAIN = {"나무", "불", "흙", "쇠", "물"};
+
+    /** 십성 역할(Element.roleFor: 0 비겁 1 식상 2 재성 3 관성 4 인성)을 사주 용어 없이 풀어 쓴 말 */
+    private static final String[] ROLE_MEANING = {
+            "나와 같은 기운", "내가 살려 주는 기운", "내가 이끄는 기운", "나를 이끌어 주는 기운", "나를 살려 주는 기운"};
 
     /**
      * 팔자·등급·성별·오행 사실뿐. 개인정보 미포함은 테스트로 고정한다 (TR-03).
@@ -64,7 +68,11 @@ public class ReadingGenerator {
                 .append("많은 기운: ").append(strong).append(" / 없는 기운: ").append(weak.isEmpty() ? "없음" : weak).append("\n")
                 .append("배우자 기운: ").append(PLAIN[spouse.ordinal()])
                 .append(" / 배우자 자리의 기운: ").append(PLAIN[Element.ofBranch(p.dayPillar().charAt(1)).ordinal()]).append("\n")
-                .append("자녀 기운: ").append(PLAIN[child.ordinal()]);
+                .append("자녀 기운: ").append(PLAIN[child.ordinal()]).append("\n");
+        // 잘 맞는 기운(기능명세 3.5)은 행운의 장소와 같은 보완 오행. 그 기운이 나에게 무슨 뜻인지도 코드가 정해 준다 (#82)
+        Element match = LuckyPlace.luckyElement(p);
+        sb.append("잘 맞는 기운: ").append(PLAIN[match.ordinal()])
+                .append(" (").append(ROLE_MEANING[match.roleFor(me)]).append(")");
         for (ReadingCategory c : ReadingCategory.values()) {
             sb.append("\n").append(c.korean()).append(" 등급: ").append(grades.get(c).label());
         }
@@ -96,6 +104,6 @@ public class ReadingGenerator {
         contents.put(ReadingCategory.MARRIAGE, m.get("marriage"));
         contents.put(ReadingCategory.CHILDREN, m.get("children"));
         contents.put(ReadingCategory.LOVE, m.get("love"));
-        return new Reading(m.get("destinyDescription"), contents);
+        return new Reading(m.get("destinyDescription"), contents, m.get("elementMatch"));
     }
 }

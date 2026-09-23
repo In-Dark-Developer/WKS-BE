@@ -25,7 +25,8 @@ public interface ResultAnalysisPort {
     record AnalysisResult(
             SajuPillars pillars,
             String destinyDescription,
-            List<Fortune> fortunes
+            List<Fortune> fortunes,
+            String elementMatchReason // "나와 잘 맞는 오행" 풀이. 오행 자체는 팔자에서 계산하므로 저장하지 않는다 (#82)
     ) {
 
         public Fortune fortune(FortuneCategory category) {

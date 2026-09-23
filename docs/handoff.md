@@ -22,7 +22,7 @@
 | 배포 상태 | 🔧 파일상 확정(2026-09-23): `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버. **아직 커밋 전이고 EC2에도 미반영** — 커밋·머지 전까지는 실제로 `dev` push 가 운영을 배포하는 기존 동작 그대로다. 머지 직후엔 `main` 으로 한 번도 릴리즈 안 해봐서 첫 `dev`→`main` PR 전까지 운영 자동 배포 공백 생김(아래 기록) |
 | 개발 서버 (`api-dev.threadoffate.site`) | 🔧 인프라 파일 준비 완료(2026-09-23, 아래 기록) — **EC2 미적용.** `docs/runbook-dev-server.md` 대로 본인이 실행해야 실제로 뜬다 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V11 (dev 기준, 2026-09-23 로그인 머지). V12(원장)는 예약만, V13(궁합 이유 캐시)은 PR — 아래 예약 표 |
+| Flyway 최신 버전 | V11 (dev 기준, 2026-09-23 로그인 머지). V12(원장)는 예약만, V13(궁합 이유 캐시, #81)·V14(잘 맞는 오행, #82)는 PR — 아래 예약 표. **#81 → #82 순서로 머지** |
 | 카카오 로그인 | ✅ 백엔드·프론트 **로컬 구현 완료 + 왕복 검증 완료**(2026-09-23). `auth/`·`common/auth/`·`member/`(BE), `features/auth/`(FE) 전부 **아직 커밋 안 됨** — 브랜치 정리 필요. 계획은 `docs/backend-requirements.md` §16, 세부는 아래 2026-09-23 기록 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
@@ -48,6 +48,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V14 | 차은호 | `reading` 에 `element_match_content` (잘 맞는 오행 이유, #82). **V13(#81) 뒤에 머지** | PR |
 | V13 | 차은호 | `compatibility` 에 `reason_why`·`reason_together`·`reason_conflict` (궁합 상세 이유 캐시, #80) | PR |
 | V12 | 미정 | `thread_ledger` (실 원장, `ref_id NOT NULL`). 소개팅 BE 와 함께 | 예약 |
 | V11 | 곽도윤 | `member`(`kakao_id` 만) + `result.member_id`(계정당 1개, 부분 unique). 로그인 마감 09/22 | 로컬 적용·검증 완료(2026-09-23), **커밋 전** |
@@ -86,6 +87,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-23 | `POST /api/results`·`GET /api/results/{resultId}` 응답에 `elementMatch: { element, korean, reason }` 추가 (나와 잘 맞는 오행 + 이유, 기능명세 3.5). `null` 이면 영역 미노출. CTA "OO 기운의 사람 만나보기"는 `element` 사용 | ❌ |
 | 2026-09-23 | `GET /api/compatibilities/{id}/reason` 추가 (궁합 상세 이유 3답: `why`·`together`·`conflict`). 첫 호출만 LLM 생성이라 최대 30초, 실패는 `LLM_UNAVAILABLE` 503 → 해당 영역만 미노출·재시도. 두 사람이 같은 내용. **프론트가 `id` 를 받으려면 궁합 응답에 `id` 가 필요** — 아래 기록 참고 | ❌ |
 | 2026-09-21 | **(예정, 미구현)** `POST /api/auth/kakao`(프론트가 code 전달, 응답에 JWT)·`GET /api/me`·`GET /api/me/result`. **초안이 `api-spec.md` §9 / `api.md` §6 에 있음.** 사주·궁합·공유 API 는 **변경 없음**(비로그인 그대로). 인증 API 는 `Authorization: Bearer`. 프론트 콜백 주소(운영·로컬)를 백엔드에 받아야 한다. 구현 PR 에서 확정 후 재공지 | ❌ |
 | 2026-09-17 | `PATCH /api/results/{resultId}` 추가 (닉네임만 변경, 공유 링크·궁합 유지) | ❌ |
@@ -131,6 +133,35 @@
 ---
 
 ## 기록
+
+### 2026-09-23 (수) · 차은호 · saju/ + result/ 나와 잘 맞는 오행 + 이유 (#82) · Claude Code
+
+**한 일**
+- 피그마 사주 결과 화면의 "나와 잘 맞는 오행은 토(土)" 구획(기능명세 3.5·5.13) 데이터를 결과 응답에 넣었다: `elementMatch: { element, korean, reason }`
+- 오행은 코드가 정한다: `LuckyPlace.luckyElement`(행운의 장소와 같은 보완 오행, 사람마다 고정) 를 public 으로 열어 재사용. 기획에 별도 규칙이 없어서 이렇게 잡았다 — **기획 확인 필요**
+- 이유 문장은 기존 사주 해석 Gemini 호출에 `elementMatch` 필드 하나를 얹어 **한 번에** 받는다 (FR-GM-02). 프롬프트 입력에 "잘 맞는 기운: 흙 (나를 살려 주는 기운)" 한 줄 추가 — 그 기운이 나에게 무슨 뜻인지(비겁·식상·재성·관성·인성을 쉬운 말로)도 코드가 넘긴다
+- `reading.element_match_content` (V14, nullable). 옛 행은 NULL → 응답 `elementMatch: null` → 화면 미노출. 프롬프트가 바뀌어 `analysisVersion` 이 달라지므로 같은 입력도 다시 생성된다 (#62)
+- plan §8.2 의 별도 엔드포인트 `GET /api/results/{resultId}/element-match` 대신 결과 조회에 포함했다 (호출 1회, 5.13 자동 충족). plan 은 안 고쳤다 — 기획이 원본이라 기획 쪽에서 반영해 주면 좋겠다
+
+**건드린 파일/패키지**
+- `saju/`: `Reading`(필드 추가), `ReadingGenerator`(프롬프트 한 줄·필드 하나), `LuckyPlace.luckyElement` public, `prompts/reading-system.txt`
+- `result/`: `ResultAnalysisPort.AnalysisResult`(필드), `SajuResultAnalysisAdapter`, `entity/Reading`(컬럼·생성자), `ResultService`(생성자 인자·`toAnalysis`), `dto/ResultResponse`(`elementMatch` + `ElementMatchResponse`)
+- `db/migration/V14__add_reading_element_match.sql`
+- 테스트: `ReadingGeneratorTest`(프롬프트 기대값), `SajuResultAnalysisAdapterTest`·`ResultServiceTest`(생성자·`elementMatch` 단언)
+
+**다음 사람이 알아야 할 것**
+- **#81(V13) 다음에 머지한다.** 이 브랜치는 `feat/79-compatibility-reason` 에서 땄다 (`GeminiJson` 의존)
+- `SharedResultResponse`(공유 페이지) 에는 안 넣었다. 5.13 은 공유 유입자의 *자기* 결과(= 일반 홈)라 `ResultResponse` 로 충족
+- 기존 저장 결과는 `elementMatch: null`. 축제 전 운영 DB 결과가 적으면 무시, 많으면 재생성 여부 결정
+
+**막힌 것 / 넘기는 것**
+- 기획: 잘 맞는 오행 선정 규칙이 보완 오행이 맞는지 확인. 아니면 `LuckyPlace.luckyElement` 대신 다른 함수로 바꾸면 된다 (응답·프롬프트 구조는 그대로)
+
+**문서 변경**
+- `docs/api-spec.md` (§2·§3 `elementMatch`), `docs/architecture.md` (§6 파이프라인), `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 위 표 2026-09-23 행 (`elementMatch`)
 
 ### 2026-09-23 (수) · 차은호 · saju/ + compatibility/ 궁합 상세 이유 (#79 #80) · Claude Code
 
