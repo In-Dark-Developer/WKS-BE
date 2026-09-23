@@ -39,6 +39,9 @@
 | JWT 라이브러리 도입 승인 | 곽도윤 | `nimbus-jose-jwt` 로컬에 이미 추가돼 동작 확인함(2026-09-23). **팀 채널 공지는 아직 안 함** — convention 규칙상 커밋 전에 알릴 것 |
 | plan.md 미결정 항목 (TBD-13~16 등) | 기획 | 소개팅 BE 1차(09/25)에 영향. 명세가 09/22 전에 확정돼야 함 |
 | **CI 없음.** PR 용 빌드·테스트 워크플로가 없고 `deploy.yml` 은 `bootJar -x test` | 곽도윤 | `dev` push 가 테스트 없이 운영에 배포된다. PR CI(`./gradlew build`) 추가와 배포 전 테스트 단계 결정 |
+| PR #81(궁합 상세 이유)·#83(잘 맞는 오행) 리뷰·머지 | 최선우·곽도윤 | **#81 → #83 순서.** #83 은 #81 위에 쌓은 PR(base `feat/79-compatibility-reason`)이라 #81 머지 후 `gh pr edit 83 --base dev`. Flyway V13 → V14. `ErrorCode`·`db/migration/`·`compatibility/`·`result/` 변경 **팀 채널 공지는 아직 안 함**(차은호) |
+| "나와 잘 맞는 오행" 선정 규칙 | 기획 | #83 은 보완 오행(`LuckyPlace.luckyElement`, 행운의 장소와 동일)으로 잡았다. 기획 규칙이 다르면 함수 하나만 교체 |
+| 사주 해설 문장 길이 | 기획 | 피그마(`8:741`) 연애·결혼·자녀운 본문은 6문장 안팎, 현재 프롬프트는 8~10문장. 줄일지 결정 |
 
 ---
 
@@ -134,7 +137,7 @@
 
 ## 기록
 
-### 2026-09-23 (수) · 차은호 · saju/ + result/ 나와 잘 맞는 오행 + 이유 (#82) · Claude Code
+### 2026-09-23 (수) · 차은호 · saju/ + result/ 나와 잘 맞는 오행 + 이유 (#82 → PR #83) · Claude Code
 
 **한 일**
 - 피그마 사주 결과 화면의 "나와 잘 맞는 오행은 토(土)" 구획(기능명세 3.5·5.13) 데이터를 결과 응답에 넣었다: `elementMatch: { element, korean, reason }`
@@ -156,6 +159,9 @@
 
 **막힌 것 / 넘기는 것**
 - 기획: 잘 맞는 오행 선정 규칙이 보완 오행이 맞는지 확인. 아니면 `LuckyPlace.luckyElement` 대신 다른 함수로 바꾸면 된다 (응답·프롬프트 구조는 그대로)
+- 차은호: #81 머지 뒤 PR #83 base 를 `dev` 로 변경. 팀 채널 공지(`result/` 관통 변경·V14)
+- 운영: 이 PR 배포 전에 만든 결과는 `elementMatch: null`. 운영 DB 결과가 많으면 재생성 여부 결정 (같은 입력 재생성은 버전이 달라 LLM 을 다시 부른다)
+- 로컬 end-to-end 에서 옛 행 NULL 경로는 앱이 먼저 꺼져 못 봤다. 단위 테스트(`ResultServiceTest.oldReadingWithoutElementMatchReasonYieldsNullSection`)로 대신 고정
 
 **문서 변경**
 - `docs/api-spec.md` (§2·§3 `elementMatch`), `docs/architecture.md` (§6 파이프라인), `docs/handoff.md`
@@ -163,7 +169,7 @@
 **프론트에 알려야 할 것**
 - 위 표 2026-09-23 행 (`elementMatch`)
 
-### 2026-09-23 (수) · 차은호 · saju/ + compatibility/ 궁합 상세 이유 (#79 #80) · Claude Code
+### 2026-09-23 (수) · 차은호 · saju/ + compatibility/ 궁합 상세 이유 (#79 #80 → PR #81) · Claude Code
 
 **한 일**
 - 궁합지도 상세 시트의 세 질문("왜 나에게 귀인일까요?"·"둘이 만나게 된다면?"·"둘이 싸우게 된다면?")을 Gemini 한 번 호출로 만드는
@@ -185,11 +191,14 @@
 - `CompatibilityReasonService.getReason` 은 일부러 트랜잭션이 없다. LLM 30초를 트랜잭션 안에서 기다리면 공유가 몰릴 때 커넥션 풀이 마른다. 동시 최초 열람은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 저장되고 진 쪽은 다시 읽는다
 - 프롬프트를 바꿔도 기존 캐시는 옛 글로 남는다(버전 컬럼 없음). 다시 만들려면 `reason_*` 를 NULL 로
 - **최선우·곽도윤:** `compatibility/`·`result/dto`·`ErrorCode` 를 건드렸다. PR 리뷰에서 봐 주면 좋겠다. 이유 API 담당이 "미정"이라 내가 가져갔다
-- 피그마 사주 결과 화면에 **"나와 잘 맞는 오행 + 이유"(기능명세 3.5, plan §8.2 `GET /api/results/{resultId}/element-match`)** 가 있는데 **아직 미구현**이다. 이번 PR 범위 밖. 별도 이슈 필요
-- 피그마의 연애운·결혼운·자녀운 본문은 6문장 안팎으로 보이는데 현재 프롬프트는 8~10문장이다. 기획 확인 후 줄일지 결정
+- 피그마 사주 결과 화면의 **"나와 잘 맞는 오행 + 이유"(기능명세 3.5)** 는 같은 날 #82 → PR #83 으로 따로 했다 (위 기록)
+- 피그마의 연애운·결혼운·자녀운 본문은 6문장 안팎으로 보이는데 현재 프롬프트는 8~10문장이다. 기획 확인 후 줄일지 결정 (위 "지금 막혀 있는 것" 표)
+- 리뷰어: 최선우(`seonwoochoi24`)·곽도윤(`hairyung2002`) 지정함
+- 로컬 확인 때 `wks-postgres` 컨테이너에 옛 데이터가 있어 V10~V13 만 새로 적용됐다. 빈 DB 에서 V1 부터 도는 것은 이번에 안 봤다
 
 **막힌 것 / 넘기는 것**
-- 없음
+- 차은호: `ErrorCode`·`db/migration/`·`compatibility/` 변경 **팀 채널 공지** (AGENTS.md 규칙, 아직 안 함)
+- 프론트: `id` 필드 2곳 + reason 엔드포인트 공지 (위 "프론트에 공지한 API 변경" 표, 미전달)
 
 **문서 변경**
 - `docs/api-spec.md` (§1 에러 코드, §3 `compatibilities[].id`, §4 `id` + `GET /api/compatibilities/{id}/reason`), `docs/architecture.md` (§6 궁합 이유), `docs/handoff.md`
