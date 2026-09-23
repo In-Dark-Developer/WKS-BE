@@ -3,6 +3,7 @@ package com.darkness.wks.saju;
 import com.darkness.wks.common.Gender;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,19 +48,21 @@ class ReadingGeneratorTest {
                 .contains("시주 모름");
     }
 
+    private static final List<String> FIELDS = List.of("destinyDescription", "marriage", "children", "love");
+
     @Test
     void parsesCompleteJson() {
-        Reading r = new ReadingGenerator(null, "m").parse("""
-                {"destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애"}""");
+        Reading r = ReadingGenerator.toReading(new GeminiJson(null, "m").parse("""
+                {"destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애"}""", FIELDS));
         assertThat(r.destinyDescription()).isEqualTo("설명");
         assertThat(r.contents()).containsEntry(ReadingCategory.LOVE, "연애");
     }
 
     @Test
     void rejectsMissingFieldOrBrokenJson() {
-        ReadingGenerator g = new ReadingGenerator(null, "m");
-        assertThatThrownBy(() -> g.parse("{\"destinyDescription\":\"x\"}")).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> g.parse("not json")).isInstanceOf(RuntimeException.class);
-        assertThatThrownBy(() -> g.parse(null)).isInstanceOf(IllegalStateException.class);
+        GeminiJson g = new GeminiJson(null, "m");
+        assertThatThrownBy(() -> g.parse("{\"destinyDescription\":\"x\"}", FIELDS)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> g.parse("not json", FIELDS)).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> g.parse(null, FIELDS)).isInstanceOf(IllegalStateException.class);
     }
 }

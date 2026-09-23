@@ -46,6 +46,16 @@ public class Compatibility {
     @Column(name = "tier", length = 10, nullable = false)
     private CompatibilityTier tier;
 
+    // 궁합 상세 이유 캐시 (plan §1.2). 처음 열어볼 때 LLM 이 세 답을 한 번에 만들어 채운다 (V13)
+    @Column(name = "reason_why")
+    private String reasonWhy;
+
+    @Column(name = "reason_together")
+    private String reasonTogether;
+
+    @Column(name = "reason_conflict")
+    private String reasonConflict;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -55,5 +65,9 @@ public class Compatibility {
         this.guest = guest;
         this.score = score;
         this.tier = tier;
+    }
+
+    public boolean hasReason() {
+        return reasonWhy != null;
     }
 }

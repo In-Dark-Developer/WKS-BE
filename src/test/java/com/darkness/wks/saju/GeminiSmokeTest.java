@@ -22,7 +22,7 @@ class GeminiSmokeTest {
                 .apiKey(System.getenv("GOOGLE_API_KEY"))
                 .httpOptions(HttpOptions.builder().timeout(30_000).build())
                 .build();
-        ReadingGenerator generator = new ReadingGenerator(client, "gemini-3.5-flash-lite");
+        ReadingGenerator generator = new ReadingGenerator(new GeminiJson(client, "gemini-3.5-flash-lite"));
 
         Reading r = generator.generate(
                 new SajuPillars("임오", "계묘", "신사", "을미"),

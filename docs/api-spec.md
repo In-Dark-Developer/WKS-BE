@@ -39,6 +39,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `INVALID_INPUT` | 400 | 유효성 검증 실패 |
 | `RESULT_NOT_FOUND` | 404 | resultId 없음 |
 | `SELF_COMPATIBILITY` | 400 | 자기 자신과 궁합 요청 |
+| `COMPATIBILITY_NOT_FOUND` | 404 | 궁합 `id` 없음 |
 | `DUPLICATE_SIGNUP` | 409 | 이미 신청한 이메일 |
 | `INVALID_EMAIL_DOMAIN` | 400 | 학교 웹메일 아님 |
 | `INVALID_TOKEN` | 400 | 인증 토큰 만료·위조·재사용 |
@@ -153,14 +154,15 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": [
-      { "nickname": "민수", "score": 31, "tier": "SEUCHIM",  "createdAt": "2026-09-11T13:20:00Z" },
-      { "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" }
+      { "id": 15, "nickname": "민수", "score": 31, "tier": "SEUCHIM",  "createdAt": "2026-09-11T13:20:00Z" },
+      { "id": 12, "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" }
     ]
   }
 }
 ```
 
 - `compatibilities` 는 `createdAt` 내림차순
+- `id` 는 궁합 ID(순번). `GET /api/compatibilities/{id}/reason` 에 쓴다 (§4)
 - **상대의 생년월일·성별·resultId 는 내려보내지 않는다.** 닉네임과 점수만
 
 ### `GET /api/results/{resultId}/input`
@@ -236,6 +238,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 {
   "success": true,
   "data": {
+    "id": 12,
     "score": 92,
     "tier": "GUIIN",
     "originNickname": "도윤",
@@ -248,6 +251,32 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - 이미 있는 조합이면 기존 값을 그대로 **200**으로 반환. 재계산하지 않는다
 - `score(A,B) == score(B,A)` 보장
 - `tier` 구간 (2026-09-13 기획 확정, 25점 구간 아님): `GUIIN` 90~100 · `CHALTTEOK` 75~89 · `BEOT` 61~74 · `SEUCHIM` 0~60
+- `id` 는 궁합 ID(순번). 아래 상세 이유 조회에 쓴다
+
+### `GET /api/compatibilities/{id}/reason`
+
+궁합지도에서 친구 Row 를 눌러 상세 시트를 열 때 호출한다 (기능명세 4.7 · 5.10).
+세 질문의 답을 한 번에 준다. **처음 열어볼 때 LLM 으로 생성해 저장**하므로 첫 호출만 느리고(최대 30초), 이후는 즉시 반환.
+`{id}` = 궁합 생성 응답 또는 결과 조회 `compatibilities[].id`.
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "why": "나무의 기운이 불의 기운을 살리는 사이라 ...",
+    "together": "함께 있으면 나무의 기운을 가진 분이 먼저 ...",
+    "conflict": "불의 기운 쪽이 먼저 달아오르기 쉬워요 ..."
+  }
+}
+```
+
+- `why` = "왜 나에게 귀인(찰떡·벗·스침)일까요?", `together` = "둘이 만나게 된다면?", `conflict` = "둘이 싸우게 된다면?". 각 3~4문장
+- **두 사람이 같은 내용을 본다.** 글은 어느 한쪽을 "당신"으로 부르지 않고, 각자를 기운("나무의 기운을 가진 분")으로 가리킨다. 성별은 반영하지 않는다
+- 없는 `id` 는 `COMPATIBILITY_NOT_FOUND` 404
+- 생성 실패는 `LLM_UNAVAILABLE` 503. **해당 영역만 미노출**하고 궁합지도는 유지한다. 다시 호출하면 재시도된다
+- 첫 호출이 느리므로 시트에 로딩 상태를 둔다. 같은 조합을 두 사람이 동시에 처음 열어도 저장은 한 번이고 둘이 같은 글을 받는다
 
 ---
 

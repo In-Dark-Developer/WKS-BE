@@ -7,6 +7,7 @@ public enum ErrorCode {
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),
     RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "사주 결과를 찾을 수 없습니다."),
     SELF_COMPATIBILITY(HttpStatus.BAD_REQUEST, "본인과는 궁합을 볼 수 없습니다."),
+    COMPATIBILITY_NOT_FOUND(HttpStatus.NOT_FOUND, "궁합을 찾을 수 없습니다."),
     DUPLICATE_SIGNUP(HttpStatus.CONFLICT, "이미 신청된 이메일입니다."),
     INVALID_EMAIL_DOMAIN(HttpStatus.BAD_REQUEST, "허용되지 않는 이메일 도메인입니다."),
     INVALID_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 토큰입니다."),

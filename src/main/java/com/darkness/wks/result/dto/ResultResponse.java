@@ -147,6 +147,7 @@ public record ResultResponse(
 
     @Schema(description = "친구 궁합 요약. 상대방 개인정보와 resultId는 포함하지 않는다.")
     public record CompatibilityResponse(
+            @Schema(description = "궁합 ID. GET /api/compatibilities/{id}/reason 에 쓴다", example = "12") Long id,
             @Schema(example = "지현") String nickname,
             @Schema(minimum = "0", maximum = "100", example = "82") int score,
             CompatibilityTier tier,
@@ -158,6 +159,7 @@ public record ResultResponse(
                     ? compatibility.getGuest()
                     : compatibility.getOrigin();
             return new CompatibilityResponse(
+                    compatibility.getId(),
                     other.getNickname(),
                     compatibility.getScore(),
                     compatibility.getTier(),

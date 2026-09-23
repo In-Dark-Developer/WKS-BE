@@ -22,7 +22,7 @@
 | 배포 상태 | 🔧 파일상 확정(2026-09-23): `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버. **아직 커밋 전이고 EC2에도 미반영** — 커밋·머지 전까지는 실제로 `dev` push 가 운영을 배포하는 기존 동작 그대로다. 머지 직후엔 `main` 으로 한 번도 릴리즈 안 해봐서 첫 `dev`→`main` PR 전까지 운영 자동 배포 공백 생김(아래 기록) |
 | 개발 서버 (`api-dev.threadoffate.site`) | 🔧 인프라 파일 준비 완료(2026-09-23, 아래 기록) — **EC2 미적용.** `docs/runbook-dev-server.md` 대로 본인이 실행해야 실제로 뜬다 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V9 (dev 기준). V10 은 #54(사진, 개명 완료), V11(로그인)은 **로컬 구현 완료·커밋 전**, V12(원장)는 예약만 — 아래 예약 표 |
+| Flyway 최신 버전 | V11 (dev 기준, 2026-09-23 로그인 머지). V12(원장)는 예약만, V13(궁합 이유 캐시)은 PR — 아래 예약 표 |
 | 카카오 로그인 | ✅ 백엔드·프론트 **로컬 구현 완료 + 왕복 검증 완료**(2026-09-23). `auth/`·`common/auth/`·`member/`(BE), `features/auth/`(FE) 전부 **아직 커밋 안 됨** — 브랜치 정리 필요. 계획은 `docs/backend-requirements.md` §16, 세부는 아래 2026-09-23 기록 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
@@ -48,6 +48,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V13 | 차은호 | `compatibility` 에 `reason_why`·`reason_together`·`reason_conflict` (궁합 상세 이유 캐시, #80) | PR |
 | V12 | 미정 | `thread_ledger` (실 원장, `ref_id NOT NULL`). 소개팅 BE 와 함께 | 예약 |
 | V11 | 곽도윤 | `member`(`kakao_id` 만) + `result.member_id`(계정당 1개, 부분 unique). 로그인 마감 09/22 | 로컬 적용·검증 완료(2026-09-23), **커밋 전** |
 | V10 | 곽도윤 | signup 에 `photo_key` 추가 (#54). `V9__add_signup_photo_key.sql` 을 개명 (dev 의 V9 와 중복이었다) | 개명 완료 (2026-09-21), PR 대기 |
@@ -76,6 +77,7 @@
 | (문서 기준 8종) | - | ✅ |
 | `UNAUTHENTICATED` (401) | 곽도윤 (예정, 로그인 PR) | 📄 `api-spec.md` §9 "추가 예정 에러 코드"에 기재. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 (1:1 유지) |
 | `KAKAO_UNAVAILABLE` (503) | 곽도윤 (확정 2026-09-21, 로그인 PR) | 📄 `api-spec.md` §9 에 기재. 카카오 서버 오류·타임아웃. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 |
+| `COMPATIBILITY_NOT_FOUND` (404) | 차은호 (#80) | ✅ §1 표·§4 `GET /api/compatibilities/{id}/reason` |
 | `INSUFFICIENT_THREAD` | 소개팅 BE (예정) | ❌ HTTP 상태 미정 (plan.md TBD-11). 명세 확정 후 |
 
 ---
@@ -84,6 +86,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-23 | `GET /api/compatibilities/{id}/reason` 추가 (궁합 상세 이유 3답: `why`·`together`·`conflict`). 첫 호출만 LLM 생성이라 최대 30초, 실패는 `LLM_UNAVAILABLE` 503 → 해당 영역만 미노출·재시도. 두 사람이 같은 내용. **프론트가 `id` 를 받으려면 궁합 응답에 `id` 가 필요** — 아래 기록 참고 | ❌ |
 | 2026-09-21 | **(예정, 미구현)** `POST /api/auth/kakao`(프론트가 code 전달, 응답에 JWT)·`GET /api/me`·`GET /api/me/result`. **초안이 `api-spec.md` §9 / `api.md` §6 에 있음.** 사주·궁합·공유 API 는 **변경 없음**(비로그인 그대로). 인증 API 는 `Authorization: Bearer`. 프론트 콜백 주소(운영·로컬)를 백엔드에 받아야 한다. 구현 PR 에서 확정 후 재공지 | ❌ |
 | 2026-09-17 | `PATCH /api/results/{resultId}` 추가 (닉네임만 변경, 공유 링크·궁합 유지) | ❌ |
 | 2026-09-17 | `GET /api/results/{resultId}/input` 추가 (폼 자동 채움). `resultId` 는 URL 노출 금지 | ❌ |
@@ -128,6 +131,40 @@
 ---
 
 ## 기록
+
+### 2026-09-23 (수) · 차은호 · saju/ + compatibility/ 궁합 상세 이유 (#79 #80) · Claude Code
+
+**한 일**
+- 궁합지도 상세 시트의 세 질문("왜 나에게 귀인일까요?"·"둘이 만나게 된다면?"·"둘이 싸우게 된다면?")을 Gemini 한 번 호출로 만드는
+  `saju/CompatibilityReasonGenerator` + `prompts/compatibility-reason-system.txt` 추가. 피그마(4.1.2 궁합 자세히 보기)의 구획당 2~4문장에 맞춰 각 3~4문장·150자 이내
+- `GET /api/compatibilities/{id}/reason` 추가 (`CompatibilityReasonService`·`CompatibilityReasonController`). 처음 열 때 생성해 `compatibility.reason_*` 3컬럼(V13)에 캐싱, 재조회는 LLM 0회
+- Gemini 호출부를 `saju/GeminiJson` 으로 뽑아 `ReadingGenerator` 와 공유. `CallBudget` 도 하나라 사주 해석·궁합 이유가 같은 한도를 쓴다 (FR-CP-14)
+- 궁합 응답(`POST …/compatibility`)과 결과 조회의 `compatibilities[]` 에 `id` 추가 (프론트가 reason 을 부르려면 필요. 추가만이라 계약 위반 아님)
+- `ErrorCode.COMPATIBILITY_NOT_FOUND`(404) 추가, `CompatibilityTier.korean()` 추가
+- 로컬 postgres 로 end-to-end 확인: V13 적용·`validate` 통과, 결과 2개 → 궁합 → reason 첫 호출 2.3초(Gemini 1회) → 재호출 10ms(캐시) → 없는 id 404. 생성 문장은 상생 방향(흙→쇠)이 입력과 일치했고 "당신" 없이 두 사람을 기운으로 가리켰다
+
+**건드린 파일/패키지**
+- `saju/`: `GeminiJson`(신규), `CompatibilityReasonGenerator`(신규), `CompatibilityReason`(신규), `ReadingGenerator`(호출부 분리, 프롬프트 조립은 그대로)
+- `compatibility/`: `CompatibilityReasonService`·`CompatibilityReasonController`·`dto/CompatibilityReasonResponse`(신규), `CompatibilityRepository`(`findByIdWithResults`·`saveReasonIfAbsent`), `entity/Compatibility`(3컬럼), `entity/CompatibilityTier`(`korean()`), `dto/CompatibilityResponse`(`id`)
+- `result/dto/ResultResponse.CompatibilityResponse`(`id`), `common/exception/ErrorCode`, `db/migration/V13__add_compatibility_reason.sql`, `resources/prompts/compatibility-reason-system.txt`
+- 테스트: `CompatibilityReasonGeneratorTest`·`CompatibilityReasonServiceTest`(신규), `ReadingGeneratorTest`·`GeminiSmokeTest`·`CompatibilityControllerTest`(생성자 변경 반영)
+
+**다음 사람이 알아야 할 것**
+- **궁합 이유 프롬프트에는 성별을 넣지 않는다.** 두 사람이 같은 글을 보고, 성별을 고려한 글은 소개팅 쪽이 따로 만든다 (2026-09-23 결정)
+- `CompatibilityReasonService.getReason` 은 일부러 트랜잭션이 없다. LLM 30초를 트랜잭션 안에서 기다리면 공유가 몰릴 때 커넥션 풀이 마른다. 동시 최초 열람은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 저장되고 진 쪽은 다시 읽는다
+- 프롬프트를 바꿔도 기존 캐시는 옛 글로 남는다(버전 컬럼 없음). 다시 만들려면 `reason_*` 를 NULL 로
+- **최선우·곽도윤:** `compatibility/`·`result/dto`·`ErrorCode` 를 건드렸다. PR 리뷰에서 봐 주면 좋겠다. 이유 API 담당이 "미정"이라 내가 가져갔다
+- 피그마 사주 결과 화면에 **"나와 잘 맞는 오행 + 이유"(기능명세 3.5, plan §8.2 `GET /api/results/{resultId}/element-match`)** 가 있는데 **아직 미구현**이다. 이번 PR 범위 밖. 별도 이슈 필요
+- 피그마의 연애운·결혼운·자녀운 본문은 6문장 안팎으로 보이는데 현재 프롬프트는 8~10문장이다. 기획 확인 후 줄일지 결정
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `docs/api-spec.md` (§1 에러 코드, §3 `compatibilities[].id`, §4 `id` + `GET /api/compatibilities/{id}/reason`), `docs/architecture.md` (§6 궁합 이유), `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-23 행. `id` 필드 추가 2곳 + reason 엔드포인트
 
 ### 2026-09-23 (수) · 곽도윤 · 인프라: 운영 compose·main 배포 트리거 diff 승인·적용 · Claude Code
 

@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "친구 궁합 결과")
 public record CompatibilityResponse(
+        @Schema(description = "궁합 ID. GET /api/compatibilities/{id}/reason 에 쓴다", example = "12") Long id,
         @Schema(minimum = "0", maximum = "100", example = "92") int score,
         @Schema(example = "GUIIN") CompatibilityTier tier,
         @Schema(example = "서연") String originNickname,
@@ -15,6 +16,7 @@ public record CompatibilityResponse(
 
     public static CompatibilityResponse from(Compatibility compatibility, Result origin, Result guest) {
         return new CompatibilityResponse(
+                compatibility.getId(),
                 compatibility.getScore(),
                 compatibility.getTier(),
                 origin.getNickname(),
