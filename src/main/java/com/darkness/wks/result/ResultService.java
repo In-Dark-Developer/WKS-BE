@@ -70,6 +70,7 @@ public class ResultService {
                 children.content(),
                 love.score(),
                 love.content(),
+                analysis.elementMatchReason(),
                 version
         );
         readingRepository.save(reading);
@@ -86,7 +87,8 @@ public class ResultService {
                         new ResultAnalysisPort.Fortune(FortuneCategory.MARRIAGE, r.getMarriageScore(), r.getMarriageContent()),
                         new ResultAnalysisPort.Fortune(FortuneCategory.CHILDREN, r.getChildrenScore(), r.getChildrenContent()),
                         new ResultAnalysisPort.Fortune(FortuneCategory.LOVE, r.getLoveScore(), r.getLoveContent())
-                )
+                ),
+                r.getElementMatchContent()
         );
     }
 

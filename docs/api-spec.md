@@ -109,6 +109,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
       { "category": "LOVE",     "grade": "B",  "content": "연애운에 대한 설명" }
     ],
     "elements": { "wood": 3, "fire": 2, "earth": 1, "metal": 1, "water": 1 },
+    "elementMatch": { "element": "EARTH", "korean": "토", "reason": "흙의 기운은 당신을 살려 주는 기운이에요. ..." },
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": []
@@ -117,6 +118,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ```
 
 - 화면의 고정 문구인 “당신의 운명은”은 프론트에서 표시한다
+- `elementMatch` 는 **나와 잘 맞는 오행 + 이유** (기능명세 3.5). `element` 는 `WOOD` `FIRE` `EARTH` `METAL` `WATER`, `korean` 은 목·화·토·금·수. 한자(木 등)는 프론트 매핑. 오행은 `luckyPlace` 와 같은 보완 오행이라 사람마다 고정, `reason` 은 2~3문장. CTA "OO 기운의 사람 만나보기"(3.6)는 `element` 를 그대로 쓴다. **`null` 이면 영역을 그리지 않는다** (이 필드가 생기기 전에 만든 결과)
 - `fortunes` 순서는 `MARRIAGE` → `CHILDREN` → `LOVE`로 고정한다
 - `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
   **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
@@ -151,6 +153,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "destiny": { "title": "오래 사랑할 운명", "description": "..." },
     "fortunes": [ ... ],
     "elements": { "wood": 3, "fire": 2, "earth": 1, "metal": 1, "water": 1 },
+    "elementMatch": { "element": "EARTH", "korean": "토", "reason": "..." },
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": [

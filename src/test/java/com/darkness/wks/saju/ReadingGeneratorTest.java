@@ -27,6 +27,7 @@ class ReadingGeneratorTest {
                 많은 기운: 나무, 불, 물 / 없는 기운: 없음
                 배우자 기운: 나무 / 배우자 자리의 기운: 불
                 자녀 기운: 불
+                잘 맞는 기운: 흙 (나를 살려 주는 기운)
                 결혼운 등급: SS
                 자녀운 등급: A+
                 연애운 등급: B""");
@@ -37,9 +38,10 @@ class ReadingGeneratorTest {
 
     @Test
     void strongAndWeakElementsMatchCharacterCounts() {
-        // 갑인 갑인 갑인 갑인: 목 8, 나머지 0
+        // 갑인 갑인 갑인 갑인: 목 8, 나머지 0. 신강이라 빼는 오행 중 첫째(불) = 잘 맞는 기운, 내가 살려 주는 쪽
         assertThat(ReadingGenerator.buildPrompt(new SajuPillars("갑인", "갑인", "갑인", "갑인"), GRADES, Gender.MALE))
-                .contains("많은 기운: 나무 / 없는 기운: 불, 흙, 쇠, 물");
+                .contains("많은 기운: 나무 / 없는 기운: 불, 흙, 쇠, 물")
+                .contains("잘 맞는 기운: 불 (내가 살려 주는 기운)");
     }
 
     @Test
@@ -48,14 +50,15 @@ class ReadingGeneratorTest {
                 .contains("시주 모름");
     }
 
-    private static final List<String> FIELDS = List.of("destinyDescription", "marriage", "children", "love");
+    private static final List<String> FIELDS = List.of("destinyDescription", "marriage", "children", "love", "elementMatch");
 
     @Test
     void parsesCompleteJson() {
         Reading r = ReadingGenerator.toReading(new GeminiJson(null, "m").parse("""
-                {"destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애"}""", FIELDS));
+                {"destinyDescription":"설명","marriage":"결혼","children":"자녀","love":"연애","elementMatch":"흙"}""", FIELDS));
         assertThat(r.destinyDescription()).isEqualTo("설명");
         assertThat(r.contents()).containsEntry(ReadingCategory.LOVE, "연애");
+        assertThat(r.elementMatch()).isEqualTo("흙");
     }
 
     @Test

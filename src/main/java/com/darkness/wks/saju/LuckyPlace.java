@@ -29,7 +29,8 @@ public final class LuckyPlace {
         return LuckyPool.pick(PLACES.get(element), pillars.toString() + today);
     }
 
-    static Element luckyElement(SajuPillars pillars) {
+    /** 보완 오행. 행운의 장소와 "나와 잘 맞는 오행"(기능명세 3.5, #82)이 같이 쓴다. 날짜 무관, 사람마다 고정 */
+    public static Element luckyElement(SajuPillars pillars) {
         Element me = Element.ofStem(pillars.dayPillar().charAt(0));
         double[] strength = Element.strengths(pillars);
         double total = 0, support = 0;

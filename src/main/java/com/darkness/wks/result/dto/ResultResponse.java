@@ -44,6 +44,9 @@ public record ResultResponse(
         @Schema(description = "사주 원국의 오행 개수. 출생 시간 입력 시 합계 8, 미입력 시 합계 6")
         ElementResponse elements,
 
+        @Schema(description = "나와 잘 맞는 오행 + 이유. 행운의 장소와 같은 보완 오행. 이유가 없는 옛 결과는 null (영역 미노출)")
+        ElementMatchResponse elementMatch,
+
         @Schema(description = "오늘의 행운 아이템. 팔자 + 오늘 일진으로 계산, 매일 바뀜", example = "파란 부채")
         String luckyItem,
 
@@ -86,12 +89,29 @@ public record ResultResponse(
                         new FortuneResponse(FortuneCategory.LOVE, Grade.of(reading.getLoveScore()).label(), reading.getLoveContent())
                 ),
                 ElementResponse.from(pillars),
+                ElementMatchResponse.from(pillars, reading.getElementMatchContent()),
                 lucky.item(),
                 LuckyPlace.of(pillars, today),
                 compatibilities.stream()
                         .map(compatibility -> CompatibilityResponse.from(compatibility, result))
                         .toList()
         );
+    }
+
+    @Schema(description = "나와 잘 맞는 오행 + 이유 (기능명세 3.5). 이유가 없는 옛 결과는 이 필드가 null")
+    public record ElementMatchResponse(
+            @Schema(description = "WOOD FIRE EARTH METAL WATER", example = "EARTH") Element element,
+            @Schema(example = "토") String korean,
+            @Schema(example = "흙의 기운은 당신을 살려 주는 기운이에요. ...") String reason
+    ) {
+
+        static ElementMatchResponse from(SajuPillars pillars, String reason) {
+            if (reason == null) {
+                return null; // V14 이전 결과. 화면은 영역 미노출
+            }
+            Element e = LuckyPlace.luckyElement(pillars);
+            return new ElementMatchResponse(e, e.korean(), reason);
+        }
     }
 
     @Schema(description = "사주 원국 6~8글자의 오행 분포")
