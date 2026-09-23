@@ -1,0 +1,25 @@
+# 개발 서버(api-dev.threadoffate.site, EC2 /opt/wks-dev) 환경. application-prod.yml과 거의 동일한
+# 구조를 쓴다 — 값은 전부 환경변수로 주입하고, 이 파일에는 비밀값을 직접 적지 않는다.
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:wks-postgres}:${DB_PORT:5432}/${DB_NAME:wks_dev}
+    username: ${DB_USERNAME:wks_dev}
+    password: ${DB_PASSWORD}
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+gemini:
+  api-key: ${GOOGLE_API_KEY}
+
+server:
+  port: ${SERVER_PORT:8080}
