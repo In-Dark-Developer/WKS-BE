@@ -52,6 +52,10 @@ public class Reading {
     @Column(name = "love_content", nullable = false, columnDefinition = "TEXT")
     private String loveContent;
 
+    /** "나와 잘 맞는 오행" 풀이 (#82). V14 이전 행은 NULL → 응답에서 영역 미노출 */
+    @Column(name = "element_match_content", columnDefinition = "TEXT")
+    private String elementMatchContent;
+
     /** 프롬프트·점수 로직 버전. 같은 입력 재사용은 같은 버전끼리만 (#62). 0 = 버전 도입 전 행 */
     @Column(name = "version", nullable = false)
     private int version;
@@ -69,10 +73,12 @@ public class Reading {
             String childrenContent,
             int loveScore,
             String loveContent,
+            String elementMatchContent,
             int version
     ) {
         this.result = result;
         this.version = version;
+        this.elementMatchContent = elementMatchContent;
         this.destinyContent = destinyContent;
         this.marriageScore = (short) marriageScore;
         this.marriageContent = marriageContent;

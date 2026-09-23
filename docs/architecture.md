@@ -337,11 +337,12 @@ CreateResultRequest
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
   → ReadingScorer       결혼·자녀·연애 점수 산출 (성별로 배우자성·자녀성 결정)   ← 결정적
-  → ReadingGenerator    등급+팔자+성별 → 보살 톤 문장   ← LLM (운명 설명·결혼·자녀·연애 문장만)
+  → ReadingGenerator    등급+팔자+성별+잘 맞는 오행 → 보살 톤 문장   ← LLM (운명 설명·결혼·자녀·연애·잘 맞는 오행 이유 문장만, 한 번에)
   → DestinyTitle        조회 시: 점수 상/하 조합 → 운명 제목 8종   ← 코드 표
   → ReadingRepository   저장
   → DailyLucky          조회 시: 오행별 (궁합 40% + 오늘 일진 활성도 60%) → 행운 오행 → 아이템   ← 코드, 매일 변경
   → LuckyPlace          조회 시: 원국 오행 세력·신강/신약 → 보완 오행(고정) → 풀에서 날짜별 장소   ← 코드, 매일 변경
+  → ElementMatch        조회 시: 같은 보완 오행 = "나와 잘 맞는 오행" (기능명세 3.5). 이유 문장은 reading.element_match_content   ← 오행은 코드, 문장은 LLM
 ```
 
 **등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:
@@ -352,13 +353,16 @@ CreateResultRequest
 `reading.result_id`가 PK이므로 Result당 해석은 한 행만 저장한다.
 값이 있으면 **LLM을 호출하지 않는다.** 예외 없음.
 
-### 궁합 이유 (plan §1.2 · 구현 전)
+### 궁합 이유 (plan §1.2 · #79 #80)
 
-- **등록 시가 아니라 처음 열어볼 때 생성**한다 (`GET /api/compatibilities/{id}/reason`). 공유가 몰릴 때 등록 즉시 생성하면 429 로 죽는다
-- 생성 결과는 DB 에 캐싱하고, 재조회는 LLM 호출 0회다
-- 세 질문("왜 귀인인가"·"둘이 만나게 된다면"·"둘이 싸움이 난다면")을 **한 번의 호출**로 생성한다 (FR-GM-02)
-- 실패하면 해당 영역만 미노출하고 재시도할 수 있다. 화면 전체를 에러로 만들지 않는다
-- 프롬프트에는 팔자·점수·관계유형만 넣는다. 호출은 `CallBudget` 에 집계된다
+- **등록 시가 아니라 처음 열어볼 때 생성**한다 (`GET /api/compatibilities/{id}/reason`, `CompatibilityReasonService`). 공유가 몰릴 때 등록 즉시 생성하면 429 로 죽는다
+- 생성 결과는 `compatibility.reason_*` 세 컬럼(V13)에 캐싱하고, 재조회는 LLM 호출 0회다. 조합은 A↔B 무순서로 한 행이라 **두 사람이 같은 글을 본다**
+- 세 질문("왜 귀인인가"·"둘이 만나게 된다면"·"둘이 싸움이 난다면")을 **한 번의 호출**로 생성한다 (FR-GM-02). `saju/CompatibilityReasonGenerator` + `prompts/compatibility-reason-system.txt`
+- 실패하면 `LLM_UNAVAILABLE` 503. 프론트는 해당 영역만 미노출하고 재시도할 수 있다. 화면 전체를 에러로 만들지 않는다
+- 프롬프트에는 팔자·점수·관계유형과 코드가 정한 오행 사실(두 기운·상생/상극)만 넣는다. **성별은 넣지 않는다** — 성별을 고려한 글은 소개팅 쪽이 따로 만든다. 호출은 `saju/GeminiJson` 의 `CallBudget` 하나에 사주 해석과 함께 집계된다
+- 동시에 처음 열면 LLM 을 두 번 부를 수 있지만 저장은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 되고, 진 쪽은 저장된 글을 다시 읽는다. 잠금은 LLM 30초 동안 DB 연결을 잡아 두므로 쓰지 않는다
+- 서비스 메서드에 트랜잭션을 걸지 않는다. 같은 이유
+- 프롬프트를 바꾸면 기존 캐시는 옛 글로 남는다. 다시 만들려면 `UPDATE compatibility SET reason_why = NULL, reason_together = NULL, reason_conflict = NULL` (버전 컬럼은 두지 않았다)
 - 소개팅 "궁합 까닭"이 같은 캐시를 쓰는 방식은 미정이다 (plan.md TBD-13). `compatibility` 행을 재사용하면 후보가 친구 궁합지도에 나타난다
 
 ### 시간·지역 모름
