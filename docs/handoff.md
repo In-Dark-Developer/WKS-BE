@@ -51,6 +51,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V17 | 최선우 | 소개팅 요청·수락/거절 상태 및 양방향 중복 방지 (#86) | 작업 중, V16 뒤에 머지 |
 | V16 | 최선우 | `dating_profile.result_id` 직접 FK 제거. V15 뒤에 머지 | #84 로컬 기동 검증·미머지 |
 | V15 | 최선우 | 소개팅 사진·프로필·추천 노출 이력. V12~V14 뒤에 머지 | #84 `feat/84-dating-profile-recommendations`, 검증 완료·미머지 |
 | V14 | 차은호 | `reading` 에 `element_match_content` (잘 맞는 오행 이유, #82). **V13(#81) 뒤에 머지** | PR |
@@ -88,6 +89,8 @@
 | `DATING_PROFILE_NOT_FOUND` (404) | 최선우 (소개팅 프로필) | ✅ §1·§10 |
 | `DATING_PROFILE_CONFLICT` (409) | 최선우 (중복 프로필·이메일) | ✅ §1·§10 |
 | `DATING_NOT_VERIFIED` (403) | 최선우 (학교 메일 미인증) | ✅ §1·§10 |
+| `DATING_REQUEST_NOT_FOUND` (404) | 최선우 (#86) | ✅ §1·§11 |
+| `DATING_REQUEST_CONFLICT` (409) | 최선우 (#86) | ✅ §1·§11 |
 
 ---
 
@@ -141,6 +144,35 @@
 ---
 
 ## 기록
+
+### 2026-09-24 (목) · 최선우 · dating/ 매칭 요청 API (#86) · Codex
+
+**한 일**
+- #84 머지를 확인한 최신 `origin/dev`에서 `feat/86-dating-requests` 브랜치를 만들었다
+- 현재 추천 카드 상대에게 무료 요청, 보낸·받은 요청 목록, 수락·거절 및 수락 후 양쪽 연락처 공개를 구현했다. 실 원장은 사용하지 않는다
+- 회원 행을 순서대로 잠가 동시 수락을 직렬화하고, 두 프로필 쌍의 요청은 DB UNIQUE 인덱스로 중복을 차단했다
+- 정책 변경에 따라 수락 후에도 양쪽 프로필은 소개팅을 계속 이용하고 추천 후보 자격을 유지한다. `matched_at`은 더 이상 쓰지 않는다
+- PostgreSQL Testcontainers 포함 전체 `./gradlew test --offline` 통과
+
+**건드린 파일/패키지**
+- `dating/` 요청 Controller·Service·Repository·Entity·DTO, 추천 Repository, `db/migration/V17__add_dating_request.sql`, `common/exception/ErrorCode.java`, `DatingSchemaTest`
+
+**다음 사람이 알아야 할 것**
+- `requestId`는 요청 UUID, `candidateId`는 조회자 기준 상대 프로필 UUID다. 연락처는 `ACCEPTED`일 때만 응답한다
+- 요청은 무료로 확정돼 `plan.md` TBD-5를 종료했다. 새 요청은 현재 추천 카드의 후보에게만 가능하고 한 쌍당 한 번만 가능하다
+- 매칭 수락 후에도 다른 사람에게 요청하거나 요청받을 수 있다. 연락처 공개는 수락된 요청의 두 사람 사이에서만 이뤄진다
+
+**막힌 것 / 넘기는 것**
+- #84에서 남은 학교 이메일 인증 연동이 되기 전에는 추천 조회가 403이므로 실제 요청 왕복도 진행할 수 없다
+- `common/exception/ErrorCode.java`와 `db/migration/` 변경의 팀 채널 사전 공지는 사용자가 이전에 하지 않겠다고 했다
+
+**문서 변경**
+- `docs/plan.md` 무료 정책 확정, `docs/api-spec.md` §1·§11 프론트 계약, `docs/handoff.md` V17 예약·에러 코드·기록
+
+**프론트에 알려야 할 것**
+- 매칭 요청은 무료. §11의 요청 생성·보관함·수락/거절 API 및 수락 전후 연락처 공개 조건 전달 필요
+
+---
 
 ### 2026-09-24 (목) · 최선우 · dating/ 프로필·Top 3 API (#84) · Codex
 
