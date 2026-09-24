@@ -44,6 +44,11 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `INVALID_EMAIL_DOMAIN` | 400 | 학교 웹메일 아님 |
 | `INVALID_TOKEN` | 400 | 인증 토큰 만료·위조·재사용 |
 | `LLM_UNAVAILABLE` | 503 | 해석 생성 실패. Gemini 오류·타임아웃, 또는 서버 호출 총량 상한(분당 60·일 1,600) 초과. 잠시 후 재시도 안내 |
+| `UNAUTHENTICATED` | 401 | 토큰 없음·만료·위조 |
+| `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃 |
+| `DATING_PROFILE_NOT_FOUND` | 404 | 내 소개팅 프로필 없음 |
+| `DATING_PROFILE_CONFLICT` | 409 | 프로필 또는 학교 이메일 중복 |
+| `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
 
@@ -557,11 +562,48 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - 쿠키를 쓰지 않는다. 토큰을 URL 쿼리에 넣지 않는다
 - 프론트 콜백 주소(운영·로컬·netlify 등)를 **백엔드에 알려줘야 한다.** `redirectUri` 화이트리스트와 카카오 콘솔 등록에 필요하다
 
-### 추가 예정 에러 코드
+## 10. 소개팅 프로필·후보 추천
 
-구현 PR 에서 이 표를 §1 에러 코드 표로 옮기고 `ErrorCode.java` 에 함께 추가한다 (**1:1 유지**).
+모든 `/api/dating/**` 요청은 `Authorization: Bearer <JWT>` 가 필요하다. 응답은 §1의 `ApiResponse` 형식이다.
 
-| code | HTTP | 상황 |
-|---|---|---|
-| `UNAUTHENTICATED` | 401 | 인증이 필요한 API 에 토큰이 없거나 만료·위조 |
-| `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃 (2026-09-21 확정) |
+### `POST /api/dating/profile/photo`
+
+`{ "contentType": "image/jpeg" }` → `{ "uploadUrl": "...", "photoId": "UUIDv4", "expiresInSeconds": 600 }`.
+`image/jpeg`·`image/png`·`image/webp`만 허용한다. 프론트는 `uploadUrl`에 파일을 직접 PUT한 뒤 `photoId`를 프로필 요청에 넣는다. 업로드 URL은 공개 사진 조회 URL이 아니다.
+
+### `POST /api/dating/profile` · `PATCH /api/dating/profile/me`
+
+요청 필드: `email`(학교 메일, 예: `student@dgu.ac.kr`), `name`, `contactMethod`(`PHONE` 또는 `INSTAGRAM`), `contactValue`(문자열: `PHONE`이면 `010-3333-3333`, `INSTAGRAM`이면 `my_insta_id`), `department`, `mbti`, `bio`, `photoId`(UUIDv4). 모두 필수다. PATCH도 전체 필드를 전송한다. `photoId`는 해당 회원에게 발급됐고 S3 업로드가 완료된 값이어야 한다.
+
+POST는 201, PATCH는 200. 응답 `data`는 `candidateId`(내 소개팅 프로필 UUIDv4; 다른 사람의 추천 카드에서 이 값으로 표시), `photoId`(연결된 사진 UUIDv4), 위 프로필 필드와 `emailVerified`를 담는다. 두 ID는 서로 다른 객체를 가리킨다. 학교 이메일을 변경하면 `emailVerified`는 false로 돌아간다. 로그인 계정에 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
+
+### `GET /api/dating/profile/me`
+
+내 프로필을 위 응답 형식으로 반환한다. 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404.
+
+### `GET /api/dating/recommendations`
+
+최대 3개의 현재 후보를 반환한다. 후보는 학교 메일 인증을 마친 소개팅 신청 이성 중 기존 궁합 점수 내림차순으로 고른다. 한 번 카드에 나온 후보는 이후 새 추천에서 제외한다. 매칭된 후보가 현재 카드에 있으면 제외하고 아직 보지 않은 후보로 빈자리를 채운다. 학교 이메일 인증 전에는 `DATING_NOT_VERIFIED` 403이다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "candidates": [{
+      "rank": 1,
+      "candidateId": "3f2a9c1e-0000-4000-8000-000000000001",
+      "score": 90,
+      "mbti": "INFP",
+      "bio": "안녕하세요",
+      "fields": {
+        "photo": { "locked": true, "cost": 10 },
+        "name": { "locked": true, "cost": 7 },
+        "department": { "locked": true, "cost": 5 },
+        "reason": { "locked": true, "cost": 3 }
+      }
+    }]
+  }
+}
+```
+
+후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. 잠긴 개인정보·사진 URL·연락처는 응답에 없다. 리롤·해금·요청 API는 별도 작업에서 추가한다.

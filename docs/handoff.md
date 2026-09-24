@@ -51,6 +51,8 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V16 | 최선우 | `dating_profile.result_id` 직접 FK 제거. V15 뒤에 머지 | #84 로컬 기동 검증·미머지 |
+| V15 | 최선우 | 소개팅 사진·프로필·추천 노출 이력. V12~V14 뒤에 머지 | #84 `feat/84-dating-profile-recommendations`, 검증 완료·미머지 |
 | V14 | 차은호 | `reading` 에 `element_match_content` (잘 맞는 오행 이유, #82). **V13(#81) 뒤에 머지** | PR |
 | V13 | 차은호 | `compatibility` 에 `reason_why`·`reason_together`·`reason_conflict` (궁합 상세 이유 캐시, #80) | PR |
 | V12 | 미정 | `thread_ledger` (실 원장, `ref_id NOT NULL`). 소개팅 BE 와 함께 | 예약 |
@@ -83,6 +85,9 @@
 | `KAKAO_UNAVAILABLE` (503) | 곽도윤 (확정 2026-09-21, 로그인 PR) | 📄 `api-spec.md` §9 에 기재. 카카오 서버 오류·타임아웃. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 |
 | `COMPATIBILITY_NOT_FOUND` (404) | 차은호 (#80) | ✅ §1 표·§4 `GET /api/compatibilities/{id}/reason` |
 | `INSUFFICIENT_THREAD` | 소개팅 BE (예정) | ❌ HTTP 상태 미정 (plan.md TBD-11). 명세 확정 후 |
+| `DATING_PROFILE_NOT_FOUND` (404) | 최선우 (소개팅 프로필) | ✅ §1·§10 |
+| `DATING_PROFILE_CONFLICT` (409) | 최선우 (중복 프로필·이메일) | ✅ §1·§10 |
+| `DATING_NOT_VERIFIED` (403) | 최선우 (학교 메일 미인증) | ✅ §1·§10 |
 
 ---
 
@@ -136,6 +141,40 @@
 ---
 
 ## 기록
+
+### 2026-09-24 (목) · 최선우 · dating/ 프로필·Top 3 API (#84) · Codex
+
+**한 일**
+- 분리된 `dev` 작업 공간에서 소개팅 사진 업로드 URL·프로필 등록/조회/수정·현재 Top 3 조회를 구현했다. 추천은 기존 `CompatibilityCalculator`만 사용하며 친구 궁합 행이나 LLM을 생성하지 않는다
+- 프로필은 학교 메일 인증 전 추천 대상이 아니고, 후보는 인증된 소개팅 신청 이성으로 제한했다. 노출 이력은 회원·후보별 UNIQUE로 남기고 매칭된 후보가 현재 카드에서 빠지면 미노출 후보로 채운다
+- `photoId`를 발급해 S3 키는 서버에만 저장하고, 프로필 등록 때 회원 소유와 실제 업로드를 확인한다. 잠긴 후보 필드의 값·사진 URL·연락처는 응답에 없다
+- 추천 응답의 `fields`는 고정 필드 DTO로 선언해 Swagger에 `additionalProp` 예시 키가 나타나지 않게 했다
+- Swagger 프로필 요청 예시를 동국대 메일과 전화번호/인스타그램 2종으로 정리했다. 예시 `photoId`는 실제 발급값으로 교체해야 한다
+- Swagger 내 프로필 응답의 `candidateId`(프로필)와 `photoId`(사진)에 서로 다른 예시 UUID와 설명을 붙였다
+- 소개팅 프로필과 사주 결과는 `member_id`로 간접 연결한다. `dating_profile.result_id` 직접 FK를 제거해 사주 결과의 계정 연결은 `result.member_id` 하나로 유지했다
+- PostgreSQL Testcontainers로 V15→V16·JPA 매핑·추천 이력/보충·JWT 경로를 검증했고 전체 `./gradlew test --offline` 통과
+
+**건드린 파일/패키지**
+- `dating/` 신규 (Controller, 프로필·사진·추천 서비스, 엔티티·Repository·DTO, 인증 경로 등록), `result/ResultRepository.java` 후보 결과 일괄 조회 메서드
+- `db/migration/V15__add_dating_profile_and_recommendation.sql`, `db/migration/V16__remove_dating_profile_result_id.sql`, `common/exception/ErrorCode.java`, `docs/plan.md`, `docs/api-spec.md`, `docs/handoff.md`, `dating/` 테스트
+
+**다음 사람이 알아야 할 것**
+- 이 작업은 #84 브랜치 `feat/84-dating-profile-recommendations`의 기본 작업 폴더(`/Users/seonwoo-choi/IdeaProjects/WKS-BE`)에 있다. 원래 #57 브랜치는 보존했다
+- 리롤/해금/요청 API는 아직 없다. 리롤 비용·무료 횟수(TBD-6), 요청 비용(TBD-5), 학교 메일 인증 흐름(TBD-16)이 미결정이고 wallet/·학교 인증 구현이 필요하다
+- 학교 이메일 인증 담당은 `DatingProfile.markVerified`를 연결해야 추천이 열린다. `GET /api/me`의 `hasDatingProfile`은 아직 연결 전이다. 소개팅 카드 등급 문구는 화면 고정이므로 추천 응답에 `tier`를 넣지 않는다
+- V15와 V16은 V12(원장)·V13·V14가 순서대로 머지된 뒤에만 머지한다. V15를 로컬에 적용한 뒤 `result_id` 직접 FK를 제거하게 되어 V15 원본을 유지하고 V16으로 분리했다. 공용 파일 변경 팀 채널 공지는 사용자 요청으로 생략했다
+- 로컬 PostgreSQL에는 V12 없이 V15가 먼저 적용돼 있었다. V15 원본 복원 후 V16을 적용해 `bootRun` 기동을 확인했다. 무시되는 `application-local.yml`에 `spring.flyway.out-of-order: true`를 로컬 한정으로 넣어 V12가 나중에 합쳐져도 적용되게 했다. V12 적용 후 이 설정은 제거한다. 운영/개발 서버는 V12→V15→V16 순서로 머지해야 한다
+
+**막힌 것 / 넘기는 것**
+- #84 PR을 올리고 리뷰받아야 한다. 학교 이메일 인증·wallet/ 연동은 곽도윤 담당
+- S3 실제 버킷·권한이 없어 사진 업로드의 외부 왕복은 검증하지 못했다. 테스트에서는 외부 호출을 하지 않았다
+
+**문서 변경**
+- `docs/plan.md` §7.3·TBD 정리, `docs/api-spec.md` §1·§10, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `docs/api-spec.md` §10의 `photoId` 기반 프로필 요청과 Top 3 후보 응답. 해금·리롤·요청 API는 뒤 PR에서 추가
+
 
 ### 2026-09-23 (수) · 차은호 · saju/ + result/ 나와 잘 맞는 오행 + 이유 (#82 → PR #83) · Claude Code
 
