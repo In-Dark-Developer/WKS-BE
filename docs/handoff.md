@@ -151,6 +151,7 @@
 - 추천 응답의 `fields`는 고정 필드 DTO로 선언해 Swagger에 `additionalProp` 예시 키가 나타나지 않게 했다
 - Swagger 프로필 요청 예시를 동국대 메일과 전화번호/인스타그램 2종으로 정리했다. 예시 `photoId`는 실제 발급값으로 교체해야 한다
 - Swagger 내 프로필 응답의 `candidateId`(프로필)와 `photoId`(사진)에 서로 다른 예시 UUID와 설명을 붙였다
+- 프론트 전달을 위해 `api-spec.md` §10을 요청·응답 JSON과 사진 업로드 순서로 다시 작성하고, 실제 S3 연동·학교 인증이 미검증/미연동임을 분리해 명시했다
 - 소개팅 프로필과 사주 결과는 `member_id`로 간접 연결한다. `dating_profile.result_id` 직접 FK를 제거해 사주 결과의 계정 연결은 `result.member_id` 하나로 유지했다
 - PostgreSQL Testcontainers로 V15→V16·JPA 매핑·추천 이력/보충·JWT 경로를 검증했고 전체 `./gradlew test --offline` 통과
 

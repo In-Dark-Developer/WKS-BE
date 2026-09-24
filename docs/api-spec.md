@@ -564,26 +564,90 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ## 10. 소개팅 프로필·후보 추천
 
-모든 `/api/dating/**` 요청은 `Authorization: Bearer <JWT>` 가 필요하다. 응답은 §1의 `ApiResponse` 형식이다.
+모든 `/api/dating/**` 요청에 `Authorization: Bearer <JWT>` 가 필요하다. 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
 
-### `POST /api/dating/profile/photo`
+### 10.1 사진 업로드 준비 — `POST /api/dating/profile/photo`
 
-`{ "contentType": "image/jpeg" }` → `{ "uploadUrl": "...", "photoId": "UUIDv4", "expiresInSeconds": 600 }`.
-`image/jpeg`·`image/png`·`image/webp`만 허용한다. 프론트는 `uploadUrl`에 파일을 직접 PUT한 뒤 `photoId`를 프로필 요청에 넣는다. 업로드 URL은 공개 사진 조회 URL이 아니다.
+이 API는 **사진 파일을 받지 않는다.** S3에 직접 업로드할 임시 주소와 사진 식별자를 발급한다.
 
-### `POST /api/dating/profile` · `PATCH /api/dating/profile/me`
+**요청**
 
-요청 필드: `email`(학교 메일, 예: `student@dgu.ac.kr`), `name`, `contactMethod`(`PHONE` 또는 `INSTAGRAM`), `contactValue`(문자열: `PHONE`이면 `010-3333-3333`, `INSTAGRAM`이면 `my_insta_id`), `department`, `mbti`, `bio`, `photoId`(UUIDv4). 모두 필수다. PATCH도 전체 필드를 전송한다. `photoId`는 해당 회원에게 발급됐고 S3 업로드가 완료된 값이어야 한다.
+```json
+{ "contentType": "image/jpeg" }
+```
 
-POST는 201, PATCH는 200. 응답 `data`는 `candidateId`(내 소개팅 프로필 UUIDv4; 다른 사람의 추천 카드에서 이 값으로 표시), `photoId`(연결된 사진 UUIDv4), 위 프로필 필드와 `emailVerified`를 담는다. 두 ID는 서로 다른 객체를 가리킨다. 학교 이메일을 변경하면 `emailVerified`는 false로 돌아간다. 로그인 계정에 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
+허용 형식은 `image/jpeg`, `image/png`, `image/webp`다. 그 외에는 `INVALID_INPUT` 400.
 
-### `GET /api/dating/profile/me`
+**응답 200 예시**
 
-내 프로필을 위 응답 형식으로 반환한다. 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404.
+```json
+{
+  "success": true,
+  "data": {
+    "uploadUrl": "https://s3.example.com/temporary-signed-url",
+    "photoId": "f1c4832a-0000-4000-8000-000000000002",
+    "expiresInSeconds": 600
+  }
+}
+```
 
-### `GET /api/dating/recommendations`
+프론트는 반환된 `uploadUrl`에 사진 파일을 `PUT`한다. `Content-Type`은 발급 요청의 `contentType`과 같아야 한다. PUT이 끝난 뒤 반환받은 `photoId`를 프로필 등록 요청에 넣는다. 예시 `photoId`는 실제 발급값으로 바꿔야 한다. `uploadUrl`은 만료되는 **업로드 전용 주소**이며 사진 조회 URL이 아니다.
+
+### 10.2 프로필 등록 — `POST /api/dating/profile`
+
+**요청 예시**
+
+```json
+{
+  "email": "student@dgu.ac.kr",
+  "name": "홍길동",
+  "contactMethod": "PHONE",
+  "contactValue": "010-3333-3333",
+  "department": "컴퓨터공학과",
+  "mbti": "ESTP",
+  "bio": "안녕하세요",
+  "photoId": "f1c4832a-0000-4000-8000-000000000002"
+}
+```
+
+모든 필드가 필수다. `contactValue`는 문자열이며 `PHONE`이면 전화번호, `INSTAGRAM`이면 인스타그램 아이디(예: `my_insta_id`)를 넣는다. `photoId`는 **로그인한 회원에게 발급됐고 S3에 파일 업로드가 완료된 사진**이어야 한다. 계정에 연결된 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
+
+**응답 201 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "candidateId": "3f2a9c1e-0000-4000-8000-000000000001",
+    "email": "student@dgu.ac.kr",
+    "emailVerified": false,
+    "name": "홍길동",
+    "contactMethod": "PHONE",
+    "contactValue": "010-3333-3333",
+    "department": "컴퓨터공학과",
+    "mbti": "ESTP",
+    "bio": "안녕하세요",
+    "photoId": "f1c4832a-0000-4000-8000-000000000002"
+  }
+}
+```
+
+`candidateId`는 소개팅 프로필 ID이며 다른 사람의 추천 카드에서도 이 값으로 표시된다. `photoId`는 사진 ID라 서로 다른 값이다. `emailVerified`는 학교 메일 인증 전에는 `false`다.
+
+### 10.3 내 프로필 조회·수정
+
+| 메서드·경로 | 동작 | 성공 응답 |
+|---|---|---|
+| `GET /api/dating/profile/me` | 내 프로필 조회 | 200 · 10.2의 응답 `data`와 같은 구조 |
+| `PATCH /api/dating/profile/me` | 내 프로필 수정 | 200 · 10.2의 응답 `data`와 같은 구조 |
+
+PATCH는 10.2의 **전체 요청 필드**를 보낸다. 학교 이메일을 바꾸면 `emailVerified`가 다시 `false`가 된다. 조회·수정할 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다.
+
+### 10.4 현재 후보 — `GET /api/dating/recommendations`
 
 최대 3개의 현재 후보를 반환한다. 후보는 학교 메일 인증을 마친 소개팅 신청 이성 중 기존 궁합 점수 내림차순으로 고른다. 한 번 카드에 나온 후보는 이후 새 추천에서 제외한다. 매칭된 후보가 현재 카드에 있으면 제외하고 아직 보지 않은 후보로 빈자리를 채운다. 학교 이메일 인증 전에는 `DATING_NOT_VERIFIED` 403이다.
+
+**응답 200 예시**
 
 ```json
 {
@@ -606,4 +670,10 @@ POST는 201, PATCH는 200. 응답 `data`는 `candidateId`(내 소개팅 프로�
 }
 ```
 
-후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. 잠긴 개인정보·사진 URL·연락처는 응답에 없다. 리롤·해금·요청 API는 별도 작업에서 추가한다.
+후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. 잠긴 개인정보·사진 URL·연락처는 응답에 없다. 현재 카드가 3장인 동안에는 새 신청자가 와도 단순 재조회로 교체되지 않는다. 빈자리가 있으면 다음 조회 때 새 후보로 채울 수 있다.
+
+### #84 구현 상태와 남은 연동
+
+- 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
+- 학교 메일 인증 완료를 소개팅 프로필에 반영하는 연동은 별도 작업이다. 연동 전에는 `GET /api/dating/recommendations`가 `DATING_NOT_VERIFIED` 403을 반환한다.
+- 리롤·정보 해금·매칭 요청·블러 미리보기용 썸네일 API는 #84에 포함되지 않는다.
