@@ -25,7 +25,7 @@ public class AuthService {
     private final MemberService memberService;
     private final JwtProvider jwtProvider;
 
-    public KakaoLoginResponse login(KakaoLoginRequest request) {
+    public LoginOutcome login(KakaoLoginRequest request) {
         if (!properties.isConfigured()) {
             // 카카오 client-id/secret·JWT_SECRET 중 하나라도 비어 있다 — 로그인만 막고 나머지 API 는
             // 그대로 기동한다(운영 .env 반영 전에 dev 가 배포되어도 서비스 전체가 죽지 않는다).
@@ -35,6 +35,11 @@ public class AuthService {
         long kakaoId = kakaoClient.fetchKakaoId(request.code(), request.redirectUri());
         MemberService.LoginResult result = memberService.loginAndLink(kakaoId, request.resultId());
         String token = jwtProvider.issue(result.member().getId());
-        return new KakaoLoginResponse(token, result.isNewUser(), result.restoredResultId(), null);
+        KakaoLoginResponse body = new KakaoLoginResponse(result.isNewUser(), result.restoredResultId(), null);
+        return new LoginOutcome(token, body);
+    }
+
+    /** 토큰은 쿠키로만 내려간다 — {@link AuthController} 가 여기서 꺼내 {@code Set-Cookie} 를 만든다. */
+    public record LoginOutcome(String token, KakaoLoginResponse body) {
     }
 }

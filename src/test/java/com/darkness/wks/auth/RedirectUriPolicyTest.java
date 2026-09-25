@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RedirectUriPolicyTest {
 
     private RedirectUriPolicy policyFor(String allowed) {
-        return new RedirectUriPolicy(new AuthProperties(allowed, null, null));
+        return new RedirectUriPolicy(new AuthProperties(allowed, true, null, null));
     }
 
     @Test

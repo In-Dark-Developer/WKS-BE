@@ -196,25 +196,31 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
   → POST /api/auth/kakao {code, redirectUri, resultId?, ref?}
 백엔드: redirectUri 화이트리스트 검증 → 카카오 토큰 교환(client secret) → 유저 정보(id 만)
   → member upsert(kakao_id) → 결과 연결·복원(plan §1.1) → JWT 발급
-응답:   {token, isNewUser, restoredResultId, rewardGranted}
-이후:   Authorization: Bearer <JWT> — /api/me, /api/dating/**, /api/wallet/**
+응답:   Set-Cookie: wks_token(HttpOnly·Secure·SameSite=Lax) + body {isNewUser, restoredResultId, rewardGranted}
+이후:   브라우저가 쿠키를 자동으로 실어 보낸다 (credentials: 'include' 필요) — /api/me, /api/dating/**, /api/wallet/**
 ```
+
+**2026-09-25, 토큰 전달 방식을 `Authorization: Bearer` 헤더에서 HttpOnly 쿠키로 전환했다** (의도적 결정,
+`docs/handoff.md` 참고). 서버 쪽 세션 저장소나 Spring Security 를 들이는 건 아니다 — JWT 를 담는
+그릇만 바뀌었다. 로그아웃도 이제 `POST /api/auth/logout` 이 쿠키를 지운다(과거엔 프론트가 로컬 토큰을
+지우는 방식뿐이었다).
 
 **설계 원칙**
 
-1. **사주는 로그인을 요구하지 않는다.** JWT 검증은 인증 경로에만 건다. 사주·궁합·공유 API 는 `Authorization` 헤더를 읽지 않는다. 익명 API 가 회원을 알아야 하는 경우(plan §5.8 중복 등록 방지)는 `TBD-14` 결정 전까지 구현하지 않는다.
+1. **사주는 로그인을 요구하지 않는다.** JWT 검증은 인증 경로에만 건다. 사주·궁합·공유 API 는 쿠키를 읽지 않는다. 익명 API 가 회원을 알아야 하는 경우(plan §5.8 중복 등록 방지)는 `TBD-14` 결정 전까지 구현하지 않는다.
 2. **결과와 계정은 `result.member_id` 로 연결한다.** nullable, 계정당 결과 1개(부분 unique). 연결 규칙은 plan §1.1(계정 결과 우선, 브라우저 결과는 삭제·병합하지 않음)이고, 로그인 요청에 `resultId` 가 실렸을 때만 연결한다. `Result` 는 `Long memberId` 만 가지며 `member` 패키지를 참조하지 않는다. 로그인한 클라이언트는 `resultId` 를 저장해 두지 않아도 `GET /api/me/result` 로 내 결과를 받는다.
 3. **카카오 프로필을 저장하지 않는다.** 동의항목 없이 `id` 만 쓰고 `member` 는 `kakao_id` 만 가진다. `kakao_id` UNIQUE 가 중복 계정·중복 신청을 막는다.
-4. **JWT.** HS256, 서명키는 환경변수, 알고리즘을 고정하고(헤더의 `alg` 를 믿지 않는다), 클레임은 `sub`(memberId)·`iat`·`exp` 만 담는다. 만료 15일·갱신 없음(2026-09-21 결정, 2026-09-23 30일→15일로 조정)이고 만료되면 재로그인한다. **서버 쪽 토큰 폐기·기기 관리는 하지 않는다(2026-09-21 결정 유지).** 로그아웃은 프론트가 로컬에 저장한 토큰을 지우는 것으로 처리한다(2026-09-23, 서버 엔드포인트 없음) — 지우지 않은 사본은 만료까지 그대로 유효하다. 서명키를 바꾸면 전원이 로그아웃된다. 토큰은 프론트가 보관하므로 XSS 노출을 감수한다.
+4. **JWT.** HS256, 서명키는 환경변수, 알고리즘을 고정하고(헤더의 `alg` 를 믿지 않는다), 클레임은 `sub`(memberId)·`iat`·`exp` 만 담는다. 만료 15일·갱신 없음(2026-09-21 결정, 2026-09-23 30일→15일로 조정)이고 만료되면 재로그인한다. **서버 쪽 토큰 폐기·기기 관리는 하지 않는다(2026-09-21 결정 유지).** 로그아웃은 `POST /api/auth/logout` 이 쿠키를 지운다(2026-09-25, 이전엔 프론트가 로컬 토큰을 지우는 방식뿐이었다) — 그 전에 탈취된 사본은 만료까지 그대로 유효하다. 서명키를 바꾸면 전원이 로그아웃된다. **토큰은 HttpOnly 쿠키로 내려가 JS 가 값을 읽을 수 없다(2026-09-25, XSS 노출 완화) — CSRF 는 `SameSite=Lax` + 상태변경 API 는 전부 POST/PATCH 로 막는다(별도 CSRF 토큰 없음).**
 5. **카카오 access token 은 저장하지 않는다.** 로그인 이후 카카오를 다시 호출하지 않는다. 카카오 외부 호출은 타임아웃을 명시한다 (NFR-P-04).
 6. **`redirectUri` 는 화이트리스트 값만 허용한다.** 클라이언트가 보낸 값을 그대로 카카오에 넘기지 않는다.
 7. **잘못된 `ref`(제휴 코드)는 조용히 무시하고 로그인은 성공한다** (plan §8.1).
-8. **쿠키를 쓰지 않는다.** cross-site 쿠키·CSRF 문제가 없고 netlify·localhost 도 그대로 붙는다. CORS 는 `WebConfig` 를 유지하고 `Authorization` 헤더가 preflight 를 통과하는지 확인한다. 와일드카드 금지.
-9. **로그아웃·탈퇴는 V1 범위 밖이다 (2026-09-21 결정).** 개인정보 삭제 요청은 기능이 아니라 운영자가 직접 처리한다. 요청 창구를 처리방침에 명시해야 한다 (§9).
+8. **쿠키는 host-only 로 발급한다 (`Domain` 속성을 안 준다, 2026-09-25).** 운영(`api.threadoffate.site`)·개발(`api-dev.threadoffate.site`) 쿠키가 서로 안 섞인다. CORS 는 `WebConfig` 에 `allowCredentials(true)` 가 있어야 브라우저가 쿠키를 실어 보낸다 — `allowedOrigins` 와일드카드는 credentials 모드에서 애초에 금지돼 있다.
+9. **탈퇴는 V1 범위 밖이다 (2026-09-21 결정).** 개인정보 삭제 요청은 기능이 아니라 운영자가 직접 처리한다. 요청 창구를 처리방침에 명시해야 한다 (§9). **로그아웃은 있다 (2026-09-25, `POST /api/auth/logout`)** — 쿠키만 지우고 서버 쪽 토큰 무효화는 여전히 없다.
 
 | API (구현 전, 초안은 `docs/api-spec.md` §9) | 동작 |
 |---|---|
-| `POST /api/auth/kakao` | code 교환 → member upsert → 결과 연결·복원 → JWT 발급 (익명) |
+| `POST /api/auth/kakao` | code 교환 → member upsert → 결과 연결·복원 → JWT 발급, 쿠키로 내려줌 (익명) |
+| `POST /api/auth/logout` | 로그인 쿠키를 지운다 (익명, 2026-09-25 추가) |
 | `GET /api/me` | 인증 필요. 로그인 상태, 결과·프로필 보유 여부, 실 잔액 |
 | `GET /api/me/result` | 인증 필요. 계정에 연결된 내 결과를 `GET /api/results/{resultId}` 와 같은 구조로 반환, 없으면 404. 클라이언트가 `resultId` 를 잃어도 복원할 수 있다 |
 

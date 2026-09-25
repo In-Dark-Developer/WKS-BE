@@ -229,7 +229,7 @@ V1은 **사주 결과 페이지가 홈**이 되고, 궁합지도·소개팅이 �
 
 ## 8. API 초안
 
-인증: `Authorization: Bearer <JWT>` (2026-09-21 JWT 확정). 공통 응답 포맷은 `docs/api-spec.md`를 따른다.
+인증: JWT, HttpOnly 쿠키로 전달 (2026-09-21 JWT 확정, 2026-09-25 Bearer 헤더에서 쿠키로 전환). 공통 응답 포맷은 `docs/api-spec.md`를 따른다.
 
 ### 8.1 인증
 

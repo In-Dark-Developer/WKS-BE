@@ -119,9 +119,10 @@ throw new BusinessException(ErrorCode.RESULT_NOT_FOUND);
 
 ## 인증
 
-- 로그인은 JWT 다 (`Authorization: Bearer`). **Spring Security 는 쓰지 않는다.** 인증이 필요한 경로(`/api/me`, `/api/dating/**`, `/api/wallet/**`)에만 인터셉터로 검증한다
+- 로그인은 JWT 다. 토큰은 **HttpOnly 쿠키**(`wks_token`)로 내려간다(2026-09-25, `Authorization: Bearer` 헤더에서 전환). **Spring Security 는 쓰지 않는다** — 쿠키는 JWT 를 담는 그릇일 뿐 서버 쪽 세션이 아니다. 인증이 필요한 경로(`/api/me`, `/api/dating/**`, `/api/wallet/**`)에만 인터셉터로 검증한다
 - 로그인 회원은 Controller 에서 `@CurrentMember` 인자로 받는다 (argument resolver). 토큰 파싱을 Controller·Service 에서 직접 하지 않는다
-- 사주·궁합·공유 API 는 `Authorization` 헤더를 읽지 않는다. 새 API 는 **익명 허용인지 인증 필수인지** PR 설명에 적는다
+- 사주·궁합·공유 API 는 쿠키를 읽지 않는다. 새 API 는 **익명 허용인지 인증 필수인지** PR 설명에 적는다
+- 쿠키를 새로 발급·삭제하는 곳은 `common/auth/JwtCookie` 하나로 모은다. Controller 가 직접 `Set-Cookie` 를 만들지 않는다
 - JWT 는 서명 알고리즘을 고정하고(헤더의 `alg` 를 믿지 않는다) 클레임은 `sub`(memberId)·`iat`·`exp` 만 담는다. 서명키는 환경변수
 - 인증 경로를 바꾸는 PR 은 **익명 API 스모크 테스트**(기존 엔드포인트 전부 헤더 없이 성공)가 통과해야 머지한다
 - 잠긴 정보(소개팅 해금 대상)는 서버가 응답에서 뺀다. 프론트 CSS 블러에 맡기지 않는다 (plan §9.1)

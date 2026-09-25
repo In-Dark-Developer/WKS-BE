@@ -20,8 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Dating Requests", description = "소개팅 요청·보관함. Bearer JWT 필요")
-@SecurityRequirement(name = "bearerAuth")
+@Tag(name = "Dating Requests", description = "소개팅 요청·보관함. 로그인 쿠키(wks_token) 필요")
+@SecurityRequirement(name = "cookieAuth")
 @RestController
 @RequestMapping("/api/dating/requests")
 public class DatingRequestController {
