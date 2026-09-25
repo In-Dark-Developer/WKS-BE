@@ -69,14 +69,6 @@ public class DatingProfile {
                          String mbti, String bio, DatingPhoto photo) {
         this.id = UUID.randomUUID();
         this.memberId = memberId;
-        update(email, name, contactMethod, contactValue, department, mbti, bio, photo);
-    }
-
-    public void update(String email, String name, ContactMethod contactMethod, String contactValue,
-                       String department, String mbti, String bio, DatingPhoto photo) {
-        if (this.email != null && !this.email.equalsIgnoreCase(email)) {
-            verifiedAt = null;
-        }
         this.email = email;
         this.name = name;
         this.contactMethod = contactMethod;

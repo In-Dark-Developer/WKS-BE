@@ -64,24 +64,6 @@ public class DatingProfileService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.DATING_PROFILE_NOT_FOUND)));
     }
 
-    @Transactional
-    public DatingProfileResponse update(Long memberId, DatingProfileRequest request) {
-        DatingProfile profile = profileRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DATING_PROFILE_NOT_FOUND));
-        validate(memberId, request);
-        DatingPhoto photo = profile.getPhoto().getId().equals(request.photoId())
-                ? profile.getPhoto() : photoService.verifyOwnedPhoto(memberId, request.photoId());
-        profile.update(normalize(request.email()), request.name().trim(), request.contactMethod(),
-                request.contactValue().trim(), request.department().trim(), request.mbti(),
-                request.bio().trim(), photo);
-        try {
-            profileRepository.flush();
-        } catch (DataIntegrityViolationException exception) {
-            throw new BusinessException(ErrorCode.DATING_PROFILE_CONFLICT);
-        }
-        return DatingProfileResponse.from(profile);
-    }
-
     private void validate(Long memberId, DatingProfileRequest request) {
         String email = normalize(request.email());
         String domain = email.substring(email.lastIndexOf('@') + 1);

@@ -15,7 +15,10 @@ import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,12 +34,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @SpringBootTest(properties = {"gemini.api-key=test-key",
         "app.auth.jwt.secret=dating-test-secret-0123456789-abcdef", "app.auth.jwt.ttl-days=15"})
@@ -86,6 +89,10 @@ class DatingSchemaTest {
     @Autowired
     JwtProvider jwtProvider;
 
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    RequestMappingHandlerMapping handlerMapping;
+
     @Test
     void appliesDatingMigrationAndValidatesJpaMappings() {
         Integer profileCount = jdbcTemplate.queryForObject("SELECT count(*) FROM dating_profile", Integer.class);
@@ -115,8 +122,22 @@ class DatingSchemaTest {
     }
 
     @Test
+    void profileUpdateRouteIsNotExposed() throws Exception {
+        assertThat(handlerMapping.getHandlerMethods().keySet()).noneMatch(mapping ->
+                mapping.getMethodsCondition().getMethods().contains(RequestMethod.PATCH)
+                        && mapping.getPathPatternsCondition() != null
+                        && mapping.getPathPatternsCondition().getPatternValues()
+                        .contains("/api/dating/profile/me"));
+        var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
+        mvc.perform(patch("/api/dating/profile/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtProvider.issue(999L)))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.error.code").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
     @Transactional
-    void keepsCurrentThreeAndReplacesUnverifiedCandidateWithUnseenPerson() {
+    void keepsCurrentThreeWhenNewProfileJoins() {
         DatingProfile viewer = profile(900001L, Gender.MALE, "갑자", "을축", "병인");
         profile(900002L, Gender.FEMALE, "갑자", "을축", "병인");
         profile(900003L, Gender.FEMALE, "계해", "임술", "신유");
@@ -125,7 +146,6 @@ class DatingSchemaTest {
 
         var first = recommendationService.getCurrent(viewer.getMemberId()).candidates();
         assertThat(first).hasSize(3);
-        Set<UUID> firstIds = first.stream().map(card -> card.candidateId()).collect(Collectors.toSet());
         assertThat(recommendationService.getCurrent(viewer.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).containsExactlyElementsOf(
                         first.stream().map(card -> card.candidateId()).toList());
@@ -134,16 +154,7 @@ class DatingSchemaTest {
         assertThat(recommendationService.getCurrent(viewer.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).doesNotContain(newPerson.getId());
 
-        DatingProfile unverified = profileRepository.findById(first.get(0).candidateId()).orElseThrow();
-        unverified.update("changed-" + unverified.getEmail(), unverified.getName(),
-                unverified.getContactMethod(), unverified.getContactValue(), unverified.getDepartment(),
-                unverified.getMbti(), unverified.getBio(), unverified.getPhoto());
-        var updated = recommendationService.getCurrent(viewer.getMemberId()).candidates();
-        assertThat(updated).hasSize(3);
-        assertThat(updated).extracting(card -> card.candidateId()).contains(newPerson.getId());
-        assertThat(updated).extracting(card -> card.candidateId()).doesNotContain(unverified.getId());
-        assertThat(recommendationRepository.findAllByViewerMemberId(viewer.getMemberId())).hasSize(4);
-        assertThat(firstIds).doesNotContain(newPerson.getId());
+        assertThat(recommendationRepository.findAllByViewerMemberId(viewer.getMemberId())).hasSize(3);
     }
 
     @Test

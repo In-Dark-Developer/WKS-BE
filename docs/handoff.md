@@ -91,6 +91,7 @@
 | `DATING_NOT_VERIFIED` (403) | 최선우 (학교 메일 미인증) | ✅ §1·§10 |
 | `DATING_REQUEST_NOT_FOUND` (404) | 최선우 (#86) | ✅ §1·§11 |
 | `DATING_REQUEST_CONFLICT` (409) | 최선우 (#86) | ✅ §1·§11 |
+| `METHOD_NOT_ALLOWED` (405) | 최선우 (#89, 사용자 직접 요청) | ✅ §1·§10.3 |
 
 ---
 
@@ -144,6 +145,30 @@
 ---
 
 ## 기록
+
+### 2026-09-25 (금) · 최선우 · dating/ 프로필 수정 API 제거 (#89) · Codex
+
+**한 일**
+- V1에서 프로필 수정·사진 교체를 제공하지 않기로 한 결정에 맞춰 `PATCH /api/dating/profile/me`와 서비스·엔티티 수정 메서드를 제거했다
+- 기존 추천 테스트에서 프로필 수정에 기대던 부분을 정리하고, PATCH 매핑이 없음을 확인하는 테스트를 추가했다
+
+**건드린 파일/패키지**
+- `dating/DatingController.java`, `DatingProfileService.java`, `entity/DatingProfile.java`, `DatingSchemaTest.java`, `common/exception/ErrorCode.java`, `GlobalExceptionHandler.java`
+
+**다음 사람이 알아야 할 것**
+- V1 소개팅 프로필은 최초 등록(POST)·내 프로필 조회(GET)만 제공한다. 사진 교체도 지원하지 않는다
+- 공통 예외 처리기에 405 응답을 추가했다. 제거된 PATCH 호출은 `METHOD_NOT_ALLOWED` 405를 반환한다
+
+**막힌 것 / 넘기는 것**
+- `common/exception/`은 곽도윤 담당 패키지이므로 PR 리뷰 때 함께 확인 필요
+
+**문서 변경**
+- `docs/plan.md` §8.3, `docs/api-spec.md` §1·§10.3, `docs/handoff.md` 이 기록
+
+**프론트에 알려야 할 것**
+- `PATCH /api/dating/profile/me` 제거. V1에서는 프로필·사진 수정 UI를 연결하지 않는다
+
+---
 
 ### 2026-09-24 (목) · 최선우 · dating/ 매칭 요청 API (#86) · Codex
 

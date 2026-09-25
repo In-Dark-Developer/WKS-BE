@@ -16,7 +16,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -74,19 +73,6 @@ public class DatingController {
     @GetMapping("/profile/me")
     public ApiResponse<DatingProfileResponse> myProfile(@CurrentMember Long memberId) {
         return ApiResponse.success(profileService.getMine(memberId));
-    }
-
-    @PatchMapping("/profile/me")
-    @Operation(requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "전체 필드를 전송한다. photoId는 본인에게 발급된 실제 값 사용",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = DatingProfileRequest.class),
-                    examples = {
-                            @ExampleObject(name = "전화번호", value = PHONE_PROFILE_EXAMPLE),
-                            @ExampleObject(name = "인스타그램", value = INSTAGRAM_PROFILE_EXAMPLE)
-                    })))
-    public ApiResponse<DatingProfileResponse> updateProfile(@CurrentMember Long memberId,
-            @Valid @RequestBody DatingProfileRequest request) {
-        return ApiResponse.success(profileService.update(memberId, request));
     }
 
     @GetMapping("/recommendations")

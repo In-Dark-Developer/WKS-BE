@@ -51,6 +51,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회 |
 | `DATING_REQUEST_NOT_FOUND` | 404 | 요청 없음 또는 받은 사람 본인이 아님 |
 | `DATING_REQUEST_CONFLICT` | 409 | 중복 요청, 대상 미노출, 이미 처리된 요청 |
+| `METHOD_NOT_ALLOWED` | 405 | 존재하는 경로에 지원하지 않는 HTTP 메서드 사용 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
 
@@ -636,14 +637,9 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 `candidateId`는 소개팅 프로필 ID이며 다른 사람의 추천 카드에서도 이 값으로 표시된다. `photoId`는 사진 ID라 서로 다른 값이다. `emailVerified`는 학교 메일 인증 전에는 `false`다.
 
-### 10.3 내 프로필 조회·수정
+### 10.3 내 프로필 조회 — `GET /api/dating/profile/me`
 
-| 메서드·경로 | 동작 | 성공 응답 |
-|---|---|---|
-| `GET /api/dating/profile/me` | 내 프로필 조회 | 200 · 10.2의 응답 `data`와 같은 구조 |
-| `PATCH /api/dating/profile/me` | 내 프로필 수정 | 200 · 10.2의 응답 `data`와 같은 구조 |
-
-PATCH는 10.2의 **전체 요청 필드**를 보낸다. 학교 이메일을 바꾸면 `emailVerified`가 다시 `false`가 되며, 재인증 전에는 추천 조회·매칭 요청이 제한된다. 이름(`name`)을 바꿔도 이메일 인증 상태는 유지된다. 조회·수정할 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다.
+응답 200의 `data`는 10.2의 프로필 등록 응답과 같은 구조다. 내 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다. V1에는 프로필 수정·사진 교체 API가 없다. `PATCH /api/dating/profile/me`는 제공하지 않으며 호출 시 `METHOD_NOT_ALLOWED` 405다.
 
 ### 10.4 현재 후보 — `GET /api/dating/recommendations`
 
