@@ -19,6 +19,7 @@ public enum ErrorCode {
     DATING_NOT_VERIFIED(HttpStatus.FORBIDDEN, "학교 이메일 인증이 필요합니다."),
     DATING_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "소개팅 요청을 찾을 수 없습니다."),
     DATING_REQUEST_CONFLICT(HttpStatus.CONFLICT, "소개팅 요청을 처리할 수 없습니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청 방식입니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청하신 경로를 찾을 수 없습니다.");
 

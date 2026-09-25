@@ -274,9 +274,9 @@ V1은 **사주 결과 페이지가 홈**이 되고, 궁합지도·소개팅이 �
 | `POST` | `/api/dating/profile/photo` | 사진 업로드 → `photoId` |
 | `POST` | `/api/dating/profile` | 신청 모달 제출 (`photoId` 포함) |
 | `GET` | `/api/dating/profile/me` | 내 프로필 |
-| `PATCH` | `/api/dating/profile/me` | 수정 |
 
 사진을 먼저 올리고 `photoId`를 넘기는 2단계. 업로드 실패가 폼 전체를 막지 않게 한다.
+V1에서는 소개팅 프로필 수정·사진 교체 API를 제공하지 않는다 (2026-09-25 결정).
 
 ### 8.4 추천
 
