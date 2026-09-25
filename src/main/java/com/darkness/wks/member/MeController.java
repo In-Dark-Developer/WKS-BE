@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Me", description = "로그인 회원 정보 API. Authorization: Bearer <token> 필요")
-@SecurityRequirement(name = "bearerAuth")
+@Tag(name = "Me", description = "로그인 회원 정보 API. 로그인 쿠키(wks_token) 필요")
+@SecurityRequirement(name = "cookieAuth")
 @RestController
 @RequestMapping("/api/me")
 @RequiredArgsConstructor

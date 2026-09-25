@@ -25,7 +25,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ```
 
 - HTTP 상태코드도 함께 맞춘다 (200/201/302/400/401/404/409/500/503)
-- 인증이 필요한 API 는 `Authorization: Bearer <JWT>` 를 보낸다 (§9, 구현 전). 사주·궁합·공유 API 는 인증이 없다
+- 인증이 필요한 API 는 로그인 쿠키(`wks_token`, HttpOnly)로 인증한다 (§9). `credentials: 'include'` 로 호출해야 한다. 사주·궁합·공유 API 는 인증이 없다
 - `error.message` 는 **사용자에게 그대로 보여줄 수 있는 한국어**
 - 스택트레이스·SQL 오류를 `message` 에 절대 넣지 않는다
 - `traceId` 는 장애 문의 시 로그 추적용. 프론트가 화면에 노출해도 된다
@@ -461,8 +461,13 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ```
 프론트: 카카오 인가 → redirectUri(프론트 콜백)로 code 수신
   → POST /api/auth/kakao {code, redirectUri, resultId?, ref?}
-  → 응답의 token 을 저장 → 이후 인증이 필요한 API 에 Authorization: Bearer <token>
+  → 서버가 Set-Cookie(wks_token, HttpOnly)로 토큰을 내려준다 — 프론트는 저장·첨부 안 해도 된다
+  → 이후 인증이 필요한 API 호출은 credentials: 'include' 로 요청하면 브라우저가 쿠키를 자동으로 실어 보낸다
 ```
+
+**2026-09-25, Bearer 헤더에서 쿠키로 전환했다** (의도적 결정, `docs/handoff.md` 참고). 프론트는 토큰을
+직접 다루지 않는다 — `fetch`/`axios` 요청에 `credentials: 'include'`(axios는 `withCredentials: true`)만
+켜면 된다. `localStorage`에 토큰을 저장하던 기존 로직은 제거한다.
 
 ### `POST /api/auth/kakao`
 
@@ -492,7 +497,6 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 {
   "success": true,
   "data": {
-    "token": "eyJhbGciOi...",
     "isNewUser": true,
     "restoredResultId": null,
     "rewardGranted": null
@@ -500,7 +504,13 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 }
 ```
 
-- `token`: JWT. 이후 `Authorization: Bearer <token>` 으로 보낸다. **만료 15일, 갱신 없음.** 만료되면 401 이 오고 다시 로그인한다. 로그아웃은 프론트가 이 토큰을 지우는 것으로 처리한다(서버 엔드포인트 없음, 2026-09-23) — 지우기 전 사본은 만료까지 유효하다
+같은 응답에 `Set-Cookie: wks_token=...; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1296000`
+헤더가 함께 온다. **`token` 필드는 응답 바디에 없다** (2026-09-25, 필드 삭제 — 이전엔 있었다). 쿠키는
+HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 — 브라우저가 알아서 이후 요청에 실어 보낸다.
+
+- **만료 15일, 갱신 없음.** 만료되면 401 이 오고 다시 로그인한다
+- 로그아웃은 `POST /api/auth/logout` 이 쿠키를 지운다 (아래). 서버 쪽 토큰 무효화는 없다 — 로그아웃 전에
+  탈취된 토큰 사본은 만료까지 그대로 유효하다
 - `isNewUser`: 이번 로그인으로 계정이 새로 만들어졌으면 `true`
 - `rewardGranted`: 제휴·가입 보상이 지급됐으면 `{ "partnerName": "OO", "amount": 10 }`, 아니면 `null`. **소개팅·실 기능이 구현되기 전에는 항상 `null`**
 - 카카오 동의항목은 받지 않는다. 서버는 회원번호만 쓴다. 이름·연락처는 소개팅 신청 폼에서 받는다
@@ -524,6 +534,17 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `INVALID_INPUT` | 400 | `code`·`redirectUri` 누락, 등록되지 않은 `redirectUri` |
 | `INVALID_TOKEN` | 400 | 카카오 인가 코드 만료·이미 사용·위조 |
 | `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃. 잠시 후 재시도 안내 |
+
+### `POST /api/auth/logout`
+
+로그인 쿠키를 지운다(`Set-Cookie` 로 `Max-Age=0`). 인증 없이 호출할 수 있다 — 쿠키가 없거나 이미
+만료된 상태에서 불러도 안전하게 아무 일도 안 한다.
+
+**Response 200**
+
+```json
+{ "success": true, "data": null }
+```
 
 ### `GET /api/me`
 
@@ -560,14 +581,15 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ### 인증 규칙
 
-- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 이후 소개팅(`/api/dating/**`)·실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 헤더 없이 동작하고, 보내도 무시된다**
-- `401 UNAUTHENTICATED` 를 받으면 저장된 토큰을 지우고 다시 로그인시킨다
-- 쿠키를 쓰지 않는다. 토큰을 URL 쿼리에 넣지 않는다
+- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 소개팅(`/api/dating/**`), 이후 실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 쿠키 없이 동작하고, 보내도 무시된다**
+- 인증이 필요한 API 는 반드시 `credentials: 'include'`(axios는 `withCredentials: true`) 로 호출한다 — 안 그러면 브라우저가 쿠키를 안 실어 보내 401 이 난다
+- `401 UNAUTHENTICATED` 를 받으면 로그인 화면으로 보낸다 (프론트가 지울 토큰은 없다 — 쿠키는 서버가 관리)
+- 토큰을 URL 쿼리에 넣지 않는다. `Authorization` 헤더도 쓰지 않는다 — **쿠키 하나로만 인증한다** (2026-09-25 전환)
 - 프론트 콜백 주소(운영·로컬·netlify 등)를 **백엔드에 알려줘야 한다.** `redirectUri` 화이트리스트와 카카오 콘솔 등록에 필요하다
 
 ## 10. 소개팅 프로필·후보 추천
 
-모든 `/api/dating/**` 요청에 `Authorization: Bearer <JWT>` 가 필요하다. 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
+모든 `/api/dating/**` 요청에 로그인 쿠키(`wks_token`)가 필요하다 (§9 참고, `credentials: 'include'` 필수). 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
 
 ### 10.1 사진 업로드 준비 — `POST /api/dating/profile/photo`
 
@@ -680,7 +702,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ## 11. 소개팅 매칭 요청·보관함
 
-모두 `Authorization: Bearer <JWT>` 필수. 매칭 요청은 **무료**이며 실을 차감하지 않는다. `candidateId`는 §10 추천 응답의 소개팅 프로필 ID다. `requestId`는 매칭 요청 자체의 ID로, 두 값은 다르다.
+모두 로그인 쿠키(`wks_token`) 필수 (§9 참고). 매칭 요청은 **무료**이며 실을 차감하지 않는다. `candidateId`는 §10 추천 응답의 소개팅 프로필 ID다. `requestId`는 매칭 요청 자체의 ID로, 두 값은 다르다.
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|

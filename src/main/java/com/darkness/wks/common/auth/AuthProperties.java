@@ -11,6 +11,8 @@ public record AuthProperties(
         // 콤마 구분 원문 그대로 받는다 — SignupService.allowedEmailDomainsRaw 와 같은 패턴.
         // RedirectUriPolicy 가 파싱한다(빈 값이면 화이트리스트가 없다는 뜻 — 어떤 redirectUri 도 거부).
         String allowedRedirectUris,
+        // 로컬(plain HTTP)에서만 false. 브라우저가 Secure 쿠키를 HTTPS 가 아닌 연결에는 저장하지 않는다.
+        boolean cookieSecure,
         Kakao kakao,
         Jwt jwt
 ) {

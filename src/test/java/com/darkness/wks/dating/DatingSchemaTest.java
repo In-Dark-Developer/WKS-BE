@@ -13,6 +13,7 @@ import com.darkness.wks.member.MemberRepository;
 import com.darkness.wks.member.entity.Member;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -113,11 +114,11 @@ class DatingSchemaTest {
     }
 
     @Test
-    void datingRouteRequiresBearerToken() throws Exception {
+    void datingRouteRequiresLoginCookie() throws Exception {
         var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
         mvc.perform(get("/api/dating/profile/me")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/dating/profile/me")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtProvider.issue(999L)))
+                        .cookie(new Cookie("wks_token", jwtProvider.issue(999L))))
                 .andExpect(status().isNotFound());
     }
 

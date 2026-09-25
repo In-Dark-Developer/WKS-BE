@@ -45,7 +45,7 @@ Java 17 · Spring Boot 4.1.1 · Gradle · PostgreSQL 16 · JPA · Flyway · Gemi
 
 **인증·개인정보**
 - 사주·궁합·공유 API 는 **로그인 없이 동작**한다. 인증은 `/api/me`·`/api/dating/**`·`/api/wallet/**` 에만 건다
-- 로그인은 **JWT(Bearer)** 다. **Spring Security·세션·쿠키를 넣지 않는다.** "Spring Boot 세팅"의 기본값처럼 자꾸 들어온다
+- 로그인은 **JWT** 다. 토큰은 **HttpOnly 쿠키**(`wks_token`)로 내려간다(2026-09-25, Bearer 헤더에서 전환 — 의도적 결정, `docs/handoff.md` 참고). **Spring Security·서버 쪽 세션 저장소는 여전히 안 쓴다** — 쿠키는 JWT를 담는 그릇일 뿐, 세션이 아니다. CSRF는 `SameSite=Lax` + 상태변경 API는 전부 POST/PATCH로 막는다(별도 CSRF 토큰 없음)
 - `member` 는 `kakao_id` 만 가진다. 카카오 프로필·access token 을 저장하지 않는다. 계정당 결과는 1개(`result.member_id`)
 - `resultId`·`shareId` 는 **UUIDv4**. 순번 금지 (예외는 `docs/architecture.md` §4 에 적힌 `compatibility.id` 하나)
 - 소개팅에서 **잠긴 필드는 서버가 응답에서 뺀다.** 프론트 CSS 블러에 맡기지 않는다. 사진 URL 은 추측 불가하게 준다
