@@ -8,11 +8,11 @@ import java.util.UUID;
 public record DatingRecommendationResponse(List<CandidateCard> candidates) {
 
     public record CandidateCard(int rank, UUID candidateId, int score,
-                                String mbti, String bio, CandidateFields fields) {
-        public static CandidateCard from(int rank, DatingRecommendation recommendation) {
+                                String mbti, String bio, String blurredPhotoUrl, CandidateFields fields) {
+        public static CandidateCard from(int rank, DatingRecommendation recommendation, String blurredPhotoUrl) {
             var profile = recommendation.getCandidate();
             return new CandidateCard(rank, profile.getId(), recommendation.getScore(),
-                    profile.getMbti(), profile.getBio(), new CandidateFields(
+                    profile.getMbti(), profile.getBio(), blurredPhotoUrl, new CandidateFields(
                     locked(10), locked(7), locked(5), locked(3)));
         }
 

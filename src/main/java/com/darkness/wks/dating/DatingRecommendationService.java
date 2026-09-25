@@ -31,16 +31,18 @@ public class DatingRecommendationService {
     private final ResultRepository resultRepository;
     private final DatingRecommendationRepository recommendationRepository;
     private final DatingRecommendationSelector selector;
+    private final DatingPhotoService photoService;
 
     public DatingRecommendationService(EntityManager entityManager, DatingProfileRepository profileRepository,
                                        ResultRepository resultRepository,
                                        DatingRecommendationRepository recommendationRepository,
-                                       DatingRecommendationSelector selector) {
+                                       DatingRecommendationSelector selector, DatingPhotoService photoService) {
         this.entityManager = entityManager;
         this.profileRepository = profileRepository;
         this.resultRepository = resultRepository;
         this.recommendationRepository = recommendationRepository;
         this.selector = selector;
+        this.photoService = photoService;
     }
 
     @Transactional
@@ -95,7 +97,8 @@ public class DatingRecommendationService {
                         .thenComparing(item -> item.getCandidate().getId()))
                 .toList();
         List<CandidateCard> cards = java.util.stream.IntStream.range(0, ordered.size())
-                .mapToObj(index -> CandidateCard.from(index + 1, ordered.get(index)))
+                .mapToObj(index -> CandidateCard.from(index + 1, ordered.get(index),
+                        photoService.thumbnailUrl(ordered.get(index).getCandidate().getPhoto())))
                 .toList();
         return new DatingRecommendationResponse(cards);
     }

@@ -147,6 +147,33 @@
 
 ## 기록
 
+### 2026-09-25 (금) · 최선우 · dating/ 사진 블러 썸네일 (#88) · Codex
+
+**한 일**
+- 소개팅 사진 업로드 URL은 JPEG·PNG만 발급하고, 프로필 등록 시 실제 파일 형식을 검사해 96×121 블러 PNG를 별도 S3 객체로 저장했다. 피그마 사진 영역 343×433·레이어 흐림 고르게 15를 기준으로 비율·흐림을 근사했다
+- 추천 카드에 블러 썸네일 임시 조회 URL을 추가했다. 원본 URL·키는 응답에 없다
+- 사진 형식·블러 생성·S3 서명 키 분리·추천 응답 테스트를 추가했고 `./gradlew test` 전체 통과했다
+
+**건드린 파일/패키지**
+- `dating/DatingPhotoService.java`, `DatingProfileService.java`, `DatingRecommendationService.java`, `dto/DatingRecommendationResponse.java` 및 관련 테스트
+- `docs/plan.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 썸네일 키는 `dating-thumbnails/{photoId}.png`; 원본 키와 독립적이다. S3 버킷은 비공개여야 한다
+- 원본 사진 조회 URL은 실 차감·사진 해금 API에서만 발급해야 한다
+- 프로필 등록 때 S3 원본 읽기·썸네일 쓰기 권한이 필요하다. 10MB·2천만 픽셀 초과 파일은 거절한다
+
+**막힌 것 / 넘기는 것**
+- 실제 S3 버킷 권한·CORS를 통한 업로드→등록→추천 전체 흐름은 아직 수동 검증 전
+
+**문서 변경**
+- `docs/plan.md` §9.2, `docs/api-spec.md` §10, `docs/backend-requirements.md` FR-DT-04
+
+**프론트에 알려야 할 것**
+- 소개팅 사진은 JPEG·PNG만 업로드 가능. 추천 카드의 `blurredPhotoUrl`로 블러 사진을 표시하며, 원본은 해금 API 후 제공 예정
+
+---
+
 ### 2026-09-25 (금) · 최선우 · dating/ 프로필 수정 API 제거 (#89) · Codex
 
 **한 일**

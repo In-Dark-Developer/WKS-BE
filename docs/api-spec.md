@@ -601,7 +601,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 { "contentType": "image/jpeg" }
 ```
 
-허용 형식은 `image/jpeg`, `image/png`, `image/webp`다. 그 외에는 `INVALID_INPUT` 400.
+허용 형식은 `image/jpeg`, `image/png`다. 그 외에는 `INVALID_INPUT` 400.
 
 **응답 200 예시**
 
@@ -616,7 +616,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 }
 ```
 
-프론트는 반환된 `uploadUrl`에 사진 파일을 `PUT`한다. `Content-Type`은 발급 요청의 `contentType`과 같아야 한다. PUT이 끝난 뒤 반환받은 `photoId`를 프로필 등록 요청에 넣는다. 예시 `photoId`는 실제 발급값으로 바꿔야 한다. `uploadUrl`은 만료되는 **업로드 전용 주소**이며 사진 조회 URL이 아니다.
+프론트는 반환된 `uploadUrl`에 사진 파일을 `PUT`한다. `Content-Type`은 발급 요청의 `contentType`과 같아야 한다. PUT이 끝난 뒤 반환받은 `photoId`를 프로필 등록 요청에 넣는다. 프로필 등록 시 서버가 실제 파일 형식을 확인하고 저해상도 블러 썸네일을 별도 S3 객체로 생성한다. 확장자만 JPEG·PNG인 다른 파일은 `INVALID_INPUT` 400이다. 예시 `photoId`는 실제 발급값으로 바꿔야 한다. `uploadUrl`은 만료되는 **업로드 전용 주소**이며 사진 조회 URL이 아니다.
 
 ### 10.2 프로필 등록 — `POST /api/dating/profile`
 
@@ -679,6 +679,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
       "score": 90,
       "mbti": "INFP",
       "bio": "안녕하세요",
+      "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
       "fields": {
         "photo": { "locked": true, "cost": 10 },
         "name": { "locked": true, "cost": 7 },
@@ -690,13 +691,13 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 }
 ```
 
-후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. 잠긴 개인정보·사진 URL·연락처는 응답에 없다. 현재 카드가 3장인 동안에는 새 신청자가 와도 단순 재조회로 교체되지 않는다. 빈자리가 있으면 다음 조회 때 새 후보로 채울 수 있다.
+후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. `blurredPhotoUrl`은 별도 S3 객체의 임시 조회 URL이며 원본 사진 조회 권한을 주지 않는다. 원본 사진 URL·S3 키와 잠긴 개인정보·연락처는 응답에 없다. 현재 카드가 3장인 동안에는 새 신청자가 와도 단순 재조회로 교체되지 않는다. 빈자리가 있으면 다음 조회 때 새 후보로 채울 수 있다.
 
 ### #84 구현 상태와 남은 연동
 
 - 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
 - 학교 메일 인증 완료를 소개팅 프로필에 반영하는 연동은 별도 작업이다. 연동 전에는 `GET /api/dating/recommendations`가 `DATING_NOT_VERIFIED` 403을 반환한다.
-- 리롤·정보 해금·블러 미리보기용 썸네일 API는 #84에 포함되지 않는다. 매칭 요청은 §11을 본다.
+- 리롤·정보 해금 API는 #84에 포함되지 않는다. 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 원본 사진은 후속 사진 해금 API에서만 제공한다. 매칭 요청은 §11을 본다.
 
 ---
 
