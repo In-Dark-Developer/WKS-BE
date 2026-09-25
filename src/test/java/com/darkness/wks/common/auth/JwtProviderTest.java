@@ -21,7 +21,7 @@ class JwtProviderTest {
     private static final String OTHER_SECRET = "o".repeat(64);
 
     private JwtProvider provider(String secret, int ttlDays) {
-        return new JwtProvider(new AuthProperties(null, null, new AuthProperties.Jwt(secret, ttlDays)));
+        return new JwtProvider(new AuthProperties(null, true, null, new AuthProperties.Jwt(secret, ttlDays)));
     }
 
     @Test

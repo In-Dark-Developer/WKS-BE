@@ -23,7 +23,7 @@
 | 개발 서버 (`api-dev.threadoffate.site`) | 🔧 인프라 파일 준비 완료(2026-09-23, 아래 기록) — **EC2 미적용.** `docs/runbook-dev-server.md` 대로 본인이 실행해야 실제로 뜬다 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
 | Flyway 최신 버전 | V11 (dev 기준, 2026-09-23 로그인 머지). V12(원장)는 예약만, V13(궁합 이유 캐시, #81)·V14(잘 맞는 오행, #82)는 PR — 아래 예약 표. **#81 → #82 순서로 머지** |
-| 카카오 로그인 | ✅ 백엔드·프론트 **로컬 구현 완료 + 왕복 검증 완료**(2026-09-23). `auth/`·`common/auth/`·`member/`(BE), `features/auth/`(FE) 전부 **아직 커밋 안 됨** — 브랜치 정리 필요. 계획은 `docs/backend-requirements.md` §16, 세부는 아래 2026-09-23 기록 |
+| 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -98,6 +98,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-25 | **[필드 삭제, 프론트 대응 필수]** `POST /api/auth/kakao` 응답에서 `token` 필드 제거. 토큰은 이제 `Set-Cookie`(HttpOnly)로만 내려간다 — 인증 필요 API는 `credentials: 'include'` 로 호출. `POST /api/auth/logout` 신규 추가(로그아웃은 이제 이 호출로 처리, 클라이언트 로컬 삭제 방식 폐기). 상세는 `docs/api-spec.md` §9, 백엔드 `feat/cookie-based-auth` | ❌ |
 | 2026-09-23 | `POST /api/results`·`GET /api/results/{resultId}` 응답에 `elementMatch: { element, korean, reason }` 추가 (나와 잘 맞는 오행 + 이유, 기능명세 3.5). `null` 이면 영역 미노출. CTA "OO 기운의 사람 만나보기"는 `element` 사용 | ❌ |
 | 2026-09-23 | `GET /api/compatibilities/{id}/reason` 추가 (궁합 상세 이유 3답: `why`·`together`·`conflict`). 첫 호출만 LLM 생성이라 최대 30초, 실패는 `LLM_UNAVAILABLE` 503 → 해당 영역만 미노출·재시도. 두 사람이 같은 내용. **프론트가 `id` 를 받으려면 궁합 응답에 `id` 가 필요** — 아래 기록 참고 | ❌ |
 | 2026-09-21 | **(예정, 미구현)** `POST /api/auth/kakao`(프론트가 code 전달, 응답에 JWT)·`GET /api/me`·`GET /api/me/result`. **초안이 `api-spec.md` §9 / `api.md` §6 에 있음.** 사주·궁합·공유 API 는 **변경 없음**(비로그인 그대로). 인증 API 는 `Authorization: Bearer`. 프론트 콜백 주소(운영·로컬)를 백엔드에 받아야 한다. 구현 PR 에서 확정 후 재공지 | ❌ |
@@ -144,6 +145,88 @@
 ---
 
 ## 기록
+
+### 2026-09-25 (금) · 곽도윤 · auth/·common/auth/ 로그인을 쿠키 기반으로 전환 · Claude Code
+
+**한 일**
+- **의도적 결정 (본인 확인).** 로그인 토큰 전달 방식을 `Authorization: Bearer` 헤더 + 프론트 로컬 저장소에서
+  **HttpOnly 쿠키**로 바꿨다. `AGENTS.md`의 기존 "쿠키를 넣지 않는다" 규칙을 뒤집는 거라 진행 전에 재확인
+  받았다 — Spring Security·서버 쪽 세션 저장소는 여전히 안 쓴다(쿠키는 JWT 를 담는 그릇일 뿐)
+- `common/auth/JwtCookie`(신규) — 쿠키 발급(`issue`)·삭제(`clear`)·요청에서 읽기(`readFrom`)를 한 곳에
+  모았다. 속성: `HttpOnly`·`SameSite=Lax`·`Path=/`·`Domain` 없음(host-only — 운영/개발 쿠키가 안 섞임)·
+  `Secure`는 `app.auth.cookie-secure`(기본 true, 로컬만 false)로 제어
+- `JwtAuthInterceptor`가 이제 쿠키에서만 토큰을 읽는다 (`Authorization` 헤더 파싱 제거 — 폴백 없이 완전
+  전환). `/api/me/**`·`/api/dating/**` 둘 다 같은 인터셉터라 자동으로 적용됨
+- `POST /api/auth/kakao` 응답에서 `token` 필드를 **삭제**했다 (프론트 계약 변경, api-spec.md·api.md 갱신).
+  대신 응답에 `Set-Cookie`가 실린다. `AuthService.login()`은 이제 `LoginOutcome(token, body)`를 돌려주고
+  Controller가 `token`을 꺼내 쿠키를 만든 뒤 `body`만 클라이언트에 보낸다
+- `POST /api/auth/logout` 신규 추가 — 쿠키를 지운다. **쿠키가 HttpOnly라 프론트 JS가 못 지우므로 이
+  엔드포인트가 없으면 로그아웃 자체가 불가능해진다** (2026-09-23 결정 "로그아웃은 클라이언트가 로컬
+  토큰 삭제"는 이제 성립 안 함 — 그 결정을 대체함)
+- `WebConfig`에 `allowCredentials(true)` 추가 (쿠키가 크로스 오리진 요청에 실리려면 필수 — CORS
+  `allowedOrigins` 와일드카드 금지 규칙과도 호환됨, credentials 모드에서는 와일드카드 자체가 금지라)
+- `OpenApiConfig`의 Swagger 보안 스키마를 `bearerAuth`(HTTP Bearer)에서 `cookieAuth`(APIKEY, in=COOKIE,
+  name=wks_token)로 바꿨다. `MeController`·`DatingController`·`DatingRequestController`의
+  `@SecurityRequirement` 이름도 맞춰 바꿈
+- CSRF는 별도 토큰 없이 `SameSite=Lax` + 상태변경 API가 전부 POST/PATCH인 것으로 막는다 — CSRF 토큰
+  시스템(Spring Security 등)은 도입하지 않았다(범위 밖이라고 판단, 필요하면 별건)
+- **기존 테스트 중 하나가 깨졌다**: `DatingSchemaTest.datingRouteRequiresBearerToken`이 `Authorization`
+  헤더로 인증하던 걸 전제해서 401 대신 예상한 404가 안 나왔다 — 쿠키를 심도록 고치고 테스트명도
+  `datingRouteRequiresLoginCookie`로 바꿈. `AuthProperties`에 `cookieSecure` 필드가 추가돼 생성자를
+  직접 호출하던 3개 테스트(`KakaoClientTest`·`RedirectUriPolicyTest`·`JwtProviderTest`)도 인자 추가
+- 신규 테스트: `JwtCookieTest`(쿠키 속성 단위테스트), `AuthControllerTest`(로그인 응답에 토큰 필드가
+  없고 Set-Cookie가 실리는지, 로그아웃이 Max-Age=0 쿠키를 내려주는지)
+- `./gradlew build` 전체 통과 확인 (컴파일 + 전체 테스트 스위트)
+- 문서 갱신: `AGENTS.md`(핵심 규칙 문구 교체), `docs/api-spec.md` §9(요청/응답 예시·인증 규칙·로그아웃
+  엔드포인트 추가), `docs/architecture.md`(다이어그램·설계원칙 4·8·9, API 표), `docs/convention.md`(인증
+  절), `docs/plan.md` §8(한 줄), `api.md` §6(프론트 공유용, 같은 내용)
+
+**건드린 파일/패키지**
+- 신규: `common/auth/JwtCookie.java`, `common/auth/JwtCookieTest.java`, `auth/AuthControllerTest.java`
+- 수정: `common/auth/AuthProperties.java`(`cookieSecure` 필드), `common/auth/JwtAuthInterceptor.java`,
+  `common/config/WebConfig.java`, `common/config/OpenApiConfig.java`, `auth/AuthController.java`,
+  `auth/AuthService.java`, `auth/dto/KakaoLoginResponse.java`, `member/MeController.java`,
+  `dating/DatingAuthWebConfig.java`(주석)·`DatingController.java`·`DatingRequestController.java`(Tag·
+  SecurityRequirement), `application.yml`·`application-local.yml.example`(`cookie-secure`)
+- 테스트 수정: `KakaoClientTest.java`, `RedirectUriPolicyTest.java`, `JwtProviderTest.java`(생성자 인자),
+  `dating/DatingSchemaTest.java`(쿠키로 전환)
+- 문서: 위 "한 일" 참고
+
+**다음 사람이 알아야 할 것**
+- **프론트(WKS-FE)가 반드시 같이 바뀌어야 한다.** 이 레포는 백엔드뿐이라 프론트는 못 건드렸다 — 아래
+  "프론트에 알려야 할 것" 그대로 전달 필요. 프론트가 안 바뀐 채로 이 백엔드가 배포되면 **로그인이 완전히
+  깨진다** (프론트가 여전히 응답 바디의 `token`을 찾고 `Authorization` 헤더를 보내려 하기 때문)
+- 로컬 개발 시 `application-local.yml`에 `app.auth.cookie-secure: false`가 없으면 브라우저가 로그인
+  쿠키를 저장하지 않는다 (plain HTTP라 Secure 쿠키 거부됨) — `application-local.yml.example`에 이미
+  반영해뒀으니 로컬 파일도 맞춰 갱신할 것
+- `wks_token` 쿠키는 host-only(Domain 속성 없음)라 `api.threadoffate.site`와 `api-dev.threadoffate.site`
+  가 쿠키를 안 공유한다 — 의도한 설계(운영/개발 격리)
+- CSRF 방어가 `SameSite=Lax`뿐이라는 걸 인지할 것. 상태변경 API를 GET으로 만들면 이 방어가 뚫린다 —
+  새 API 만들 때 메서드를 지킬 것
+- 이 브랜치(`feat/cookie-based-auth`, `dev`에서 분기)는 아직 커밋만 했고 PR은 안 올렸다
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: 이 PR 리뷰·머지, 프론트 팀에 아래 변경사항 전달
+- 프론트 팀 (WKS-FE, 별도 레포라 여기서 직접 수정 못 함):
+  1. 로그인 API 응답에서 `token` 필드 제거됨 — 더 이상 읽지 않는다
+  2. `localStorage`(`wks:auth`)에 토큰 저장하던 로직(`src/api/authToken.ts` 등) 전체 제거
+  3. 인증이 필요한 모든 API 호출에 `credentials: 'include'`(axios는 `withCredentials: true`) 추가 —
+     빠지면 브라우저가 쿠키를 안 보내서 401
+  4. `LogoutButton.tsx`가 `clearAuthToken()`(로컬 삭제) 대신 `POST /api/auth/logout`을 호출하도록 변경
+     — HttpOnly 쿠키는 JS가 못 지운다
+  5. 카카오 콜백 처리 후 더 이상 토큰을 저장할 필요 없음 — 로그인 성공 응답만 받으면 쿠키는 이미 심어져
+     있다
+  6. 로컬 개발 시 프론트가 `localhost:8080`(백엔드)과 다른 포트(`5173`/`3000`)에서 뜨는데, 쿠키가
+     `SameSite=Lax`라 같은 사이트(`localhost`)면 포트가 달라도 전송된다 — 별도 처리 불필요하지만
+     `credentials: 'include'`는 로컬에서도 꼭 필요
+
+**문서 변경**
+- `AGENTS.md`, `docs/api-spec.md`, `docs/architecture.md`, `docs/convention.md`, `docs/plan.md`,
+  `api.md`, `docs/handoff.md`(이 항목)
+
+**프론트에 알려야 할 것**
+- 위 "막힌 것 / 넘기는 것" 항목 1~6 그대로. **이번 백엔드 변경은 프론트 협업 없이는 배포하면 안 된다**
+  (로그인이 깨짐) — 프론트 작업이 끝나고 같이 배포할 것
 
 ### 2026-09-24 (목) · 최선우 · dating/ 매칭 요청 API (#86) · Codex
 

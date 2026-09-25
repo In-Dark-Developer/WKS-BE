@@ -70,6 +70,8 @@ app:
   auth:
     # 값이 비어 있으면 로그인만 비활성(KAKAO_UNAVAILABLE)이고 나머지 서비스는 정상 기동한다 (AuthProperties 참고).
     allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS:}
+    # 로컬(plain HTTP)만 false로 덮어쓴다 (application-local.yml.example 참고).
+    cookie-secure: ${COOKIE_SECURE:true}
     kakao:
       client-id: ${KAKAO_CLIENT_ID:}
       client-secret: ${KAKAO_CLIENT_SECRET:}

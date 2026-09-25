@@ -38,7 +38,7 @@
 ```
 
 - HTTP 상태코드도 함께 맞춰서 내려감
-- 인증이 필요한 API 는 `Authorization: Bearer <JWT>` 를 보냅니다 (§6, 구현 전). 사주·궁합·공유 API 는 인증이 없습니다
+- 인증이 필요한 API 는 로그인 쿠키(`wks_token`, HttpOnly)로 인증합니다 (§6). `credentials: 'include'` 로 호출해야 합니다. 사주·궁합·공유 API 는 인증이 없습니다
 - `error.message`는 사용자에게 그대로 보여줘도 되는 한국어 문구
 - `traceId`는 장애 문의 시 로그 추적용 (화면에 노출해도 무방)
 - JSON 키는 camelCase, 날짜는 `yyyy-MM-dd`, 시각은 ISO-8601 UTC(`Z`)
@@ -391,8 +391,13 @@
 ```
 프론트: 카카오 인가 → redirectUri(프론트 콜백)로 code 수신
   → POST /api/auth/kakao {code, redirectUri, resultId?, ref?}
-  → 응답의 token 저장 → 이후 인증이 필요한 API 에 Authorization: Bearer <token>
+  → 서버가 Set-Cookie(wks_token, HttpOnly)로 토큰을 내려줍니다 — 프론트는 저장·첨부 안 해도 됩니다
+  → 이후 인증이 필요한 API 는 credentials: 'include' 로 호출하면 브라우저가 쿠키를 자동으로 실어 보냅니다
 ```
+
+**2026-09-25, Bearer 헤더에서 쿠키로 전환했습니다.** `fetch`/`axios` 요청에
+`credentials: 'include'`(axios는 `withCredentials: true`)만 켜면 됩니다. `localStorage` 에 토큰을
+저장하던 기존 로직은 제거해 주세요.
 
 ### `POST /api/auth/kakao` — 카카오 로그인
 
@@ -420,7 +425,6 @@
 {
   "success": true,
   "data": {
-    "token": "eyJhbGciOi...",
     "isNewUser": true,
     "restoredResultId": null,
     "rewardGranted": null
@@ -428,7 +432,12 @@
 }
 ```
 
-- `token`: JWT. 이후 `Authorization: Bearer <token>` 으로 보냅니다. **만료 15일, 갱신 없음.** 만료되면 401 이 오고 다시 로그인하면 됩니다. 로그아웃 버튼은 프론트가 이 토큰을 지우는 방식입니다(서버 엔드포인트 없음)
+같은 응답에 `Set-Cookie: wks_token=...; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1296000`
+헤더가 함께 옵니다. **`token` 필드는 더 이상 응답 바디에 없습니다** (2026-09-25, 필드 삭제). 쿠키는
+HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없습니다.
+
+- **만료 15일, 갱신 없음.** 만료되면 401 이 오고 다시 로그인하면 됩니다
+- 로그아웃은 `POST /api/auth/logout` 을 호출하면 서버가 쿠키를 지웁니다(아래)
 - `isNewUser`: 이번 로그인으로 계정이 새로 만들어졌으면 `true`
 - `rewardGranted`: 보상이 지급됐으면 `{ "partnerName": "OO", "amount": 10 }`, 아니면 `null`. **소개팅·실 기능이 나오기 전에는 항상 `null`**
 - 카카오 동의항목은 받지 않습니다 (회원번호만 사용)
@@ -451,6 +460,15 @@
 | `INVALID_INPUT` | 400 | `code`·`redirectUri` 누락, 등록되지 않은 `redirectUri` |
 | `INVALID_TOKEN` | 400 | 카카오 인가 코드 만료·이미 사용·위조 |
 | `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃. 잠시 후 재시도 안내 |
+
+### `POST /api/auth/logout` — 로그아웃
+
+로그인 쿠키를 지웁니다. 인증 없이 호출할 수 있습니다.
+
+**Response 200**
+```json
+{ "success": true, "data": null }
+```
 
 ### `GET /api/me` — 내 정보
 
@@ -480,11 +498,11 @@
 
 ### 인증 규칙
 
-- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 이후 소개팅(`/api/dating/**`)·실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 헤더 없이 동작**합니다
-- `401 UNAUTHENTICATED` 를 받으면 저장된 토큰을 지우고 다시 로그인시켜 주세요
-- 쿠키는 쓰지 않습니다. 토큰을 URL 쿼리에 넣지 마세요
+- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 소개팅(`/api/dating/**`), 이후 실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 쿠키 없이 동작**합니다
+- 인증이 필요한 API 는 반드시 `credentials: 'include'`(axios는 `withCredentials: true`) 로 호출하세요 — 안 그러면 브라우저가 쿠키를 안 실어 보내 401이 납니다
+- `401 UNAUTHENTICATED` 를 받으면 로그인 화면으로 보내세요 (지울 토큰은 없습니다 — 쿠키는 서버가 관리)
+- 토큰을 URL 쿼리에 넣지 마세요. `Authorization` 헤더도 쓰지 않습니다 — **쿠키 하나로만 인증합니다** (2026-09-25 전환)
 - **프론트 콜백 주소(운영·로컬·netlify 등)를 백엔드에 알려주세요.** `redirectUri` 화이트리스트와 카카오 콘솔 등록에 필요합니다
-- 구현 시 에러 코드 표(§1)에 `UNAUTHENTICATED`(401)와 `KAKAO_UNAVAILABLE`(503)이 추가될 예정입니다
 
 ---
 

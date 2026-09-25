@@ -36,7 +36,7 @@ class KakaoClientTest {
         server = MockRestServiceServer.createServer(builder);
         AuthProperties.Kakao kakaoConfig = new AuthProperties.Kakao(
                 "client-id", "client-secret", TOKEN_URI, USER_INFO_URI, 2000, 3000);
-        AuthProperties properties = new AuthProperties("", kakaoConfig, null);
+        AuthProperties properties = new AuthProperties("", true, kakaoConfig, null);
         client = new KakaoClient(builder.build(), properties);
     }
 

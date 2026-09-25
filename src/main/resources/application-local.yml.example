@@ -27,6 +27,8 @@ gemini:
 app:
   auth:
     allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS:http://localhost:5173/dev/kakao-callback}
+    # HTTPS 가 아니라서 false — 안 그러면 브라우저가 로그인 쿠키를 저장하지 않는다.
+    cookie-secure: false
     kakao:
       client-id: ${KAKAO_CLIENT_ID:}
       client-secret: ${KAKAO_CLIENT_SECRET:}
