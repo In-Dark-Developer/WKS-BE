@@ -60,9 +60,6 @@ public class DatingProfile {
     @Column(name = "verified_at")
     private Instant verifiedAt;
 
-    @Column(name = "matched_at")
-    private Instant matchedAt;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -94,11 +91,7 @@ public class DatingProfile {
         verifiedAt = time;
     }
 
-    public void markMatched(Instant time) {
-        matchedAt = time;
-    }
-
     public boolean isEligible() {
-        return verifiedAt != null && matchedAt == null;
+        return verifiedAt != null;
     }
 }

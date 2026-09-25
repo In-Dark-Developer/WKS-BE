@@ -54,9 +54,6 @@ public class DatingRecommendationService {
         if (viewer.getVerifiedAt() == null) {
             throw new BusinessException(ErrorCode.DATING_NOT_VERIFIED);
         }
-        if (viewer.getMatchedAt() != null) {
-            return new DatingRecommendationResponse(List.of());
-        }
         Result viewerResult = resultRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
 

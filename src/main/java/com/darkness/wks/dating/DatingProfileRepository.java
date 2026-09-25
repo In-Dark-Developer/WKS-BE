@@ -16,6 +16,6 @@ public interface DatingProfileRepository extends JpaRepository<DatingProfile, UU
 
     boolean existsByEmailAndMemberIdNot(String email, Long memberId);
 
-    @Query("SELECT p FROM DatingProfile p WHERE p.verifiedAt IS NOT NULL AND p.matchedAt IS NULL")
+    @Query("SELECT p FROM DatingProfile p WHERE p.verifiedAt IS NOT NULL")
     List<DatingProfile> findEligible();
 }

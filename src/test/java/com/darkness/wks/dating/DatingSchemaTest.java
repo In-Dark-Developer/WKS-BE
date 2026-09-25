@@ -4,8 +4,11 @@ import com.google.genai.Client;
 import com.darkness.wks.common.ContactMethod;
 import com.darkness.wks.common.Gender;
 import com.darkness.wks.common.auth.JwtProvider;
+import com.darkness.wks.common.exception.BusinessException;
+import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
+import com.darkness.wks.dating.entity.DatingRequestStatus;
 import com.darkness.wks.member.MemberRepository;
 import com.darkness.wks.member.entity.Member;
 import com.darkness.wks.result.ResultRepository;
@@ -26,6 +29,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import java.time.Instant;
@@ -71,6 +75,12 @@ class DatingSchemaTest {
     DatingRecommendationService recommendationService;
 
     @Autowired
+    DatingRequestService requestService;
+
+    @Autowired
+    DatingRequestRepository requestRepository;
+
+    @Autowired
     WebApplicationContext webContext;
 
     @Autowired
@@ -82,6 +92,7 @@ class DatingSchemaTest {
         Integer photoCount = jdbcTemplate.queryForObject("SELECT count(*) FROM dating_photo", Integer.class);
         Integer recommendationCount = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM dating_recommendation", Integer.class);
+        Integer requestCount = jdbcTemplate.queryForObject("SELECT count(*) FROM dating_request", Integer.class);
         Integer directResultLinks = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.columns
                 WHERE table_name = 'dating_profile' AND column_name = 'result_id'
@@ -90,6 +101,7 @@ class DatingSchemaTest {
         assertThat(profileCount).isZero();
         assertThat(photoCount).isZero();
         assertThat(recommendationCount).isZero();
+        assertThat(requestCount).isZero();
         assertThat(directResultLinks).isZero();
     }
 
@@ -104,7 +116,7 @@ class DatingSchemaTest {
 
     @Test
     @Transactional
-    void keepsCurrentThreeAndReplacesMatchedCandidateWithUnseenPerson() {
+    void keepsCurrentThreeAndReplacesUnverifiedCandidateWithUnseenPerson() {
         DatingProfile viewer = profile(900001L, Gender.MALE, "갑자", "을축", "병인");
         profile(900002L, Gender.FEMALE, "갑자", "을축", "병인");
         profile(900003L, Gender.FEMALE, "계해", "임술", "신유");
@@ -122,14 +134,87 @@ class DatingSchemaTest {
         assertThat(recommendationService.getCurrent(viewer.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).doesNotContain(newPerson.getId());
 
-        DatingProfile matched = profileRepository.findById(first.get(0).candidateId()).orElseThrow();
-        matched.markMatched(Instant.now());
+        DatingProfile unverified = profileRepository.findById(first.get(0).candidateId()).orElseThrow();
+        unverified.update("changed-" + unverified.getEmail(), unverified.getName(),
+                unverified.getContactMethod(), unverified.getContactValue(), unverified.getDepartment(),
+                unverified.getMbti(), unverified.getBio(), unverified.getPhoto());
         var updated = recommendationService.getCurrent(viewer.getMemberId()).candidates();
         assertThat(updated).hasSize(3);
         assertThat(updated).extracting(card -> card.candidateId()).contains(newPerson.getId());
-        assertThat(updated).extracting(card -> card.candidateId()).doesNotContain(matched.getId());
+        assertThat(updated).extracting(card -> card.candidateId()).doesNotContain(unverified.getId());
         assertThat(recommendationRepository.findAllByViewerMemberId(viewer.getMemberId())).hasSize(4);
         assertThat(firstIds).doesNotContain(newPerson.getId());
+    }
+
+    @Test
+    @Transactional
+    void acceptedRequestRevealsBothContactsAndKeepsProfilesEligible() {
+        DatingProfile sender = profile(910001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(910002L, Gender.FEMALE, "갑자", "을축", "병인");
+        DatingProfile anotherRecipient = profile(910003L, Gender.FEMALE, "계해", "임술", "신유");
+        DatingProfile anotherViewer = profile(910004L, Gender.MALE, "무오", "기미", "경신");
+
+        recommendationService.getCurrent(sender.getMemberId());
+        var sent = requestService.send(sender.getMemberId(), recipient.getId());
+        assertThat(sent.status()).isEqualTo(DatingRequestStatus.PENDING);
+        assertThat(sent.contactValue()).isNull();
+        assertThat(requestService.list(recipient.getMemberId(), "received")).hasSize(1);
+        assertThat(requestService.list(sender.getMemberId(), "sent").get(0).contactValue()).isNull();
+
+        var accepted = requestService.accept(recipient.getMemberId(), sent.requestId());
+        assertThat(accepted.status()).isEqualTo(DatingRequestStatus.ACCEPTED);
+        assertThat(accepted.contactValue()).isEqualTo(sender.getContactValue());
+        assertThat(requestService.list(sender.getMemberId(), "sent").get(0).contactValue())
+                .isEqualTo(recipient.getContactValue());
+        assertThat(recommendationService.getCurrent(sender.getMemberId()).candidates())
+                .extracting(card -> card.candidateId()).contains(recipient.getId(), anotherRecipient.getId());
+        assertThat(recommendationService.getCurrent(anotherViewer.getMemberId()).candidates())
+                .extracting(card -> card.candidateId()).contains(recipient.getId());
+        var second = requestService.send(sender.getMemberId(), anotherRecipient.getId());
+        assertThat(requestService.accept(anotherRecipient.getMemberId(), second.requestId()).status())
+                .isEqualTo(DatingRequestStatus.ACCEPTED);
+        assertThat(requestRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    @Transactional
+    void rejectedRequestKeepsBothProfilesEligibleAndContactsHidden() {
+        DatingProfile sender = profile(920001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(920002L, Gender.FEMALE, "갑자", "을축", "병인");
+        recommendationService.getCurrent(sender.getMemberId());
+
+        var sent = requestService.send(sender.getMemberId(), recipient.getId());
+        var rejected = requestService.reject(recipient.getMemberId(), sent.requestId());
+        assertThat(rejected.status()).isEqualTo(DatingRequestStatus.REJECTED);
+        assertThat(rejected.contactValue()).isNull();
+        assertThat(sender.isEligible()).isTrue();
+        assertThat(recipient.isEligible()).isTrue();
+    }
+
+    @Test
+    @Transactional
+    void duplicateRequestIsRejectedWithoutCreatingAnotherRow() {
+        DatingProfile sender = profile(930001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(930002L, Gender.FEMALE, "갑자", "을축", "병인");
+        recommendationService.getCurrent(sender.getMemberId());
+        requestService.send(sender.getMemberId(), recipient.getId());
+
+        assertThatThrownBy(() -> requestService.send(sender.getMemberId(), recipient.getId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.DATING_REQUEST_CONFLICT);
+    }
+
+    @Test
+    @Transactional
+    void onlyRecipientCanAcceptRequest() {
+        DatingProfile sender = profile(940001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(940002L, Gender.FEMALE, "갑자", "을축", "병인");
+        recommendationService.getCurrent(sender.getMemberId());
+        var sent = requestService.send(sender.getMemberId(), recipient.getId());
+
+        assertThatThrownBy(() -> requestService.accept(sender.getMemberId(), sent.requestId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.DATING_REQUEST_NOT_FOUND);
     }
 
     private DatingProfile profile(Long kakaoId, Gender gender, String year, String month, String day) {

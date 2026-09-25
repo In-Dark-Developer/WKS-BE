@@ -49,6 +49,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `DATING_PROFILE_NOT_FOUND` | 404 | 내 소개팅 프로필 없음 |
 | `DATING_PROFILE_CONFLICT` | 409 | 프로필 또는 학교 이메일 중복 |
 | `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회 |
+| `DATING_REQUEST_NOT_FOUND` | 404 | 요청 없음 또는 받은 사람 본인이 아님 |
+| `DATING_REQUEST_CONFLICT` | 409 | 중복 요청, 대상 미노출, 이미 처리된 요청 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
 
@@ -641,11 +643,11 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `GET /api/dating/profile/me` | 내 프로필 조회 | 200 · 10.2의 응답 `data`와 같은 구조 |
 | `PATCH /api/dating/profile/me` | 내 프로필 수정 | 200 · 10.2의 응답 `data`와 같은 구조 |
 
-PATCH는 10.2의 **전체 요청 필드**를 보낸다. 학교 이메일을 바꾸면 `emailVerified`가 다시 `false`가 된다. 조회·수정할 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다.
+PATCH는 10.2의 **전체 요청 필드**를 보낸다. 학교 이메일을 바꾸면 `emailVerified`가 다시 `false`가 되며, 재인증 전에는 추천 조회·매칭 요청이 제한된다. 이름(`name`)을 바꿔도 이메일 인증 상태는 유지된다. 조회·수정할 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다.
 
 ### 10.4 현재 후보 — `GET /api/dating/recommendations`
 
-최대 3개의 현재 후보를 반환한다. 후보는 학교 메일 인증을 마친 소개팅 신청 이성 중 기존 궁합 점수 내림차순으로 고른다. 한 번 카드에 나온 후보는 이후 새 추천에서 제외한다. 매칭된 후보가 현재 카드에 있으면 제외하고 아직 보지 않은 후보로 빈자리를 채운다. 학교 이메일 인증 전에는 `DATING_NOT_VERIFIED` 403이다.
+최대 3개의 현재 후보를 반환한다. 후보는 학교 메일 인증을 마친 소개팅 신청 이성 중 기존 궁합 점수 내림차순으로 고른다. 한 번 카드에 나온 후보는 **리롤 이후 새 추천에서** 제외한다. 매칭이 성사되어도 기존 카드는 유지되고, 두 사람 모두 다른 사람의 추천 후보가 될 수 있다. 학교 이메일 인증 전에는 `DATING_NOT_VERIFIED` 403이다.
 
 **응답 200 예시**
 
@@ -676,4 +678,85 @@ PATCH는 10.2의 **전체 요청 필드**를 보낸다. 학교 이메일을 바�
 
 - 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
 - 학교 메일 인증 완료를 소개팅 프로필에 반영하는 연동은 별도 작업이다. 연동 전에는 `GET /api/dating/recommendations`가 `DATING_NOT_VERIFIED` 403을 반환한다.
-- 리롤·정보 해금·매칭 요청·블러 미리보기용 썸네일 API는 #84에 포함되지 않는다.
+- 리롤·정보 해금·블러 미리보기용 썸네일 API는 #84에 포함되지 않는다. 매칭 요청은 §11을 본다.
+
+---
+
+## 11. 소개팅 매칭 요청·보관함
+
+모두 `Authorization: Bearer <JWT>` 필수. 매칭 요청은 **무료**이며 실을 차감하지 않는다. `candidateId`는 §10 추천 응답의 소개팅 프로필 ID다. `requestId`는 매칭 요청 자체의 ID로, 두 값은 다르다.
+
+| 메서드 | 경로 | 동작 |
+|---|---|---|
+| `POST` | `/api/dating/requests` | 현재 내 추천 카드에 있는 상대에게 요청. `201` |
+| `GET` | `/api/dating/requests?box=sent` | 내가 보낸 요청 목록. `200` |
+| `GET` | `/api/dating/requests?box=received` | 내가 받은 요청 목록. `200` |
+| `POST` | `/api/dating/requests/{id}/accept` | 받은 사람만 수락. `200` |
+| `POST` | `/api/dating/requests/{id}/reject` | 받은 사람만 거절. `200` |
+
+요청 생성 본문:
+
+```json
+{"candidateId":"3fa85f64-5717-4562-b3fc-2c963f66afa6"}
+```
+
+요청 생성 응답 `201` 예시:
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestId": "312f3185-f114-4db0-a2fb-54d0669b7e33",
+    "candidateId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "status": "PENDING",
+    "createdAt": "2026-09-24T12:00:00Z",
+    "respondedAt": null,
+    "contactMethod": null,
+    "contactValue": null
+  }
+}
+```
+
+### 11.1 요청 목록 — `GET /api/dating/requests`
+
+`box` 쿼리 파라미터는 필수이며 `sent`(내가 보낸 요청) 또는 `received`(내가 받은 요청)만 허용한다. 다른 값은 `INVALID_INPUT` 400이다. 최신 요청부터 반환하고, 목록이 비어 있으면 `{"success":true,"data":[]}`다. 내 소개팅 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다.
+
+**보낸 요청 조회**: `GET /api/dating/requests?box=sent`
+
+```json
+{
+  "success": true,
+  "data": [{
+    "requestId": "312f3185-f114-4db0-a2fb-54d0669b7e33",
+    "candidateId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "status": "PENDING",
+    "createdAt": "2026-09-24T12:00:00Z",
+    "respondedAt": null,
+    "contactMethod": null,
+    "contactValue": null
+  }]
+}
+```
+
+**받은 요청 조회**: `GET /api/dating/requests?box=received`
+
+```json
+{
+  "success": true,
+  "data": [{
+    "requestId": "312f3185-f114-4db0-a2fb-54d0669b7e33",
+    "candidateId": "84722660-622a-4d30-a5a5-0d6c736e8530",
+    "status": "ACCEPTED",
+    "createdAt": "2026-09-24T12:00:00Z",
+    "respondedAt": "2026-09-24T12:05:00Z",
+    "contactMethod": "PHONE",
+    "contactValue": "010-3333-3333"
+  }]
+}
+```
+
+두 목록은 같은 요청 구조를 쓴다. `candidateId`는 **조회한 사람 기준 상대의 프로필 ID**여서, 같은 요청도 보낸 사람의 목록과 받은 사람의 목록에서 값이 다르다. `status`는 `PENDING`, `ACCEPTED`, `REJECTED` 중 하나다. `PENDING`과 `REJECTED`에서는 `contactMethod`·`contactValue`가 `null`이다. `ACCEPTED`에서는 **해당 요청의 상대 연락처만** 반환한다. 수락·거절 응답도 같은 객체이며 `respondedAt`이 채워진다. 요청 수에 상한은 없다.
+
+본인 요청, 이미 요청한 두 사람의 재요청, 현재 추천 카드에 없는 상대는 거절한다. 한 쌍은 방향을 바꿔도 한 번만 요청할 수 있으며, 거절 후에도 같은 쌍으로 다시 요청할 수 없다. 요청을 보내려면 내 학교 메일 인증이 완료돼 있어야 한다. 수락 후에도 양쪽은 계속 소개팅을 이용하고 다른 사람의 추천 후보에 남는다. 수락이 다른 요청의 상태를 바꾸지는 않는다. 실 기능과는 별개다.
+
+학교 메일 인증 완료를 프로필에 반영하는 연동이 끝나기 전에는 추천 조회가 403이어서, 실제 추천 카드에서 매칭 요청까지 이어지는 흐름은 사용할 수 없다 (§10 구현 상태).

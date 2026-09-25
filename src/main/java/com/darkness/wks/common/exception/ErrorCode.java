@@ -17,6 +17,8 @@ public enum ErrorCode {
     DATING_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "소개팅 프로필을 찾을 수 없습니다."),
     DATING_PROFILE_CONFLICT(HttpStatus.CONFLICT, "이미 등록된 소개팅 프로필 또는 이메일입니다."),
     DATING_NOT_VERIFIED(HttpStatus.FORBIDDEN, "학교 이메일 인증이 필요합니다."),
+    DATING_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "소개팅 요청을 찾을 수 없습니다."),
+    DATING_REQUEST_CONFLICT(HttpStatus.CONFLICT, "소개팅 요청을 처리할 수 없습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청하신 경로를 찾을 수 없습니다.");
 
