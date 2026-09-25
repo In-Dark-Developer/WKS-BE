@@ -582,7 +582,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | FR-CP-12 | P0 | 생성 실패 시 해당 영역만 미노출하고 화면 전체를 에러로 만들지 않는다. 재시도할 수 있다 |
 | FR-CP-13 | P0 | 세 질문을 **한 번의 호출**로 생성한다 (FR-GM-02) |
 | FR-CP-14 | P0 | 프롬프트에는 팔자·점수·관계유형만 넣는다 (FR-GM-01). 호출은 `CallBudget` 에 집계된다 |
-| FR-CP-15 | P1 | `GET /api/compatibilities/{id}/reason` 의 `id` 는 순번이다 (2026-09-21 수용). 열거해서 남의 궁합 이유를 읽거나 생성을 유발할 수 있고, 호출 총량은 `CallBudget` 이 막는다. 소개팅 "궁합 까닭"과 캐시를 공유하는 방식은 미정 (plan.md TBD-13) |
+| FR-CP-15 | P1 | `GET /api/compatibilities/{id}/reason` 의 `id` 는 순번이다 (2026-09-21 수용). 열거해서 남의 궁합 이유를 읽거나 생성을 유발할 수 있고, 호출 총량은 `CallBudget` 이 막는다. 소개팅 "궁합 까닭"은 첫 REASON 해금 성공 시 별도 생성해 `dating_recommendation.reason_content`에 캐싱한다 |
 | FR-VL-06 | P0 | 결과 생성 중복 요청을 서버에서도 방어한다 (plan §3: 1일차에 18초 안에 같은 사람이 3회 제출). 방식은 구현 시 정한다 |
 
 > 세부 해설 카테고리는 **변경 없음** (`MARRIAGE`·`CHILDREN`·`LOVE`, api-spec 기준). plan.md §3.8 의 카테고리 변경 문구는 오기라 2026-09-21 에 정정했다.

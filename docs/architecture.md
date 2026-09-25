@@ -321,7 +321,7 @@ CREATE TABLE thread_ledger (
     UNIQUE (member_id, reason, ref_id)
 );
 
--- 소개팅 프로필·해금·요청·궁합 이유 캐시는 명세 확정 후 추가한다 (plan.md §7, TBD-13·16)
+-- 소개팅 프로필·추천·요청은 V15~V17, 소개팅 궁합 이유 캐시는 V18에 추가한다. 해금·실 원장은 후속 작업이다 (plan.md §7)
 ```
 
 ### 스키마 규칙
@@ -369,7 +369,7 @@ CreateResultRequest
 - 동시에 처음 열면 LLM 을 두 번 부를 수 있지만 저장은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 되고, 진 쪽은 저장된 글을 다시 읽는다. 잠금은 LLM 30초 동안 DB 연결을 잡아 두므로 쓰지 않는다
 - 서비스 메서드에 트랜잭션을 걸지 않는다. 같은 이유
 - 프롬프트를 바꾸면 기존 캐시는 옛 글로 남는다. 다시 만들려면 `UPDATE compatibility SET reason_why = NULL, reason_together = NULL, reason_conflict = NULL` (버전 컬럼은 두지 않았다)
-- 소개팅 "궁합 까닭"이 같은 캐시를 쓰는 방식은 미정이다 (plan.md TBD-13). `compatibility` 행을 재사용하면 후보가 친구 궁합지도에 나타난다
+- 소개팅 "궁합 까닭"은 친구 궁합과 다른 문구다. 첫 REASON 해금 성공 시 생성하고 `dating_recommendation.reason_content`(V18)에 캐싱한다. 추천 조회에서는 LLM을 호출하지 않는다
 
 ### 시간·지역 모름
 

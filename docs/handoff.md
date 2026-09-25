@@ -22,7 +22,7 @@
 | 배포 상태 | 🔧 파일상 확정(2026-09-23): `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버. **아직 커밋 전이고 EC2에도 미반영** — 커밋·머지 전까지는 실제로 `dev` push 가 운영을 배포하는 기존 동작 그대로다. 머지 직후엔 `main` 으로 한 번도 릴리즈 안 해봐서 첫 `dev`→`main` PR 전까지 운영 자동 배포 공백 생김(아래 기록) |
 | 개발 서버 (`api-dev.threadoffate.site`) | 🔧 인프라 파일 준비 완료(2026-09-23, 아래 기록) — **EC2 미적용.** `docs/runbook-dev-server.md` 대로 본인이 실행해야 실제로 뜬다 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V11 (dev 기준, 2026-09-23 로그인 머지). V12(원장)는 예약만, V13(궁합 이유 캐시, #81)·V14(잘 맞는 오행, #82)는 PR — 아래 예약 표. **#81 → #82 순서로 머지** |
+| Flyway 최신 버전 | V17 (`dev` 기준, 2026-09-25). V12(원장)는 예약만. V18(소개팅 궁합 이유 캐시, #94)은 이 브랜치에서 작업 — 아래 예약 표 |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
@@ -51,7 +51,8 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V17 | 최선우 | 소개팅 요청·수락/거절 상태 및 양방향 중복 방지 (#86) | 작업 중, V16 뒤에 머지 |
+| V18 | 최선우 | 소개팅 추천별 궁합 이유 캐시 (#94) | 작업 중, V17 뒤에 머지 |
+| V17 | 최선우 | 소개팅 요청·수락/거절 상태 및 양방향 중복 방지 (#86) | dev 머지 완료 |
 | V16 | 최선우 | `dating_profile.result_id` 직접 FK 제거. V15 뒤에 머지 | #84 로컬 기동 검증·미머지 |
 | V15 | 최선우 | 소개팅 사진·프로필·추천 노출 이력. V12~V14 뒤에 머지 | #84 `feat/84-dating-profile-recommendations`, 검증 완료·미머지 |
 | V14 | 차은호 | `reading` 에 `element_match_content` (잘 맞는 오행 이유, #82). **V13(#81) 뒤에 머지** | PR |
@@ -146,6 +147,33 @@
 ---
 
 ## 기록
+
+### 2026-09-25 (금) · 최선우 · dating/ 소개팅 궁합 이유 캐시 (#94) · Codex
+
+**한 일**
+- 친구 궁합 이유와 별도로 소개팅 전용 문장을 생성해 추천 이력에 캐싱했다. V18에 `dating_recommendation.reason_content`를 추가했다
+- 첫 `REASON` 해금 성공 후 호출할 내부 서비스만 만들었다. 추천 조회에서는 생성하지 않고, 해금·실 차감 API는 후속 작업이다
+- 기존 `GeminiJson`의 호출 한도를 공유하며, 동시 생성 시 조건부 저장 후 먼저 저장된 문장을 반환한다. 전체 `./gradlew test` 통과
+
+**건드린 파일/패키지**
+- `dating/DatingReasonGenerator.java`, `DatingReasonService.java`, `DatingRecommendationRepository.java`, `entity/DatingRecommendation.java`, 관련 테스트·프롬프트
+- `saju/GeminiJson.java` 호출 메서드 접근 범위, `db/migration/V18__add_dating_reason_cache.sql`
+
+**다음 사람이 알아야 할 것**
+- 해금 API는 실 차감·해금 기록이 성공한 뒤 `DatingReasonService.getOrCreate(viewerMemberId, candidateId)`를 호출한다. LLM 호출 중에는 DB 트랜잭션을 열지 않는다
+- 동일 추천 이력에 이유 한 건을 보관한다. 다른 추천 후보에게 이유가 섞이지 않으며 친구 궁합 캐시를 쓰지 않는다
+- 로컬 DB에 과거 실험용 V18(`add_dating_photo_blurred_key`)이 남아 있어 #94 V18과 체크섬이 충돌했다. `/private/tmp/wks_before_issue94.dump` 백업 후 옛 V18 컬럼·이력만 제거했고, 현재 V18 적용과 `/api/health` UP을 확인했다
+
+**막힌 것 / 넘기는 것**
+- 해금·실 원장 API 구현 및 실패 시 차감 처리 정책은 후속 작업
+
+**문서 변경**
+- `docs/plan.md` §1.2·8.5, `docs/architecture.md` 궁합 이유, `docs/backend-requirements.md` FR-CP-15, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (공개 API 변경 없음)
+
+---
 
 ### 2026-09-25 (금) · 최선우 · dating/ 사진 블러 썸네일 (#88) · Codex
 
