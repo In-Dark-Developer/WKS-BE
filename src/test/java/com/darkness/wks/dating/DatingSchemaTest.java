@@ -33,6 +33,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -56,6 +58,9 @@ class DatingSchemaTest {
 
     @MockitoBean
     JavaMailSender mailSender;
+
+    @MockitoBean
+    DatingPhotoService photoService;
 
     @Autowired
     JdbcTemplate jdbcTemplate;
@@ -139,6 +144,7 @@ class DatingSchemaTest {
     @Test
     @Transactional
     void keepsCurrentThreeWhenNewProfileJoins() {
+        when(photoService.thumbnailUrl(any())).thenReturn("https://example.com/blurred.png");
         DatingProfile viewer = profile(900001L, Gender.MALE, "갑자", "을축", "병인");
         profile(900002L, Gender.FEMALE, "갑자", "을축", "병인");
         profile(900003L, Gender.FEMALE, "계해", "임술", "신유");
@@ -147,6 +153,10 @@ class DatingSchemaTest {
 
         var first = recommendationService.getCurrent(viewer.getMemberId()).candidates();
         assertThat(first).hasSize(3);
+        assertThat(first).allSatisfy(card -> {
+            assertThat(card.blurredPhotoUrl()).isEqualTo("https://example.com/blurred.png");
+            assertThat(card.fields().photo().locked()).isTrue();
+        });
         assertThat(recommendationService.getCurrent(viewer.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).containsExactlyElementsOf(
                         first.stream().map(card -> card.candidateId()).toList());

@@ -49,6 +49,7 @@ public class DatingProfileService {
             throw new BusinessException(ErrorCode.RESULT_NOT_FOUND);
         }
         DatingPhoto photo = photoService.verifyOwnedPhoto(memberId, request.photoId());
+        photoService.createBlurredThumbnail(photo);
         DatingProfile profile = new DatingProfile(memberId, normalize(request.email()),
                 request.name().trim(), request.contactMethod(), request.contactValue().trim(),
                 request.department().trim(), request.mbti(), request.bio().trim(), photo);
