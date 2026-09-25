@@ -39,6 +39,9 @@ public class DatingRecommendation {
     @Column(name = "active", nullable = false)
     private boolean active;
 
+    @Column(name = "reason_content", columnDefinition = "text")
+    private String reasonContent;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

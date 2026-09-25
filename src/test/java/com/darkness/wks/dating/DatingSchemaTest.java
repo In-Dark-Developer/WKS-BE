@@ -34,6 +34,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -62,6 +66,9 @@ class DatingSchemaTest {
     @MockitoBean
     DatingPhotoService photoService;
 
+    @MockitoBean
+    DatingReasonGenerator reasonGenerator;
+
     @Autowired
     JdbcTemplate jdbcTemplate;
 
@@ -84,6 +91,9 @@ class DatingSchemaTest {
     DatingRecommendationService recommendationService;
 
     @Autowired
+    DatingReasonService reasonService;
+
+    @Autowired
     DatingRequestService requestService;
 
     @Autowired
@@ -101,21 +111,24 @@ class DatingSchemaTest {
 
     @Test
     void appliesDatingMigrationAndValidatesJpaMappings() {
-        Integer profileCount = jdbcTemplate.queryForObject("SELECT count(*) FROM dating_profile", Integer.class);
-        Integer photoCount = jdbcTemplate.queryForObject("SELECT count(*) FROM dating_photo", Integer.class);
-        Integer recommendationCount = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM dating_recommendation", Integer.class);
-        Integer requestCount = jdbcTemplate.queryForObject("SELECT count(*) FROM dating_request", Integer.class);
+        Integer datingTables = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_schema = 'public'
+                AND table_name IN ('dating_profile', 'dating_photo', 'dating_recommendation', 'dating_request')
+                """, Integer.class);
         Integer directResultLinks = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.columns
                 WHERE table_name = 'dating_profile' AND column_name = 'result_id'
                 """, Integer.class);
+        Integer reasonColumns = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_name = 'dating_recommendation' AND column_name = 'reason_content'
+                AND data_type = 'text'
+                """, Integer.class);
 
-        assertThat(profileCount).isZero();
-        assertThat(photoCount).isZero();
-        assertThat(recommendationCount).isZero();
-        assertThat(requestCount).isZero();
+        assertThat(datingTables).isEqualTo(4);
         assertThat(directResultLinks).isZero();
+        assertThat(reasonColumns).isEqualTo(1);
     }
 
     @Test
@@ -166,6 +179,25 @@ class DatingSchemaTest {
                 .extracting(card -> card.candidateId()).doesNotContain(newPerson.getId());
 
         assertThat(recommendationRepository.findAllByViewerMemberId(viewer.getMemberId())).hasSize(3);
+    }
+
+    @Test
+    void datingReasonIsStoredOnlyAfterRequestedAndReused() {
+        when(photoService.thumbnailUrl(any())).thenReturn("https://example.com/blurred.png");
+        DatingProfile viewer = profile(950001L, Gender.MALE, "갑자", "을축", "병인");
+        profile(950002L, Gender.FEMALE, "계해", "임술", "기유");
+        UUID candidateId = recommendationService.getCurrent(viewer.getMemberId())
+                .candidates().get(0).candidateId();
+        verify(reasonGenerator, times(0)).generate(any(), any(), anyInt(), anyString());
+        when(reasonGenerator.generate(any(), any(), anyInt(), anyString())).thenReturn("소개팅 이유");
+
+        assertThat(reasonService.getOrCreate(viewer.getMemberId(), candidateId)).isEqualTo("소개팅 이유");
+        assertThat(reasonService.getOrCreate(viewer.getMemberId(), candidateId)).isEqualTo("소개팅 이유");
+        verify(reasonGenerator, times(1)).generate(any(), any(), anyInt(), anyString());
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT reason_content FROM dating_recommendation
+                WHERE viewer_member_id = ? AND candidate_profile_id = ?
+                """, String.class, viewer.getMemberId(), candidateId)).isEqualTo("소개팅 이유");
     }
 
     @Test

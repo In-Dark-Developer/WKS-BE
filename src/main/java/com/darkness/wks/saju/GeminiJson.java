@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  * Gemini 를 **한 번** 호출해 문자열 필드만 있는 JSON 을 받는다. 사주 해석과 궁합 이유가 함께 쓴다.
  * <p>
  * 실패(네트워크·429·파싱·필드 누락)는 1회 재시도 후 {@link ErrorCode#LLM_UNAVAILABLE} (FR-GM-03~05).
- * 총량 상한 {@link CallBudget} 은 여기 하나뿐이라 두 생성기가 한 한도를 나눠 쓴다 (FR-CP-14).
+ * 총량 상한 {@link CallBudget} 은 여기 하나뿐이라 사주·친구 궁합·소개팅 생성기가 한 한도를 나눠 쓴다 (FR-CP-14).
  * 로그에는 토큰 수·소요 시간만 남긴다 (FR-GM-06). "gemini ok" 로그 줄 수 = 호출 횟수 (NFR-O-06).
  */
 @Slf4j
@@ -65,7 +65,7 @@ public class GeminiJson {
     }
 
     /** 모든 필드가 비어 있지 않은 문자열 JSON. 아니면 {@link ErrorCode#LLM_UNAVAILABLE} */
-    Map<String, String> generate(String systemPrompt, String prompt, List<String> fields) {
+    public Map<String, String> generate(String systemPrompt, String prompt, List<String> fields) {
         Schema schema = Schema.builder()
                 .type(Type.Known.OBJECT)
                 .properties(fields.stream().collect(Collectors.toMap(f -> f, f -> Schema.builder().type(Type.Known.STRING).build())))
