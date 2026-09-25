@@ -4,6 +4,7 @@ import com.darkness.wks.common.Gender;
 import com.darkness.wks.member.entity.Member;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.wallet.WalletService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -35,6 +36,8 @@ class MemberServiceTest {
     private ResultRepository resultRepository;
     @Mock
     private MemberRaceOps raceOps;
+    @Mock
+    private WalletService walletService;
 
     @InjectMocks
     private MemberService memberService;

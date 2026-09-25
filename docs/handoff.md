@@ -22,8 +22,9 @@
 | 배포 상태 | 🔧 파일상 확정(2026-09-23): `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버. **아직 커밋 전이고 EC2에도 미반영** — 커밋·머지 전까지는 실제로 `dev` push 가 운영을 배포하는 기존 동작 그대로다. 머지 직후엔 `main` 으로 한 번도 릴리즈 안 해봐서 첫 `dev`→`main` PR 전까지 운영 자동 배포 공백 생김(아래 기록) |
 | 개발 서버 (`api-dev.threadoffate.site`) | 🔧 인프라 파일 준비 완료(2026-09-23, 아래 기록) — **EC2 미적용.** `docs/runbook-dev-server.md` 대로 본인이 실행해야 실제로 뜬다 |
 | `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V17 (`dev` 기준, 2026-09-25). V12(원장)는 예약만. V18(소개팅 궁합 이유 캐시, #94)은 이 브랜치에서 작업 — 아래 예약 표 |
+| Flyway 최신 버전 | V18 (`dev` 기준). V19(실 원장)·V20(소개팅 해금 컬럼)은 `feat/wallet` 브랜치에서 구현 완료, PR 대기 — V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
+| 실(재화) | 🔧 **2026-09-26, 원장·자동지급 3종·소개팅 해금 API 구현 완료**(`feat/wallet`, PR 대기). 제휴처 보상(`PARTNER`)·리롤은 미구현 — 아래 2026-09-26 기록 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -51,13 +52,15 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V18 | 최선우 | 소개팅 추천별 궁합 이유 캐시 (#94) | 작업 중, V17 뒤에 머지 |
+| V20 | 곽도윤 | `dating_recommendation` 에 `photo_unlocked`·`name_unlocked`·`department_unlocked`·`reason_unlocked` 추가 (실 해금 상태) | `feat/wallet` 구현 완료, PR 대기 |
+| V19 | 곽도윤 | `thread_ledger` (실 원장, `ref_id NOT NULL`). **V12 예약을 대체한다** — V13~V18 이 먼저 머지돼 V12 를 쓰면 out-of-order 오류가 난다 (2026-09-26 발견) | `feat/wallet` 구현 완료, PR 대기 |
+| V18 | 최선우 | 소개팅 추천별 궁합 이유 캐시 (#94) | dev 머지 완료 |
 | V17 | 최선우 | 소개팅 요청·수락/거절 상태 및 양방향 중복 방지 (#86) | dev 머지 완료 |
 | V16 | 최선우 | `dating_profile.result_id` 직접 FK 제거. V15 뒤에 머지 | #84 로컬 기동 검증·미머지 |
 | V15 | 최선우 | 소개팅 사진·프로필·추천 노출 이력. V12~V14 뒤에 머지 | #84 `feat/84-dating-profile-recommendations`, 검증 완료·미머지 |
 | V14 | 차은호 | `reading` 에 `element_match_content` (잘 맞는 오행 이유, #82). **V13(#81) 뒤에 머지** | PR |
 | V13 | 차은호 | `compatibility` 에 `reason_why`·`reason_together`·`reason_conflict` (궁합 상세 이유 캐시, #80) | PR |
-| V12 | 미정 | `thread_ledger` (실 원장, `ref_id NOT NULL`). 소개팅 BE 와 함께 | 예약 |
+| V12 | ~~미정~~ | ~~`thread_ledger`~~ | **폐기 (2026-09-26).** V13~V18 이 이 번호보다 먼저 머지돼 dev 에 이미 적용됨 — 이제 와서 V12 를 쓰면 기존 환경에서 out-of-order 오류가 난다. thread_ledger 는 V19 로 다시 받았다 |
 | V11 | 곽도윤 | `member`(`kakao_id` 만) + `result.member_id`(계정당 1개, 부분 unique). 로그인 마감 09/22 | 로컬 적용·검증 완료(2026-09-23), **커밋 전** |
 | V10 | 곽도윤 | signup 에 `photo_key` 추가 (#54). `V9__add_signup_photo_key.sql` 을 개명 (dev 의 V9 와 중복이었다) | 개명 완료 (2026-09-21), PR 대기 |
 | V9 | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
@@ -86,7 +89,7 @@
 | `UNAUTHENTICATED` (401) | 곽도윤 (예정, 로그인 PR) | 📄 `api-spec.md` §9 "추가 예정 에러 코드"에 기재. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 (1:1 유지) |
 | `KAKAO_UNAVAILABLE` (503) | 곽도윤 (확정 2026-09-21, 로그인 PR) | 📄 `api-spec.md` §9 에 기재. 카카오 서버 오류·타임아웃. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 |
 | `COMPATIBILITY_NOT_FOUND` (404) | 차은호 (#80) | ✅ §1 표·§4 `GET /api/compatibilities/{id}/reason` |
-| `INSUFFICIENT_THREAD` | 소개팅 BE (예정) | ❌ HTTP 상태 미정 (plan.md TBD-11). 명세 확정 후 |
+| `INSUFFICIENT_THREAD` (402) | 곽도윤 (2026-09-26, `feat/wallet`) | ✅ §1·§9(§12 신설) — TBD-11 종료(402 확정) |
 | `DATING_PROFILE_NOT_FOUND` (404) | 최선우 (소개팅 프로필) | ✅ §1·§10 |
 | `DATING_PROFILE_CONFLICT` (409) | 최선우 (중복 프로필·이메일) | ✅ §1·§10 |
 | `DATING_NOT_VERIFIED` (403) | 최선우 (학교 메일 미인증) | ✅ §1·§10 |
@@ -147,6 +150,94 @@
 ---
 
 ## 기록
+
+### 2026-09-26 (토) · 곽도윤 · wallet/ 실(재화) 원장·해금·출석 구현 (FR-TH) · Claude Code
+
+**한 일**
+- `wallet/` 신설. `thread_ledger` 하나로 지급·차감·잔액을 전부 처리한다(plan.md §9.4). 잔액 컬럼 없이
+  `SUM(amount)`로 계산하고, `UNIQUE(member_id, reason, ref_id)`로 중복 지급·차감을 막는다(FR-TH-02).
+  동시성은 `pg_advisory_xact_lock(memberId)`로 회원 단위 직렬화한다 — `member` 테이블을 잠그지 않은
+  이유는 wallet이 다른 도메인 엔티티를 참조하지 않기 때문(architecture.md §3, "원장이 가장 아래")
+- **TBD-11(잔액 부족 HTTP 상태) 확정 필요해서 사용자에게 직접 물어봄 → 402 Payment Required로 결정**
+  (plan.md·backend-requirements.md 갱신, TBD 종료)
+- 자동 지급 3종을 각 트리거 지점에 심었다: 가입 보너스 10(`MemberService.loginAndLink`, 신규 회원 분기
+  안, ref_id=memberId), 친구 궁합지도 등록 3(`CompatibilityService.create`, origin이 로그인 계정일 때만,
+  ref_id=compatibility.id), 출석 5(`WalletController.checkIn`, ref_id=KST 날짜)
+- 소개팅 카드 해금 `POST /api/dating/candidates/{candidateId}/unlock` 신규(plan.md §8.5, FR-DT-06). 실
+  차감·해금 기록(`DatingUnlockChargeService`, 짧은 트랜잭션)과 값 조회(`DatingUnlockService`)를
+  분리했다 — `REASON` 해금은 #94에서 최선우가 만들어 둔 `DatingReasonService.getOrCreate`를 그대로
+  호출하는데, 그 안에서 LLM을 최대 30초 부를 수 있어서 실 차감 트랜잭션·advisory lock을 그 시간만큼
+  붙잡아 두면 커넥션 풀(10개)이 마른다(#94 인수인계 메모, CompatibilityReasonService와 같은 이유) —
+  같은 클래스 안에서 `@Transactional` 메서드를 직접 호출하면(self-invocation) 스프링 프록시를 안 거쳐서
+  트랜잭션이 실제로 안 걸리는 문제가 있어 별도 빈(`DatingUnlockChargeService`)으로 분리했다
+- `dating_recommendation`에 `photo_unlocked`·`name_unlocked`·`department_unlocked`·`reason_unlocked`
+  4개 컬럼 추가(V20). 이 행이 (조회자, 후보) 쌍에 정확히 하나이고 재추천되지 않아 재사용에 안전하다 —
+  별도 해금 테이블을 안 뒀다
+- `GET /api/dating/recommendations`가 실제 해금 상태를 반영하도록 고쳤다 — 지금까지는 `fields.*`가
+  전부 `locked: true` 고정이었다(값 자체가 없었음). `LockedField`를 `{locked, cost, value}`로 바꿔서
+  잠겼으면 `cost`만, 풀렸으면 `value`만 채운다(반대쪽은 null) — 잠긴 값을 응답에 아예 안 넣는 서버 블러
+  원칙(FR-DT-03)을 유지
+- `GET /api/me`의 `threadBalance`가 하드코딩 0이었던 걸 실제 잔액으로 연결
+- Flyway **V12(원장) 예약이 죽어 있었다.** V13~V18이 먼저 merge돼 dev에 이미 적용된 상태라 이제 와서
+  V12를 쓰면 out-of-order 오류가 난다 — V12는 폐기 처리하고 thread_ledger는 **V19**로 다시 받았다.
+  dating_recommendation 해금 컬럼은 V20. `./gradlew build`로 19개 마이그레이션(V12 제외) 검증 확인
+- **버그 하나 발견·수정**: `saju/DatingReasonGenerator.java`를 새로 만들려다가 `dating/` 패키지에 동명
+  클래스가 이미 있다는 걸 뒤늦게 알았다. 그 과정에서 기존 `prompts/dating-reason-system.txt`(이미 튜닝된
+  프롬프트)를 실수로 덮어썼는데, git status로 바로 발견해서 `git checkout`으로 원복하고 중복 파일을
+  지웠다 — 실제로 커밋된 적은 없다
+
+**검증**
+- `./gradlew build` 전체 통과 (컴파일 + 전체 테스트, Testcontainers 포함)
+- `wallet/WalletServiceTest`(신규, Testcontainers): 잔액=원장합계, 같은 ref_id 중복 지급·차감 방지,
+  잔액 부족 시 402 확인
+- `dating/DatingUnlockServiceTest`(신규, Mockito): 필드별로 올바른 값을 꺼내는지
+- `dating/DatingSchemaTest`에 추가한 해금 테스트 2건에서 **테스트 오염 버그를 발견해 바로 고쳤다** — 새
+  후보 프로필을 인증(verified) 상태로 만들었더니, 이 클래스의 다른 테스트들이 트랜잭션 롤백 없이 같은
+  Postgres 컨테이너를 공유하는 구조라 내 후보가 다른 테스트의 top-3 추천 풀에 끼어들어 그 테스트의
+  의도한 recipient를 밀어냈다(같은 "갑자·을축·병인" 뷰어 팔자를 여러 테스트가 재사용해서 벌어짐). 내
+  테스트용 후보는 인증하지 않고(`markVerified()` 생략) 추천 행도 selector를 거치지 않고 직접 저장하는
+  걸로 고쳐서 해결
+- `member/MemberServiceTest`·`compatibility/CompatibilityServiceTest`에 `@Mock WalletService` 추가,
+  후자에는 지급/미지급 케이스 테스트 2건 신규 추가
+
+**건드린 파일/패키지**
+- 신규: `wallet/`(전체), `dating/DatingUnlockField.java`·`DatingUnlockChargeService.java`·
+  `DatingUnlockService.java`·`DatingUnlockController.java`·`dto/DatingUnlockRequest.java`·
+  `dto/DatingUnlockResponse.java`, `db/migration/V19__add_thread_ledger.sql`·
+  `V20__add_dating_unlock_fields.sql`, `wallet/WalletServiceTest.java`, `dating/DatingUnlockServiceTest.java`
+- 수정: `member/MemberService.java`·`MeService.java`, `compatibility/CompatibilityService.java`,
+  `dating/entity/DatingRecommendation.java`, `dating/dto/DatingRecommendationResponse.java`,
+  `dating/DatingRecommendationService.java`, `dating/DatingPhotoService.java`(`originalUrl` 추가),
+  `common/exception/ErrorCode.java`(`INSUFFICIENT_THREAD` 402)
+- 테스트 수정: `MemberServiceTest`·`CompatibilityServiceTest`·`DatingSchemaTest`
+- 문서: `docs/api-spec.md` §1·§10·신설 §12, `docs/plan.md`(TBD-11 종료), `docs/backend-requirements.md`
+  (FR-TH-06, §17 머리말), `docs/handoff.md`(이 항목, Flyway 표, ErrorCode 표)
+
+**다음 사람이 알아야 할 것**
+- **`api.md`(프론트 공유용)에는 아직 소개팅·실 섹션 자체가 없다** — `docs/api-spec.md`는 §10~§12까지
+  있는데 `api.md`는 §6(로그인)에서 끝난다. 이건 이번 작업 전부터 있던 격차라 손 안 댔다. 프론트에
+  api.md를 계속 참고시키려면 §7~§9(소개팅) 통째로 옮기는 작업이 따로 필요하다
+- **제휴처 보상(`PARTNER` reason, `rewardGranted` 필드)은 여전히 미구현이다.** 코드에 reason enum 값만
+  예약해 뒀다 — 제휴처별 금액을 어디서 관리할지(하드코딩/DB/관리자 API) 명세가 없어서 손 안 댔다
+- **리롤(`REROLL`)도 미구현이다** (plan.md TBD-6, 비용 미정)
+- 원장 격리는 `wallet_dev`처럼 별도 DB가 아니라 같은 스키마의 한 테이블이라, 개발/운영 DB 자체가
+  분리(`docs/runbook-dev-server.md`)돼 있으면 원장도 자동으로 같이 분리된다 — 추가 조치 불필요
+- `DatingUnlockChargeService`는 패키지 프라이빗이라 `dating` 패키지 밖에서 재사용 못 한다 — 의도한
+  설계(같은 클래스 self-invocation 문제 회피용 내부 협력자일 뿐, 공개 API 아님)
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: 이 브랜치(`feat/wallet`, `dev`에서 분기) PR 리뷰·머지
+- 프론트: §10.5(해금)·§12(실) API 연동, `api.md` 소개팅·실 섹션 백필은 별도 작업으로 남김
+
+**문서 변경**
+- `docs/api-spec.md`, `docs/plan.md`, `docs/backend-requirements.md`, `docs/handoff.md`(이 항목,
+  Flyway 예약 표, ErrorCode 표)
+
+**프론트에 알려야 할 것**
+- `POST /api/dating/candidates/{candidateId}/unlock` 신규 — §10.5. `GET /api/dating/recommendations`
+  응답의 `fields.*`가 이제 실제 해금 상태를 반영한다(그 전엔 전부 잠금 고정이었음, 이 필드들이 실제로
+  쓰이기 시작하는 건 이번이 처음이라 프론트 계약 파괴는 아님). `GET /api/wallet`·`POST /api/wallet/check-in`
+  신규 — §12. `GET /api/me`의 `threadBalance`가 이제 실제 값이다(그전엔 0 고정이었음)
 
 ### 2026-09-25 (금) · 최선우 · dating/ 소개팅 궁합 이유 캐시 (#94) · Codex
 

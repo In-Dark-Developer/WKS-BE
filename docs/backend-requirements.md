@@ -547,7 +547,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 ## 17. V1 소개팅·실·궁합 이유 (FR-DT · FR-TH · FR-CP-11~) · 담당 미정
 
 > **기획 원본은 `docs/plan.md` §1.2·§1.4·§7~§9.** 소개팅 기능 명세는 미확정이고 `TBD` 는 구현하지 않는다. 여기에는 **확정된 원칙만** 요구사항으로 옮긴다. 화면 동작은 plan.md 를 본다.
-> **구현 전.**
+> **FR-DT·FR-CP-11~15는 구현 완료(dev).** FR-TH(실 원장·해금·출석)는 2026-09-26 `feat/wallet` 브랜치에서 구현, PR 대기.
 
 ### 17.1 소개팅 (FR-DT)
 
@@ -572,7 +572,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | FR-TH-03 | P0 | 잔액은 원장 합계로 계산하거나, 잔액 컬럼을 두면 원장과 같은 트랜잭션에서 갱신한다 |
 | FR-TH-04 | P0 | 획득: 가입 10(첫 로그인 1회), 출석 5(1일 1회, KST 날짜 기준), 내 궁합지도에 친구 1명 등록 시 +3(공유자, 궁합 1건당 1회), 제휴처 유입(제휴처별 값). 소모: 사진 10 · 이름 7 · 학과 5 · 궁합 까닭 3 · 전체 25 (plan §1.4) |
 | FR-TH-05 | P0 | 현금 결제(충전)는 V1 에 없다 |
-| FR-TH-06 | P0 | 잔액 부족 시 `INSUFFICIENT_THREAD`. HTTP 상태는 미정 (plan.md TBD-11) |
+| FR-TH-06 | P0 | 잔액 부족 시 `INSUFFICIENT_THREAD`(**402**, 2026-09-26 확정 — plan.md TBD-11 종료) |
 
 ### 17.3 궁합 이유·사주 입력
 

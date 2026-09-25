@@ -8,6 +8,8 @@ import com.darkness.wks.compatibility.entity.Compatibility;
 import com.darkness.wks.compatibility.entity.CompatibilityTier;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.wallet.LedgerReason;
+import com.darkness.wks.wallet.WalletService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -42,6 +44,9 @@ class CompatibilityServiceTest {
     @Mock
     private CompatibilityCalculator compatibilityCalculator;
 
+    @Mock
+    private WalletService walletService;
+
     @InjectMocks
     private CompatibilityService compatibilityService;
 
@@ -70,6 +75,44 @@ class CompatibilityServiceTest {
         verify(compatibilityRepository).save(saved.capture());
         assertThat(saved.getValue().getOrigin()).isSameAs(origin);
         assertThat(saved.getValue().getGuest()).isSameAs(guest);
+        verifyNoInteractions(walletService); // origin이 비로그인(memberId 없음)이라 지급 없음
+    }
+
+    @Test
+    void 공유자가_로그인_계정이면_친구_등록_실을_지급한다() {
+        Result origin = result("서연", UUID.randomUUID(), "임오", "계묘", "갑진", "신미");
+        ReflectionTestUtils.setField(origin, "memberId", 42L);
+        Result guest = result("민수", UUID.randomUUID(), "정축", "을해", "기유", "병자");
+        when(resultRepository.findByShareId(origin.getShareId())).thenReturn(Optional.of(origin));
+        when(resultRepository.findAllByIdForUpdate(anyList())).thenReturn(List.of(origin, guest));
+        when(compatibilityRepository.findByResultPair(origin.getId(), guest.getId())).thenReturn(Optional.empty());
+        when(compatibilityCalculator.calculate(any(), any())).thenReturn(92);
+        when(compatibilityRepository.save(any())).thenAnswer(invocation -> {
+            Compatibility compatibility = invocation.getArgument(0);
+            ReflectionTestUtils.setField(compatibility, "id", 7L);
+            return compatibility;
+        });
+
+        compatibilityService.createCompatibility(
+                origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()));
+
+        verify(walletService).credit(42L, LedgerReason.MAP_FRIEND, "7", 3);
+    }
+
+    @Test
+    void 비로그인_공유자는_실을_지급하지_않는다() {
+        Result origin = result("서연", UUID.randomUUID(), "임오", "계묘", "갑진", "신미");
+        Result guest = result("민수", UUID.randomUUID(), "정축", "을해", "기유", "병자");
+        when(resultRepository.findByShareId(origin.getShareId())).thenReturn(Optional.of(origin));
+        when(resultRepository.findAllByIdForUpdate(anyList())).thenReturn(List.of(origin, guest));
+        when(compatibilityRepository.findByResultPair(origin.getId(), guest.getId())).thenReturn(Optional.empty());
+        when(compatibilityCalculator.calculate(any(), any())).thenReturn(92);
+        when(compatibilityRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        compatibilityService.createCompatibility(
+                origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()));
+
+        verifyNoInteractions(walletService);
     }
 
     @Test

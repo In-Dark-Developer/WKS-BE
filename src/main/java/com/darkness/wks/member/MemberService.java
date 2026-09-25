@@ -3,6 +3,8 @@ package com.darkness.wks.member;
 import com.darkness.wks.member.entity.Member;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.wallet.LedgerReason;
+import com.darkness.wks.wallet.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +21,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MemberService {
 
+    private static final int SIGNUP_BONUS_AMOUNT = 10;
+
     private final MemberRepository memberRepository;
     private final ResultRepository resultRepository;
     private final MemberRaceOps raceOps;
+    private final WalletService walletService;
 
     public record LoginResult(Member member, boolean isNewUser, String restoredResultId) {
     }
@@ -41,6 +46,10 @@ public class MemberService {
             if (created.isPresent()) {
                 member = created.get();
                 isNewUser = true;
+                // ref_id = memberId — 계정당 한 번만 지급된다(FR-TH-04). 같은 트랜잭션에서 처리해 회원
+                // upsert와 지급이 함께 커밋되거나 함께 롤백된다.
+                walletService.credit(member.getId(), LedgerReason.SIGNUP_BONUS,
+                        member.getId().toString(), SIGNUP_BONUS_AMOUNT);
             } else {
                 // 동시에 같은 kakaoId 로 로그인해 경쟁에서 졌다 — 방금 다른 요청이 만든 행을 이 트랜잭션에서 다시 읽는다
                 member = memberRepository.findByKakaoId(kakaoId)

@@ -111,9 +111,21 @@ public class DatingPhotoService {
     }
 
     public String thumbnailUrl(DatingPhoto photo) {
+        return presignedUrl(thumbnailKey(photo));
+    }
+
+    /**
+     * 원본 사진의 서명된 임시 URL. 사진 해금(plan.md §8.5) 이후에만 호출한다 — 잠긴 상태에서는
+     * 절대 이 URL을 내려주지 않는다(FR-DT-04). 썸네일과 같은 만료 시간을 쓴다.
+     */
+    public String originalUrl(DatingPhoto photo) {
+        return presignedUrl(photo.getObjectKey());
+    }
+
+    private String presignedUrl(String key) {
         var request = GetObjectPresignRequest.builder()
                 .signatureDuration(Duration.ofMinutes(ttlMinutes))
-                .getObjectRequest(GetObjectRequest.builder().bucket(bucket).key(thumbnailKey(photo)).build())
+                .getObjectRequest(GetObjectRequest.builder().bucket(bucket).key(key).build())
                 .build();
         return presigner.presignGetObject(request).url().toString();
     }

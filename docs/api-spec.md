@@ -51,6 +51,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회 |
 | `DATING_REQUEST_NOT_FOUND` | 404 | 요청 없음 또는 받은 사람 본인이 아님 |
 | `DATING_REQUEST_CONFLICT` | 409 | 중복 요청, 대상 미노출, 이미 처리된 요청 |
+| `INSUFFICIENT_THREAD` | 402 | 실 잔액 부족 (해금 시) |
 | `METHOD_NOT_ALLOWED` | 405 | 존재하는 경로에 지원하지 않는 HTTP 메서드 사용 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
@@ -681,10 +682,10 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
       "bio": "안녕하세요",
       "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
       "fields": {
-        "photo": { "locked": true, "cost": 10 },
-        "name": { "locked": true, "cost": 7 },
-        "department": { "locked": true, "cost": 5 },
-        "reason": { "locked": true, "cost": 3 }
+        "photo": { "locked": true, "cost": 10, "value": null },
+        "name": { "locked": true, "cost": 7, "value": null },
+        "department": { "locked": false, "cost": null, "value": "경영학과" },
+        "reason": { "locked": true, "cost": 3, "value": null }
       }
     }]
   }
@@ -693,11 +694,43 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 
 후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. `blurredPhotoUrl`은 별도 S3 객체의 임시 조회 URL이며 원본 사진 조회 권한을 주지 않는다. 원본 사진 URL·S3 키와 잠긴 개인정보·연락처는 응답에 없다. 현재 카드가 3장인 동안에는 새 신청자가 와도 단순 재조회로 교체되지 않는다. 빈자리가 있으면 다음 조회 때 새 후보로 채울 수 있다.
 
+`fields.*`는 필드마다 **잠겨 있으면 `cost`만, 해금됐으면 `value`만** 채운다(반대쪽은 항상 `null`) — 잠긴 값은 서버가 아예 응답에 넣지 않는다(FR-DT-03). `photo.value`는 해금 후 원본 사진의 서명된 임시 URL, `reason.value`는 궁합 까닭 문장이다. **해금(§10.5)은 됐는데 `value`가 `null`**이면 값 생성이 지연·실패한 것이다(궁합 까닭 LLM 생성 재시도 등) — §10.5의 해금 API를 다시 부르면 된다(차감은 다시 안 된다).
+
+### 10.5 카드 정보 해금 — `POST /api/dating/candidates/{candidateId}/unlock`
+
+사진·이름·학과·궁합 까닭 중 하나를 실로 해금한다(plan.md §8.5). 이미 해금한 필드면 차감 없이 값만 반환한다(FR-DT-06).
+
+**요청**
+
+```json
+{ "field": "PHOTO" }
+```
+
+`field`는 `PHOTO`(10) · `NAME`(7) · `DEPARTMENT`(5) · `REASON`(3) 중 하나.
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "field": "PHOTO",
+    "value": "https://s3.example.com/temporary-signed-original-url",
+    "balance": 15
+  }
+}
+```
+
+- `value`는 필드에 따라 이름·학과·궁합 까닭 문장 또는 원본 사진의 서명된 임시 URL
+- 잔액이 모자라면 **402 `INSUFFICIENT_THREAD`** (2026-09-26 확정, plan.md TBD-11 종료)
+- `candidateId`가 내 현재 추천 목록(Top 3)에 없으면 `DATING_PROFILE_NOT_FOUND` 404
+- `REASON`은 첫 해금 성공 시점에 LLM으로 생성해 캐싱한다(7.3) — 생성이 실패하면 `LLM_UNAVAILABLE` 503이지만 **차감은 이미 끝난 뒤**이므로 다시 호출하면 차감 없이 생성만 재시도한다
+
 ### #84 구현 상태와 남은 연동
 
 - 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
 - 학교 메일 인증 완료를 소개팅 프로필에 반영하는 연동은 별도 작업이다. 연동 전에는 `GET /api/dating/recommendations`가 `DATING_NOT_VERIFIED` 403을 반환한다.
-- 리롤·정보 해금 API는 #84에 포함되지 않는다. 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 원본 사진은 후속 사진 해금 API에서만 제공한다. 매칭 요청은 §11을 본다.
+- 정보 해금(§10.5)은 구현됐다(2026-09-26). **리롤 API는 아직 없다**(plan.md TBD-6, 비용 미정). 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 매칭 요청은 §11을 본다.
 
 ---
 
@@ -779,3 +812,45 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 본인 요청, 이미 요청한 두 사람의 재요청, 현재 추천 카드에 없는 상대는 거절한다. 한 쌍은 방향을 바꿔도 한 번만 요청할 수 있으며, 거절 후에도 같은 쌍으로 다시 요청할 수 없다. 요청을 보내려면 내 학교 메일 인증이 완료돼 있어야 한다. 수락 후에도 양쪽은 계속 소개팅을 이용하고 다른 사람의 추천 후보에 남는다. 수락이 다른 요청의 상태를 바꾸지는 않는다. 실 기능과는 별개다.
 
 학교 메일 인증 완료를 프로필에 반영하는 연동이 끝나기 전에는 추천 조회가 403이어서, 실제 추천 카드에서 매칭 요청까지 이어지는 흐름은 사용할 수 없다 (§10 구현 상태).
+
+---
+
+## 12. 실 (재화)
+
+로그인 쿠키(`wks_token`) 필수 (§9 참고). 원장 기반이라 잔액은 항상 지급·차감 내역의 합이다(plan.md §9.4).
+V1에서 만드는 건 잔액 조회·출석 체크·소개팅 해금(§10.5)뿐이다. **현금 충전은 없다**(FR-TH-05) — 잔액이
+모자라면 402 `INSUFFICIENT_THREAD`만 돌려주고, "구매하기" 화면은 프론트가 안내만 한다(plan.md TBD-8,
+아직 화면 없음).
+
+| 획득 | 양 | 지급 시점 |
+|---|---|---|
+| 가입 | 10 | 카카오 최초 로그인 성공 시 자동(계정당 1회) |
+| 출석 체크 | 5 | `POST /api/wallet/check-in` 호출, KST 날짜 기준 1일 1회 |
+| 친구 궁합지도 등록 | 3 | 내 공유 링크로 친구가 궁합을 생성할 때 자동(로그인 계정만, 궁합 1건당 1회) |
+| 제휴처 배너 유입 | 제휴처별 값 | 미구현 — `POST /api/auth/kakao` 응답의 `rewardGranted`는 당분간 항상 `null` |
+
+| 소모 (정보 해금, §10.5) | 양 |
+|---|---|
+| 사진 | 10 |
+| 이름 | 7 |
+| 학과 | 5 |
+| 궁합 까닭 | 3 |
+
+### `GET /api/wallet`
+
+**응답 200**
+
+```json
+{ "success": true, "data": { "balance": 18, "canCheckInToday": true } }
+```
+
+### `POST /api/wallet/check-in`
+
+출석 +5. 오늘 이미 했으면 **에러가 아니라 200으로 `checkedIn: false`** 를 돌려준다 — 재클릭이 자연스럽게
+처리되도록 한 설계다(2026-09-26 결정, 별도 TBD 아님).
+
+**응답 200**
+
+```json
+{ "success": true, "data": { "checkedIn": true, "balance": 23 } }
+```

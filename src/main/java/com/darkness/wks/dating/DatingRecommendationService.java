@@ -97,8 +97,13 @@ public class DatingRecommendationService {
                         .thenComparing(item -> item.getCandidate().getId()))
                 .toList();
         List<CandidateCard> cards = java.util.stream.IntStream.range(0, ordered.size())
-                .mapToObj(index -> CandidateCard.from(index + 1, ordered.get(index),
-                        photoService.thumbnailUrl(ordered.get(index).getCandidate().getPhoto())))
+                .mapToObj(index -> {
+                    DatingRecommendation item = ordered.get(index);
+                    String unlockedPhotoUrl = item.isPhotoUnlocked()
+                            ? photoService.originalUrl(item.getCandidate().getPhoto()) : null;
+                    return CandidateCard.from(index + 1, item,
+                            photoService.thumbnailUrl(item.getCandidate().getPhoto()), unlockedPhotoUrl);
+                })
                 .toList();
         return new DatingRecommendationResponse(cards);
     }
