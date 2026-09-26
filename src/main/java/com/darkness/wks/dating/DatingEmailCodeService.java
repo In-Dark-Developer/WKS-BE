@@ -40,8 +40,8 @@ public class DatingEmailCodeService {
     static final int MAX_FAILED_ATTEMPTS = 5;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    // 문구는 기획 확정 전 임시값 — DatingEmailVerificationService 와 같은 처리
-    private static final String SUBJECT = "[동국대 소개팅] 학교 이메일 인증 코드";
+    // 개인 지메일로 발송해 학교 메일에서 스팸으로 분류되기 쉽다 — 반말·명령조 문구를 피하고 서비스명을 앞에 둔다
+    private static final String SUBJECT = "[운명도 꿰어야 사랑이다] 학교 메일 인증번호를 알려 드려요";
 
     private final DatingEmailCodeRepository codeRepository;
     private final JavaMailSender mailSender;
@@ -98,12 +98,14 @@ public class DatingEmailCodeService {
             helper.setTo(toEmail);
             helper.setSubject(SUBJECT);
             helper.setText("""
-                    학교 이메일 인증 코드는 아래와 같다. %d분 안에 입력해라.
+                    안녕하세요, 동국대 축제 '운명도 꿰어야 사랑이다'입니다.
+                    소개팅 신청 화면에 아래 인증번호 6자리를 입력해 주세요.
 
-                    %s
+                    인증번호: %s
 
-                    요청한 적이 없으면 이 메일은 무시해도 된다.
-                    """.formatted(TTL.toMinutes(), code));
+                    인증번호는 %d분 동안 쓸 수 있어요.
+                    직접 요청하신 적이 없다면 이 메일은 무시하셔도 됩니다.
+                    """.formatted(code, TTL.toMinutes()));
             mailSender.send(message);
         } catch (Exception exception) {
             throw new MailSendFailedException(exception);

@@ -26,8 +26,8 @@ import java.util.Base64;
 public class EmailVerificationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    // 문구는 기획(영채) 확정 전 임시값 — docs/api-spec.md destiny.title 과 같은 처리
-    private static final String SUBJECT = "[동국대 소개팅] 이메일 인증을 완료해라";
+    // 개인 지메일로 발송해 스팸으로 분류되기 쉽다 — 반말·명령조 문구를 피하고 서비스명을 앞에 둔다
+    private static final String SUBJECT = "[운명도 꿰어야 사랑이다] 사전신청 이메일 인증을 완료해 주세요";
 
     private final EmailVerificationRepository emailVerificationRepository;
     private final JavaMailSender mailSender;
@@ -60,10 +60,14 @@ public class EmailVerificationService {
             helper.setTo(toEmail);
             helper.setSubject(SUBJECT);
             helper.setText("""
-                    아래 링크를 눌러 이메일 인증을 완료해라. 링크는 %d분간 유효하다.
+                    안녕하세요, 동국대 축제 '운명도 꿰어야 사랑이다'입니다.
+                    사전신청해 주셔서 감사합니다. 아래 링크를 누르면 이메일 인증이 끝나요.
 
                     %s
-                    """.formatted(ttlMinutes, verifyLink));
+
+                    링크는 %d분 동안 쓸 수 있어요.
+                    직접 신청하신 적이 없다면 이 메일은 무시하셔도 됩니다.
+                    """.formatted(verifyLink, ttlMinutes));
             mailSender.send(message);
         } catch (Exception exception) {
             log.warn("verification mail send failed", exception);
