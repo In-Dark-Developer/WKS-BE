@@ -110,7 +110,6 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
-| 2026-09-27 | #104 `POST /api/me/result` 추가. 로그인 후 `POST /api/results`로 만든 익명 결과의 `resultId`를 보내 계정에 연결한 뒤 소개팅 프로필 등록. 계정에 기존 결과가 있으면 기존 ID 반환 | ❌ |
 | 2026-09-27 | #102 `GET /api/dating/requests` 목록에 `counterpart` 추가. 받은 목록은 발신자 이름·학과·원본 사진 임시 URL 무료 제공, 보낸 목록은 기존 해금 상태 유지. 연락처는 수락 후 공개 | ❌ |
 | 2026-09-27 | #100 `POST /api/dating/requests/{id}/cancel` 추가. 보낸 사람만 PENDING 요청 취소, sent 목록에 CANCELLED 이력 표시, received 목록에서 제외. 취소 후 현재 추천 카드에 있으면 재요청 가능 | ❌ |
 | 2026-09-26 | **[사용 제약, API 변경 아님]** 개발 서버 `https://api-dev.threadoffate.site` 오픈(프론트 `dev.threadoffate.site`·`localhost:3000` 허용). **로그인은 `*.threadoffate.site` 프론트에서만 된다** — `localhost`·`netlify.app` 에서는 로그인 뒤 401. `api-spec.md` §9 인증 규칙 표 | ❌ |
@@ -163,28 +162,6 @@
 ---
 
 ## 기록
-
-### 2026-09-27 (일) · 최선우 · member/ 결과 연결 (#104) · Codex
-
-**한 일**
-- 로그인 후 생성한 익명 사주 결과를 계정에 연결하는 `POST /api/me/result` 추가
-- 계정 결과 우선 규칙, 다른 계정 소유 결과 비공개, 동시 연결 경쟁을 PostgreSQL 통합 테스트로 확인
-
-**건드린 파일/패키지**
-- `member/`, `docs/plan.md`, `docs/architecture.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
-
-**다음 사람이 알아야 할 것**
-- 프론트는 `POST /api/results` 다음 `POST /api/me/result`를 호출한 뒤, 반환된 결과 ID로 소개팅 프로필 등록을 진행한다
-- 기존 `result.member_id`와 부분 UNIQUE를 사용하므로 마이그레이션은 없다. 익명 결과 생성 시 자동 연결 여부(TBD-14)는 여전히 미결정이다
-
-**막힌 것 / 넘기는 것**
-- PR 리뷰·dev 머지 및 프론트 계약 전달
-
-**문서 변경**
-- 기획 §1.1·§8.1·TBD-14, 구조 §4, API 명세 §9, 요구사항 FR-AU-14
-
-**프론트에 알려야 할 것**
-- `POST /api/me/result`의 요청·응답과 소개팅 프로필 등록 전 호출 순서
 
 ### 2026-09-27 (일) · 최선우 · dating/ 요청 목록 상대 프로필 (#102) · Codex
 
