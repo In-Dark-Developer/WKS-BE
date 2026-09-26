@@ -16,20 +16,20 @@ public interface SignupRepository extends JpaRepository<Signup, Long> {
     Optional<Signup> findByEmail(String email);
 
     /**
-     * 재신청 초대 대상. 사주 결과가 붙어 있어야 카카오 로그인 때 계정에 연결할 수 있고(결과 없는 신청자는
-     * 새로 신청하는 게 빠르다), 아직 유효하거나 이미 완료된 초대가 있으면 다시 보내지 않는다.
-     * {@code emailSuffix} 는 인덱스 없는 LIKE 라 넓게 걸러지므로(예: {@code fakedgu.ac.kr}) 호출부가
-     * 도메인을 한 번 더 정확히 검사한다.
+     * 재신청 초대 대상. 초대의 목적은 사전신청 때 만든 사주 결과를 카카오 계정에 잇는 것이라
+     * 결과가 있고 아직 어느 계정에도 연결되지 않은 신청자만 고른다 — 연결됐으면 목적을 이룬 것이다.
+     * 사전신청 이메일은 학교메일이 아니고 인증도 안 된 경우가 많아 도메인은 거르지 않는다(학교메일
+     * 인증은 소개팅 등록 때 코드로 따로 한다). 아직 유효한 초대가 있으면 다시 보내지 않는다.
      */
     @Query("""
             SELECT s FROM Signup s
             WHERE s.result IS NOT NULL
-              AND LOWER(s.email) LIKE CONCAT('%', :emailSuffix)
+              AND s.result.memberId IS NULL
               AND NOT EXISTS (
                   SELECT 1 FROM SignupReapplyInvite i
-                  WHERE i.signup = s AND (i.usedAt IS NOT NULL OR i.expiresAt > :now)
+                  WHERE i.signup = s AND i.expiresAt > :now
               )
             ORDER BY s.id
             """)
-    List<Signup> findReapplyTargets(@Param("emailSuffix") String emailSuffix, @Param("now") Instant now);
+    List<Signup> findReapplyTargets(@Param("now") Instant now);
 }

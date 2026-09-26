@@ -29,12 +29,13 @@ public class DatingUnlockController {
     }
 
     @Operation(summary = "카드 정보 해금", description = """
-            사진·이름·학과·궁합 까닭 중 하나를 실로 해금한다 (plan.md §8.5). 이미 해금한 필드는 차감 없이
-            값만 반환한다. 잔액이 모자라면 402 INSUFFICIENT_THREAD.
+            사진·이름·학과·궁합 까닭 중 고른 필드를 한 번에 실로 해금한다 (plan.md §8.5). 네 개를 다 고르면
+            전체 해금(25). 이미 해금한 필드는 차감 없이 값만 반환한다. 잔액이 모자라면 402 INSUFFICIENT_THREAD
+            이고 아무 필드도 해금되지 않는다.
             """)
     @PostMapping("/{candidateId}/unlock")
     public ApiResponse<DatingUnlockResponse> unlock(@CurrentMember Long memberId,
             @PathVariable UUID candidateId, @Valid @RequestBody DatingUnlockRequest request) {
-        return ApiResponse.success(unlockService.unlock(memberId, candidateId, request.field()));
+        return ApiResponse.success(unlockService.unlock(memberId, candidateId, request.fields()));
     }
 }

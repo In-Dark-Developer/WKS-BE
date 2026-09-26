@@ -50,6 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.UUID;
 
 @SpringBootTest(properties = {"gemini.api-key=test-key",
@@ -245,10 +246,12 @@ class DatingSchemaTest {
         walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
                 viewer.getMemberId().toString(), 10);
 
-        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId, DatingUnlockField.NAME);
+        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId,
+                EnumSet.of(DatingUnlockField.NAME));
         assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(3); // 10 - 7(NAME)
 
-        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId, DatingUnlockField.NAME);
+        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId,
+                EnumSet.of(DatingUnlockField.NAME));
         assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(3); // 이미 해금 — 추가 차감 없음
     }
 
@@ -258,9 +261,49 @@ class DatingSchemaTest {
         UUID candidateId = directRecommendation(viewer, 960004L, Gender.FEMALE);
 
         assertThatThrownBy(() -> unlockChargeService.chargeAndMarkUnlocked(
-                viewer.getMemberId(), candidateId, DatingUnlockField.PHOTO))
+                viewer.getMemberId(), candidateId, EnumSet.of(DatingUnlockField.PHOTO)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_THREAD);
+    }
+
+    @Test
+    void batchUnlockChargesOnlyLockedFieldsAndCoversFullUnlock() {
+        DatingProfile viewer = profile(960005L, Gender.MALE, "갑자", "을축", "병인");
+        UUID candidateId = directRecommendation(viewer, 960006L, Gender.FEMALE);
+        walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
+                viewer.getMemberId().toString(), 30);
+
+        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId,
+                EnumSet.of(DatingUnlockField.NAME));
+        assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(23); // 30 - 7
+
+        // 전체 선택 — 이미 연 NAME 은 빼고 10+5+3 만 차감
+        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId,
+                EnumSet.allOf(DatingUnlockField.class));
+        assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(5);
+        DatingRecommendation recommendation = recommendationRepository
+                .findActiveWithCandidate(viewer.getMemberId(), candidateId).orElseThrow();
+        assertThat(EnumSet.allOf(DatingUnlockField.class)).allMatch(recommendation::isUnlocked);
+    }
+
+    @Test
+    void batchUnlockRollsBackEveryFieldWhenBalanceRunsOutMidway() {
+        DatingProfile viewer = profile(960007L, Gender.MALE, "갑자", "을축", "병인");
+        UUID candidateId = directRecommendation(viewer, 960008L, Gender.FEMALE);
+        walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
+                viewer.getMemberId().toString(), 12);
+
+        // PHOTO(10) 는 되지만 이어서 NAME(7) 에서 모자란다 — PHOTO 차감도 되돌려져야 한다
+        assertThatThrownBy(() -> unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId,
+                EnumSet.of(DatingUnlockField.PHOTO, DatingUnlockField.NAME)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_THREAD);
+
+        assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(12);
+        DatingRecommendation recommendation = recommendationRepository
+                .findActiveWithCandidate(viewer.getMemberId(), candidateId).orElseThrow();
+        assertThat(recommendation.isUnlocked(DatingUnlockField.PHOTO)).isFalse();
+        assertThat(recommendation.isUnlocked(DatingUnlockField.NAME)).isFalse();
     }
 
     @Test
@@ -482,6 +525,99 @@ class DatingSchemaTest {
         assertThatThrownBy(() -> requestService.accept(sender.getMemberId(), sent.requestId()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.DATING_REQUEST_NOT_FOUND);
+    }
+
+    @Test
+    @Transactional
+    void rerollIsFreeOncePerDayThenCostsFiveAndNeverRepeatsCandidates() throws Exception {
+        DatingProfile viewer = profile(1100001L, Gender.MALE, "갑자", "을축", "병인");
+        for (long i = 2; i <= 10; i++) {
+            profile(1100000L + i, Gender.FEMALE, "계해", "임술", "신유");
+        }
+        var initial = recommendationService.getCurrent(viewer.getMemberId());
+        assertThat(initial.rerollCost()).isZero();
+        walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
+                viewer.getMemberId().toString(), 5);
+
+        var free = recommendationService.reroll(viewer.getMemberId());
+        assertThat(free.threadBalance()).isEqualTo(5);
+        assertThat(free.rerollCost()).isEqualTo(5);
+        assertThat(free.candidates()).isNotEmpty();
+        assertThat(ids(free.candidates())).doesNotContainAnyElementsOf(ids(initial.candidates()));
+        assertThat(activeIds(viewer)).containsExactlyInAnyOrderElementsOf(ids(free.candidates()));
+        assertThat(recommendationService.getCurrent(viewer.getMemberId()).rerollCost()).isEqualTo(5);
+
+        var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
+        mvc.perform(post("/api/dating/recommendations/reroll")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/dating/recommendations/reroll")
+                        .cookie(new Cookie("wks_token", jwtProvider.issue(viewer.getMemberId()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.threadBalance").value(0))
+                .andExpect(jsonPath("$.data.rerollCost").value(5));
+        assertThat(activeIds(viewer)).doesNotContainAnyElementsOf(ids(initial.candidates()))
+                .doesNotContainAnyElementsOf(ids(free.candidates()));
+        assertThat(recommendationRepository.findAllByViewerMemberId(viewer.getMemberId()))
+                .extracting(item -> item.getCandidate().getId()).doesNotHaveDuplicates();
+    }
+
+    @Test
+    @Transactional
+    void paidRerollWithoutBalanceKeepsCurrentCards() {
+        DatingProfile viewer = profile(1100101L, Gender.MALE, "갑자", "을축", "병인");
+        for (long i = 2; i <= 7; i++) {
+            profile(1100100L + i, Gender.FEMALE, "계해", "임술", "신유");
+        }
+        recommendationService.getCurrent(viewer.getMemberId());
+        recommendationService.reroll(viewer.getMemberId());
+        var before = activeIds(viewer);
+
+        assertThatThrownBy(() -> recommendationService.reroll(viewer.getMemberId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_THREAD);
+        assertThat(activeIds(viewer)).containsExactlyInAnyOrderElementsOf(before);
+        assertThat(walletService.countEntries(viewer.getMemberId(),
+                com.darkness.wks.wallet.LedgerReason.REROLL, "")).isEqualTo(1);
+    }
+
+    @Test
+    @Transactional
+    void rerollWithNoNewCandidatesIsRejectedWithoutCharge() {
+        // 다른 테스트가 커밋한 인증 프로필이 후보 풀에 섞일 수 있어 후보 수를 고정할 수 없다 — 바닥날 때까지 돌린다.
+        DatingProfile viewer = profile(1100201L, Gender.MALE, "갑자", "을축", "병인");
+        profile(1100202L, Gender.FEMALE, "계해", "임술", "신유");
+        walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
+                viewer.getMemberId().toString(), 500);
+        recommendationService.getCurrent(viewer.getMemberId());
+
+        BusinessException exhausted = null;
+        int balanceBefore = 0;
+        java.util.List<UUID> cardsBefore = java.util.List.of();
+        for (int attempt = 0; attempt < 50 && exhausted == null; attempt++) {
+            balanceBefore = walletService.getBalance(viewer.getMemberId());
+            cardsBefore = activeIds(viewer);
+            try {
+                recommendationService.reroll(viewer.getMemberId());
+            } catch (BusinessException e) {
+                exhausted = e;
+            }
+        }
+
+        assertThat(exhausted).isNotNull();
+        assertThat(exhausted.getErrorCode()).isEqualTo(ErrorCode.DATING_NO_MORE_CANDIDATES);
+        assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(balanceBefore);
+        assertThat(activeIds(viewer)).containsExactlyInAnyOrderElementsOf(cardsBefore);
+    }
+
+    private java.util.List<UUID> activeIds(DatingProfile viewer) {
+        return recommendationRepository.findAllByViewerMemberId(viewer.getMemberId()).stream()
+                .filter(DatingRecommendation::isActive)
+                .map(item -> item.getCandidate().getId())
+                .toList();
+    }
+
+    private static java.util.List<UUID> ids(
+            java.util.List<com.darkness.wks.dating.dto.DatingRecommendationResponse.CandidateCard> cards) {
+        return cards.stream().map(card -> card.candidateId()).toList();
     }
 
     private DatingProfile profile(Long kakaoId, Gender gender, String year, String month, String day) {

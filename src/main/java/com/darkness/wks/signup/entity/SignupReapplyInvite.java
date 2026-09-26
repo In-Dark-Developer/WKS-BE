@@ -15,8 +15,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 
 /**
- * 기존 사전신청자 재신청 초대 토큰. {@link EmailVerification} 과 달리 클릭 시점에 소비되지 않는다 —
- * 카카오 로그인·사진 업로드를 거쳐 소개팅 프로필 생성이 끝날 때 소비한다.
+ * 기존 사전신청자 재신청 초대 토큰. {@link EmailVerification} 과 달리 소비되지 않고 만료로만 끝난다 —
+ * 완료 여부는 사주 결과가 계정에 연결됐는지로 판단한다({@code SignupRepository.findReapplyTargets}).
+ * {@code used_at} 은 2026-09-27 이전(초대가 학교메일 인증을 대신하던 때)에만 기록됐다.
  */
 @Entity
 @Table(name = "signup_reapply_invite")
@@ -50,9 +51,5 @@ public class SignupReapplyInvite {
 
     public boolean isUsable(Instant now) {
         return usedAt == null && expiresAt.isAfter(now);
-    }
-
-    public void markUsed(Instant usedAt) {
-        this.usedAt = usedAt;
     }
 }

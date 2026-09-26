@@ -9,7 +9,6 @@ import com.darkness.wks.dating.entity.DatingEmailVerification;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
 import com.darkness.wks.result.ResultRepository;
-import com.darkness.wks.signup.SignupReapplyService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -44,12 +43,10 @@ class DatingProfileServiceTest {
     private DatingEmailVerificationService emailVerificationService;
     @Mock
     private DatingEmailCodeService emailCodeService;
-    @Mock
-    private SignupReapplyService reapplyService;
 
     private DatingProfileService service() {
         DatingProfileService service = new DatingProfileService(profileRepository, resultRepository, photoService,
-                emailVerificationService, emailCodeService, reapplyService);
+                emailVerificationService, emailCodeService);
         ReflectionTestUtils.setField(service, "allowedDomainsRaw", "dgu.ac.kr");
         return service;
     }
@@ -81,7 +78,7 @@ class DatingProfileServiceTest {
         DatingProfileResponse response = service().create(MEMBER_ID, request());
 
         assertThat(response.emailVerified()).isTrue();
-        verifyNoInteractions(emailVerificationService, reapplyService);
+        verifyNoInteractions(emailVerificationService);
     }
 
     @Test
@@ -148,32 +145,20 @@ class DatingProfileServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESULT_NOT_FOUND));
 
-        verifyNoInteractions(emailVerificationService, emailCodeService, reapplyService);
-    }
-
-    @Test
-    void reapplyInviteMarksProfileVerifiedWithoutSendingMail() {
-        stubProfileCreation();
-        when(reapplyService.invitedEmail("invite")).thenReturn("student@dgu.ac.kr");
-
-        DatingProfileResponse response = service().create(MEMBER_ID, request("invite"));
-
-        assertThat(response.emailVerified()).isTrue();
-        verify(reapplyService).consumeInvite("invite");
         verifyNoInteractions(emailVerificationService, emailCodeService);
     }
 
+    /** 재신청 초대는 학교메일 인증이 아니다 — 토큰을 실어 보내도 코드 인증 없이는 등록되지 않는다 */
     @Test
-    void reapplyInviteForAnotherEmailIsRejected() {
+    void reapplyTokenDoesNotSkipCodeVerification() {
         when(resultRepository.existsByMemberId(MEMBER_ID)).thenReturn(true);
-        when(reapplyService.invitedEmail("invite")).thenReturn("someone-else@dgu.ac.kr");
+        when(emailCodeService.isVerified(MEMBER_ID, "student@dgu.ac.kr")).thenReturn(false);
 
         assertThatThrownBy(() -> service().create(MEMBER_ID, request("invite")))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DATING_NOT_VERIFIED));
 
         verify(profileRepository, never()).saveAndFlush(any());
-        verify(reapplyService, never()).consumeInvite(any());
     }
 
     @Test

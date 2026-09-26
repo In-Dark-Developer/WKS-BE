@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -24,18 +25,22 @@ class DatingUnlockChargeService {
     private final WalletService walletService;
 
     /**
-     * 실 차감·해금 기록을 한 트랜잭션으로 커밋한다(FR-DT-06). 이미 해금한 필드면 차감하지 않는다.
+     * 고른 필드 전부의 실 차감·해금 기록을 한 트랜잭션으로 커밋한다(FR-DT-06). 이미 해금한 필드는
+     * 차감하지 않는다. 중간에 잔액이 모자라면 앞서 차감한 필드까지 롤백된다 — "사진만 열리고 이름은
+     * 안 열림" 같은 반쪽 상태를 남기지 않으려는 것이다({@code debit} 은 이 트랜잭션에 합류한다).
      * {@code ref_id} 는 "추천행ID:필드" — 후보 하나에 필드가 4개라 후보 UUID만으로는 구분이 안 된다.
      */
     @Transactional
-    DatingProfile chargeAndMarkUnlocked(Long viewerMemberId, UUID candidateId, DatingUnlockField field) {
+    DatingProfile chargeAndMarkUnlocked(Long viewerMemberId, UUID candidateId, Set<DatingUnlockField> fields) {
         DatingRecommendation recommendation = recommendationRepository
                 .findActiveWithCandidate(viewerMemberId, candidateId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DATING_PROFILE_NOT_FOUND));
-        if (!recommendation.isUnlocked(field)) {
-            walletService.debit(viewerMemberId, LedgerReason.UNLOCK,
-                    recommendation.getId() + ":" + field.name(), field.cost());
-            recommendation.unlock(field);
+        for (DatingUnlockField field : fields) {
+            if (!recommendation.isUnlocked(field)) {
+                walletService.debit(viewerMemberId, LedgerReason.UNLOCK,
+                        recommendation.getId() + ":" + field.name(), field.cost());
+                recommendation.unlock(field);
+            }
         }
         DatingProfile candidate = recommendation.getCandidate();
         candidate.getPhoto().getObjectKey(); // LAZY 필드를 트랜잭션 안에서 미리 채워 둔다(open-in-view: false)

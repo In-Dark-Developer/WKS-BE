@@ -54,7 +54,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `MAIL_UNAVAILABLE` | 503 | 인증 코드 메일 발송 실패. 바로 다시 시도할 수 있다 |
 | `DATING_REQUEST_NOT_FOUND` | 404 | 요청 없음 또는 받은 사람 본인이 아님 |
 | `DATING_REQUEST_CONFLICT` | 409 | 중복 요청, 대상 미노출, 이미 처리된 요청 |
-| `INSUFFICIENT_THREAD` | 402 | 실 잔액 부족 (해금 시) |
+| `DATING_NO_MORE_CANDIDATES` | 409 | 리롤할 새 후보가 없음 (차감 없음, 2026-09-27) |
+| `INSUFFICIENT_THREAD` | 402 | 실 잔액 부족 (해금·유료 리롤 시) |
 | `METHOD_NOT_ALLOWED` | 405 | 존재하는 경로에 지원하지 않는 HTTP 메서드 사용 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
@@ -421,8 +422,13 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 ### `GET /api/signups/reapply?token={token}`
 
-**기존 사전신청자 재신청 (2026-09-26 추가, 축제용 1회성).** 사전신청 이후에 사진 등록·학교메일 인증이
-생겨서, 기존 신청자에게 초대 메일을 보내 소개팅 프로필을 미리 완성하게 하는 흐름이다.
+**기존 사전신청자 재신청 (2026-09-26 추가, 2026-09-27 변경, 축제용 1회성).** 사전신청 때는 로그인이 없어서
+그때 만든 사주 결과가 어느 계정에도 붙어 있지 않다. 사전신청자에게 초대 메일을 보내 **카카오 로그인만 하면
+그 결과가 계정에 연결**되게 하고, 이어서 일반 신청과 똑같이 학교메일 인증·사진 등록·소개팅 신청을 하게 한다.
+
+> **초대는 학교메일 인증이 아니다(2026-09-27 변경).** 사전신청 이메일은 gmail 등 아무 주소였고 인증된 적도 없어서,
+> 초대 메일은 그 주소로 가지만 학교메일 인증은 로그인 뒤 §10.7 코드 인증으로 따로 한다. 초대 대상도 도메인과 무관하다
+> (사주 결과가 있고 아직 계정에 연결되지 않은 사전신청자 전원).
 초대 메일의 링크는 **백엔드가 아니라 프론트 페이지**(`app.frontend.reapply-url`, 기본 `/dating/reapply`)를
 가리키고, 프론트가 그 `token` 으로 이 API 를 불러 폼을 채운다. 로그인 불필요.
 
@@ -444,19 +450,24 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 }
 ```
 
-- 토큰 유효기간 **48시간**(`app.signup.reapply-invite-ttl-hours`). 이 호출은 토큰을 **소비하지 않는다** — 프로필 등록까지 유효하다
-- 만료·위조·이미 완료된 토큰은 `INVALID_TOKEN` 400
+- 토큰 유효기간 **48시간**(`app.signup.reapply-invite-ttl-hours`). 토큰은 **소비되지 않는다** — 만료 전이면 여러 번 불러도 된다
+- 만료·위조 토큰은 `INVALID_TOKEN` 400
+- `email` 은 **사전신청 때 적은 주소**다(학교메일이 아닐 수 있다). 소개팅 신청서의 학교 이메일 칸에 그대로 채우지 말 것 — `@dgu.ac.kr` 이 아니면 비워 두고 사용자가 입력하게 한다
 - `name`·`contactMethod`·`contactValue`·`department`·`mbti`·`bio` 는 사전신청 당시 선택값이라 **`null` 일 수 있다.** 화면에서 받아 채워야 한다(소개팅 프로필은 전부 필수)
 - **`resultId` 를 `POST /api/auth/kakao` 의 `resultId` 로 넘겨야** 사전신청 때 본 사주 결과가 로그인 계정에 연결된다
 
 **프론트 흐름**
 
 ```
-초대 메일 링크 → GET /api/signups/reapply?token=…      (폼 자동 채움, resultId 확보)
-   → POST /api/auth/kakao (code + resultId)            (로그인 + 사주 결과 계정 연결)
-   → POST /api/dating/profile/photo → S3 PUT           (사진 등록, §10.1)
-   → POST /api/dating/profile (+ reapplyToken)         (§10.2 — 학교메일 인증까지 끝난 상태로 등록)
+초대 메일 링크 → GET /api/signups/reapply?token=…       (폼 자동 채움, resultId 확보)
+   → POST /api/auth/kakao (code + resultId)             (로그인 + 사전신청 사주 결과 계정 연결)
+   → POST /api/dating/email-codes → …/verify            (학교메일 6자리 코드 인증, §10.7 — 일반 신청과 동일)
+   → POST /api/dating/profile/photo → S3 PUT            (사진 등록, §10.1)
+   → POST /api/dating/profile                           (§10.2 — 일반 신청과 동일)
 ```
+
+- 카카오 로그인은 페이지를 떠났다 돌아오므로 **`resultId`·폼 값을 `sessionStorage` 등에 보관**해야 한다. 잃으면 결과가 연결되지 않는다
+- 이미 결과가 있는 계정으로 로그인하면 계정 결과가 우선이라 사전신청 결과는 연결되지 않는다(§9, plan §1.1)
 
 ---
 
@@ -610,7 +621,8 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 ```
 
 - `hasResult`: 계정에 연결된 사주 결과가 있는지. 결과 자체는 `GET /api/me/result` 로 받는다
-- `hasDatingProfile`·`threadBalance`: 소개팅·실 기능이 구현되기 전에는 `false` / `0` 고정이다. **필드는 처음부터 존재하고 값만 나중에 채워진다**
+- `hasDatingProfile`: 소개팅 프로필을 등록했는지(`POST /api/dating/profile` 성공 여부). 프로필은 학교메일 인증 뒤에만 만들어지므로 `true` 면 인증까지 끝난 신청자다. `GET /api/dating/profile` 이 200 을 주는 조건과 같다
+- `threadBalance`: 현재 실 잔액
 - 토큰이 없거나 만료·위조면 `UNAUTHENTICATED` 401
 
 ### `GET /api/me/result`
@@ -702,7 +714,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 
 모든 필드가 필수다. **`email`은 이 계정으로 코드 인증(§10.7)을 마친 학교 이메일이어야 한다** — 아니면 `DATING_NOT_VERIFIED` 403(2026-09-26 변경. 그래서 등록된 프로필은 항상 `emailVerified: true`이고 인증 메일은 더 이상 발송되지 않는다). `contactValue`는 문자열이며 `PHONE`이면 전화번호, `INSTAGRAM`이면 인스타그램 아이디(예: `my_insta_id`)를 넣는다. `photoId`는 **로그인한 회원에게 발급됐고 S3에 파일 업로드가 완료된 사진**이어야 한다. 계정에 연결된 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
 
-**`reapplyToken`(선택, 2026-09-26 추가)**: 기존 사전신청자 재신청(§5 `GET /api/signups/reapply`)에서만 넣는다. 값이 있으면 `email`이 **초대받은 주소와 같아야 하고**(다르면 `INVALID_INPUT` 400), 학교메일 인증을 이미 끝난 것으로 처리한다(`emailVerified: true`, **코드 인증 불필요**). 만료·위조·이미 쓴 토큰은 `INVALID_TOKEN` 400. 일반 신청에서는 넣지 않는다 — 넣지 않으면 코드 인증(§10.7)이 필요하다.
+**`reapplyToken`(선택, 폐기 예정)**: 2026-09-26 에 추가됐지만 **2026-09-27 부터 서버가 무시한다.** 재신청 사전신청자도 코드 인증(§10.7)을 거친다. 필드 삭제는 계약 변경이라 팀 확인 후 지운다 — 프론트는 넣지 않으면 된다.
 
 **응답 201 예시**
 
@@ -753,26 +765,29 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
         "department": { "locked": false, "cost": null, "value": "경영학과" },
         "reason": { "locked": true, "cost": 3, "value": null }
       }
-    }]
+    }],
+    "rerollCost": 0
   }
 }
 ```
+
+`rerollCost`(2026-09-27 추가)는 **지금 리롤하면 드는 실**이다. 오늘(KST) 무료 리롤이 남았으면 `0`, 다 썼으면 `5`. 리롤 버튼에 "무료"/"5실" 표시에 쓴다.
 
 후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. `blurredPhotoUrl`은 별도 S3 객체의 임시 조회 URL이며 원본 사진 조회 권한을 주지 않는다. 원본 사진 URL·S3 키와 잠긴 개인정보·연락처는 응답에 없다. 현재 카드가 3장인 동안에는 새 신청자가 와도 단순 재조회로 교체되지 않는다. 빈자리가 있으면 다음 조회 때 새 후보로 채울 수 있다.
 
 `fields.*`는 필드마다 **잠겨 있으면 `cost`만, 해금됐으면 `value`만** 채운다(반대쪽은 항상 `null`) — 잠긴 값은 서버가 아예 응답에 넣지 않는다(FR-DT-03). `photo.value`는 해금 후 원본 사진의 서명된 임시 URL, `reason.value`는 궁합 까닭 문장이다. **해금(§10.5)은 됐는데 `value`가 `null`**이면 값 생성이 지연·실패한 것이다(궁합 까닭 LLM 생성 재시도 등) — §10.5의 해금 API를 다시 부르면 된다(차감은 다시 안 된다).
 
-### 10.5 카드 정보 해금 — `POST /api/dating/candidates/{candidateId}/unlock`
+### 10.4.1 후보 리롤 — `POST /api/dating/recommendations/reroll` (2026-09-27)
 
-사진·이름·학과·궁합 까닭 중 하나를 실로 해금한다(plan.md §8.5). 이미 해금한 필드면 차감 없이 값만 반환한다(FR-DT-06).
+현재 카드를 **전부** 내리고, 한 번도 카드에 나온 적 없는 후보 중 궁합 점수 순으로 최대 3명을 새로 뽑는다(plan.md TBD-6 종료). 요청 바디는 없다.
 
-**요청**
-
-```json
-{ "field": "PHOTO" }
-```
-
-`field`는 `PHOTO`(10) · `NAME`(7) · `DEPARTMENT`(5) · `REASON`(3) 중 하나.
+- **비용: KST 날짜 기준 하루 1회 무료, 이후 회당 5실.** 무료 횟수는 KST 자정에 다시 생긴다(출석 체크와 같은 기준)
+- 해금했거나 매칭 요청을 보낸 카드도 내려간다. 해금 상태는 되돌려지지 않고, 보낸 요청은 §11 요청 목록에서 계속 보인다. 내려간 후보는 다시 추천되지 않는다
+- 새 후보가 1~2명뿐이면 그 수만큼만 오고 비용은 같다
+- 새 후보가 **한 명도 없으면 409 `DATING_NO_MORE_CANDIDATES`** — 차감도 카드 변경도 없다
+- 무료분을 다 썼고 잔액이 5 미만이면 **402 `INSUFFICIENT_THREAD`** — 카드는 그대로
+- 연타를 서버가 막지 않는다. 두 번 누르면 두 번 리롤(두 번째는 유료)되므로 **프론트에서 요청 중 버튼을 막아야 한다**
+- 그 밖의 에러는 §10.4와 같다(401·403 `DATING_NOT_VERIFIED`·404)
 
 **응답 200 예시**
 
@@ -780,17 +795,54 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 {
   "success": true,
   "data": {
-    "field": "PHOTO",
-    "value": "https://s3.example.com/temporary-signed-original-url",
-    "balance": 15
+    "candidates": [ /* §10.4 의 candidates 와 같은 구조 */ ],
+    "rerollCost": 5,
+    "threadBalance": 10
   }
 }
 ```
 
-- `value`는 필드에 따라 이름·학과·궁합 까닭 문장 또는 원본 사진의 서명된 임시 URL
-- 잔액이 모자라면 **402 `INSUFFICIENT_THREAD`** (2026-09-26 확정, plan.md TBD-11 종료)
+- `rerollCost`: **다음** 리롤 비용 (§10.4와 같은 의미)
+- `threadBalance`: 차감 후 잔액
+
+### 10.5 카드 정보 해금 — `POST /api/dating/candidates/{candidateId}/unlock`
+
+사진·이름·학과·궁합 까닭 중 **사용자가 고른 필드를 한 번에** 실로 해금한다(plan.md §8.5). 이미 해금한 필드는 차감 없이 값만 반환한다(FR-DT-06).
+
+> **2026-09-27 변경 (계약 변경, 프론트 대응 필수)**: 요청 `field`(단건) → `fields`(배열), 응답 `field`·`value` → `values`(맵). 필드 하나만 열 때도 배열로 보낸다.
+
+**요청**
+
+```json
+{ "fields": ["PHOTO", "NAME"] }
+```
+
+- `fields`의 원소는 `PHOTO`(10) · `NAME`(7) · `DEPARTMENT`(5) · `REASON`(3). 빈 배열·`null`·모르는 값은 `INVALID_INPUT` 400
+- 네 개를 전부 보내면 plan.md §1.4의 **전체 해금(25)** 이다. 별도 API는 없다
+- 같은 필드를 두 번 넣어도 한 번으로 친다
+- 비용은 **아직 잠긴 필드의 합**이다. 이름을 연 뒤 전체를 고르면 25가 아니라 18(10+5+3)이 빠진다
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "values": {
+      "PHOTO": "https://s3.example.com/temporary-signed-original-url",
+      "NAME": "홍길동"
+    },
+    "balance": 8
+  }
+}
+```
+
+- `values`는 요청한 필드명 → 값. 키 순서는 `PHOTO`·`NAME`·`DEPARTMENT`·`REASON` 순(요청 순서와 무관)
+- 값은 필드에 따라 이름·학과·궁합 까닭 문장 또는 원본 사진의 서명된 임시 URL
+- `balance`는 차감 후 잔액
+- 잔액이 모자라면 **402 `INSUFFICIENT_THREAD`** 이고 **고른 필드 중 아무것도 해금되지 않는다**(전부 되거나 전부 안 되거나). 프론트는 합계를 미리 보여 주고 모자라면 버튼을 막는 게 좋다
 - `candidateId`가 내 현재 추천 목록(Top 3)에 없으면 `DATING_PROFILE_NOT_FOUND` 404
-- `REASON`은 첫 해금 성공 시점에 LLM으로 생성해 캐싱한다(7.3) — 생성이 실패하면 `LLM_UNAVAILABLE` 503이지만 **차감은 이미 끝난 뒤**이므로 다시 호출하면 차감 없이 생성만 재시도한다
+- `REASON`은 첫 해금 성공 시점에 LLM으로 생성해 캐싱한다(7.3) — 생성이 실패하면 `LLM_UNAVAILABLE` 503이지만 **함께 고른 필드까지 차감·해금은 이미 끝난 뒤**이므로 같은 요청을 다시 보내면 차감 없이 값만 받는다
 
 ### 10.6 학교 이메일 인증 (매직링크, **폐기 예정**) — `GET /api/dating/profile/verify?token={token}`
 
@@ -800,7 +852,6 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 
 - 성공: `302` — 프론트 완료 페이지로 리다이렉트. 이후 `emailVerified`가 `true`로 바뀌고 `GET /api/dating/recommendations`가 더 이상 `DATING_NOT_VERIFIED`를 던지지 않는다
 - 실패(만료·위조·재사용 토큰): `400 INVALID_TOKEN`
-- 재신청 초대(`reapplyToken`)로 등록한 경우에는 이 단계가 없다. 초대 메일 수신이 곧 주소 소유 증명이라 등록 즉시 `emailVerified: true`다
 
 ### 10.7 학교 이메일 코드 인증 — `POST /api/dating/email-codes`, `POST /api/dating/email-codes/verify`
 
@@ -851,7 +902,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 
 - 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
 - 학교 메일 인증은 **등록 전 6자리 코드(10.7)** 로 구현됐다(2026-09-26). 10.6 매직링크는 폐기 예정.
-- 정보 해금(§10.5)은 구현됐다(2026-09-26). **리롤 API는 아직 없다**(plan.md TBD-6, 비용 미정). 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 매칭 요청은 §11을 본다.
+- 정보 해금(§10.5)은 구현됐다(2026-09-26). 리롤(§10.4.1)도 구현됐다(2026-09-27, TBD-6 종료). 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 매칭 요청은 §11을 본다.
 
 ---
 
@@ -973,7 +1024,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 ## 12. 실 (재화)
 
 로그인 쿠키(`wks_token`) 필수 (§9 참고). 원장 기반이라 잔액은 항상 지급·차감 내역의 합이다(plan.md §9.4).
-V1에서 만드는 건 잔액 조회·출석 체크·소개팅 해금(§10.5)뿐이다. **현금 충전은 없다**(FR-TH-05) — 잔액이
+V1에서 만드는 건 잔액 조회·출석 체크·소개팅 해금(§10.5)·리롤(§10.4.1)뿐이다. **현금 충전은 없다**(FR-TH-05) — 잔액이
 모자라면 402 `INSUFFICIENT_THREAD`만 돌려주고, "구매하기" 화면은 프론트가 안내만 한다(plan.md TBD-8,
 아직 화면 없음).
 
@@ -990,6 +1041,12 @@ V1에서 만드는 건 잔액 조회·출석 체크·소개팅 해금(§10.5)뿐
 | 이름 | 7 |
 | 학과 | 5 |
 | 궁합 까닭 | 3 |
+| 전체 (네 개 한 번에) | 25 — 이미 연 필드는 빠진다 |
+
+| 소모 (리롤, §10.4.1) | 양 |
+|---|---|
+| 하루(KST) 첫 리롤 | 0 (무료) |
+| 두 번째부터 | 5 |
 
 ### `GET /api/wallet`
 

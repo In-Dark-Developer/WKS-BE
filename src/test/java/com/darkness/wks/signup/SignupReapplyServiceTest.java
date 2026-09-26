@@ -24,7 +24,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,7 +39,6 @@ class SignupReapplyServiceTest {
     private SignupReapplyService service() {
         SignupReapplyService service = new SignupReapplyService(signupRepository, inviteRepository, mailSender);
         ReflectionTestUtils.setField(service, "ttlHours", 48L);
-        ReflectionTestUtils.setField(service, "campaignDomain", "dgu.ac.kr");
         ReflectionTestUtils.setField(service, "mailFrom", "noreply@wks.local");
         ReflectionTestUtils.setField(service, "reapplyUrl", "http://localhost:3000/dating/reapply");
         return service;
@@ -76,32 +74,13 @@ class SignupReapplyServiceTest {
     }
 
     @Test
-    void invitedEmailIsLowercased() {
-        SignupReapplyInvite invite = new SignupReapplyInvite("token", signup("DEV@dgu.ac.kr", result()),
-                Instant.now().plusSeconds(3600));
-        when(inviteRepository.findById("token")).thenReturn(Optional.of(invite));
-
-        assertThat(service().invitedEmail("token")).isEqualTo("dev@dgu.ac.kr");
-    }
-
-    @Test
-    void consumeInviteMarksTokenUsed() {
-        SignupReapplyInvite invite = new SignupReapplyInvite("token", signup("dev@dgu.ac.kr", result()),
-                Instant.now().plusSeconds(3600));
-        when(inviteRepository.findById("token")).thenReturn(Optional.of(invite));
-
-        service().consumeInvite("token");
-
-        assertThat(invite.getUsedAt()).isNotNull();
-    }
-
-    @Test
     void expiredOrUsedOrUnknownTokenIsRejected() {
         SignupReapplyInvite expired = new SignupReapplyInvite("expired", signup("dev@dgu.ac.kr", result()),
                 Instant.now().minusSeconds(1));
         SignupReapplyInvite used = new SignupReapplyInvite("used", signup("dev@dgu.ac.kr", result()),
                 Instant.now().plusSeconds(3600));
-        used.markUsed(Instant.now());
+        // used_at 은 예전 방식(초대가 학교메일 인증을 대신하던 때)에 쓴 행에만 있다
+        ReflectionTestUtils.setField(used, "usedAt", Instant.now());
         when(inviteRepository.findById("expired")).thenReturn(Optional.of(expired));
         when(inviteRepository.findById("used")).thenReturn(Optional.of(used));
         when(inviteRepository.findById("nope")).thenReturn(Optional.empty());
@@ -114,16 +93,16 @@ class SignupReapplyServiceTest {
         }
     }
 
+    /** 사전신청 이메일은 학교메일이 아닌 경우가 많다 — 초대는 결과 연결용이라 도메인을 거르지 않는다 */
     @Test
-    void targetsExcludeLookalikeDomains() {
-        when(signupRepository.findReapplyTargets(eq("dgu.ac.kr"), any())).thenReturn(List.of(
+    void targetsAreNotFilteredByEmailDomain() {
+        when(signupRepository.findReapplyTargets(any())).thenReturn(List.of(
                 signup("real@dgu.ac.kr", result()),
-                signup("sub@cs.dgu.ac.kr", result()),
-                signup("fake@notdgu.ac.kr", result())));
+                signup("someone@gmail.com", result())));
 
         assertThat(service().findTargets())
                 .extracting(SignupReapplyService.ReapplyTarget::email)
-                .containsExactly("real@dgu.ac.kr", "sub@cs.dgu.ac.kr");
+                .containsExactly("real@dgu.ac.kr", "someone@gmail.com");
     }
 
     @Test

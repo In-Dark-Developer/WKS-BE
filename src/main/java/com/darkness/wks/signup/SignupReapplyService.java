@@ -20,14 +20,14 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.List;
-import java.util.Locale;
 
 /**
- * 기존 사전신청자에게 "사진·학교메일 인증을 미리 마무리해라"고 보내는 재신청 초대(1회성 캠페인).
+ * 기존 사전신청자에게 보내는 재신청 초대(1회성 캠페인). 사전신청 때는 로그인이 없어서 그때 만든 사주 결과가
+ * 어느 계정에도 붙어 있지 않다 — 초대 링크로 들어와 카카오 로그인하면 그 결과가 계정에 연결된다.
  * <p>
- * 초대 링크는 프론트 페이지를 가리킨다 — 클릭 한 번으로 끝나는 인증이 아니라 카카오 로그인·사진 업로드를
- * 거쳐야 하므로, 토큰은 그 흐름이 끝날 때({@code POST /api/dating/profile}) 소비된다.
- * 초대 메일을 받은 사람만 그 주소를 쓸 수 있으므로, 완료 시점에 학교메일 인증을 이미 끝난 것으로 본다.
+ * 초대는 학교메일 인증이 아니다. 사전신청 이메일은 gmail 등 아무 주소였고 인증도 안 됐으므로, 학교메일
+ * 인증·사진 등록은 로그인 뒤 일반 소개팅 신청과 똑같이 한다(코드 인증, dating/).
+ * 토큰은 소비하지 않는다 — 결과가 계정에 연결되면 캠페인 대상에서 빠지는 것으로 완료를 판단한다.
  */
 @Slf4j
 @Service
@@ -37,7 +37,7 @@ public class SignupReapplyService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     // 문구는 기획 확정 전 임시값 — EmailVerificationService 와 같은 처리
-    private static final String SUBJECT = "[동국대 소개팅] 사전신청 마무리하러 와라 (사진·학교메일 인증)";
+    private static final String SUBJECT = "[동국대 소개팅] 사전신청 고맙다 — 사주 결과 이어서 소개팅 신청하러 와라";
 
     private final SignupRepository signupRepository;
     private final SignupReapplyInviteRepository inviteRepository;
@@ -45,10 +45,6 @@ public class SignupReapplyService {
 
     @Value("${app.signup.reapply-invite-ttl-hours}")
     private long ttlHours;
-
-    // 캠페인 대상 도메인 하나만 받는다. 소개팅 참여 자체를 막는 검증은 dating/ 의 화이트리스트가 한다
-    @Value("${app.signup.reapply-campaign.email-domain}")
-    private String campaignDomain;
 
     @Value("${app.mail.from}")
     private String mailFrom;
@@ -61,8 +57,7 @@ public class SignupReapplyService {
     }
 
     public List<ReapplyTarget> findTargets() {
-        return signupRepository.findReapplyTargets(campaignDomain.toLowerCase(Locale.ROOT), Instant.now()).stream()
-                .filter(signup -> isCampaignDomain(signup.getEmail()))
+        return signupRepository.findReapplyTargets(Instant.now()).stream()
                 .map(signup -> new ReapplyTarget(signup.getId(), signup.getEmail()))
                 .toList();
     }
@@ -91,10 +86,11 @@ public class SignupReapplyService {
             helper.setTo(toEmail);
             helper.setSubject(SUBJECT);
             helper.setText("""
-                    사전신청 고맙다. 그 뒤로 사진 등록과 학교메일 인증이 생겨서 한 번 더 부탁한다.
+                    사전신청 고맙다. 정식 소개팅 신청이 열렸다.
 
-                    아래 링크에서 카카오 로그인하고 사진만 올리면 끝난다. 사전신청 때 적은 내용은 그대로
-                    채워져 있고, 사주 결과도 계정에 그대로 이어진다. 링크는 %d시간 동안 유효하다.
+                    아래 링크에서 카카오 로그인하면 사전신청 때 본 사주 결과가 계정에 그대로 이어진다.
+                    그다음 학교메일(@dgu.ac.kr) 인증과 사진 등록을 하면 소개팅 신청이 끝난다.
+                    사전신청 때 적은 내용은 신청서에 미리 채워져 있다. 링크는 %d시간 동안 유효하다.
 
                     %s
                     """.formatted(ttlHours, link));
@@ -109,20 +105,6 @@ public class SignupReapplyService {
         return SignupReapplyResponse.from(usableInvite(token).getSignup());
     }
 
-    /**
-     * 초대가 보장하는 이메일. 소개팅 프로필 등록이 이 값과 요청 이메일이 같은지 확인한다 —
-     * 초대는 "그 주소의 소유 증명"일 뿐이라 다른 주소의 인증으로 넘겨 쓸 수 없다.
-     */
-    public String invitedEmail(String token) {
-        return usableInvite(token).getSignup().getEmail().trim().toLowerCase(Locale.ROOT);
-    }
-
-    /** 소개팅 프로필 등록이 끝나는 트랜잭션 안에서 호출된다 — 등록이 롤백되면 초대도 다시 쓸 수 있어야 한다 */
-    @Transactional
-    public void consumeInvite(String token) {
-        usableInvite(token).markUsed(Instant.now());
-    }
-
     private SignupReapplyInvite usableInvite(String token) {
         SignupReapplyInvite invite = inviteRepository.findById(token)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_TOKEN));
@@ -130,14 +112,6 @@ public class SignupReapplyService {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
         return invite;
-    }
-
-    private boolean isCampaignDomain(String email) {
-        String domain = email.trim().toLowerCase(Locale.ROOT);
-        int at = domain.lastIndexOf('@');
-        domain = at < 0 ? "" : domain.substring(at + 1);
-        String allowed = campaignDomain.trim().toLowerCase(Locale.ROOT);
-        return domain.equals(allowed) || domain.endsWith("." + allowed);
     }
 
     private String generateToken() {
