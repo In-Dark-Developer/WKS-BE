@@ -414,6 +414,45 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 토큰 유효기간 30분, 사용 후 재사용 불가.
 
+### `GET /api/signups/reapply?token={token}`
+
+**기존 사전신청자 재신청 (2026-09-26 추가, 축제용 1회성).** 사전신청 이후에 사진 등록·학교메일 인증이
+생겨서, 기존 신청자에게 초대 메일을 보내 소개팅 프로필을 미리 완성하게 하는 흐름이다.
+초대 메일의 링크는 **백엔드가 아니라 프론트 페이지**(`app.frontend.reapply-url`, 기본 `/dating/reapply`)를
+가리키고, 프론트가 그 `token` 으로 이 API 를 불러 폼을 채운다. 로그인 불필요.
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "email": "student@dgu.ac.kr",
+    "resultId": "3f2a9c1e-0000-4000-8000-000000000001",
+    "name": "홍길동",
+    "contactMethod": "PHONE",
+    "contactValue": "010-3333-3333",
+    "department": "컴퓨터공학과",
+    "mbti": "ESTP",
+    "bio": "안녕하세요"
+  }
+}
+```
+
+- 토큰 유효기간 **48시간**(`app.signup.reapply-invite-ttl-hours`). 이 호출은 토큰을 **소비하지 않는다** — 프로필 등록까지 유효하다
+- 만료·위조·이미 완료된 토큰은 `INVALID_TOKEN` 400
+- `name`·`contactMethod`·`contactValue`·`department`·`mbti`·`bio` 는 사전신청 당시 선택값이라 **`null` 일 수 있다.** 화면에서 받아 채워야 한다(소개팅 프로필은 전부 필수)
+- **`resultId` 를 `POST /api/auth/kakao` 의 `resultId` 로 넘겨야** 사전신청 때 본 사주 결과가 로그인 계정에 연결된다
+
+**프론트 흐름**
+
+```
+초대 메일 링크 → GET /api/signups/reapply?token=…      (폼 자동 채움, resultId 확보)
+   → POST /api/auth/kakao (code + resultId)            (로그인 + 사주 결과 계정 연결)
+   → POST /api/dating/profile/photo → S3 PUT           (사진 등록, §10.1)
+   → POST /api/dating/profile (+ reapplyToken)         (§10.2 — 학교메일 인증까지 끝난 상태로 등록)
+```
+
 ---
 
 ## 6. 헬스체크
@@ -587,10 +626,20 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 - `401 UNAUTHENTICATED` 를 받으면 로그인 화면으로 보낸다 (프론트가 지울 토큰은 없다 — 쿠키는 서버가 관리)
 - 토큰을 URL 쿼리에 넣지 않는다. `Authorization` 헤더도 쓰지 않는다 — **쿠키 하나로만 인증한다** (2026-09-25 전환)
 - 프론트 콜백 주소(운영·로컬·netlify 등)를 **백엔드에 알려줘야 한다.** `redirectUri` 화이트리스트와 카카오 콘솔 등록에 필요하다
+- **로그인은 `*.threadoffate.site` 에 뜬 프론트에서만 된다** (2026-09-26 확인). 쿠키가 `SameSite=Lax` 라 브라우저는 사이트가 다른 곳(`localhost`, `*.netlify.app`)에서 보낸 `fetch` 에 쿠키를 저장하지도 싣지도 않는다. 이런 곳에서는 CORS 는 통과해 비로그인 API 는 되지만, 로그인 뒤 `/api/me` 가 **401** 로 떨어진다 — CORS 에러가 아니라서 헷갈리기 쉽다. 로그인이 걸린 화면은 아래 도메인에서 테스트한다
+
+| 프론트 | 붙는 API | CORS | 로그인 |
+|---|---|---|---|
+| `https://threadoffate.site`, `https://www.threadoffate.site` | `https://api.threadoffate.site` | ✅ | ✅ |
+| `https://dev.threadoffate.site` | `https://api-dev.threadoffate.site` | ✅ | ✅ |
+| `http://localhost:3000` | `https://api-dev.threadoffate.site` | ✅ | ❌ (401) |
+| `https://wks-fe.netlify.app`, `http://localhost:5173` | `https://api.threadoffate.site` | ✅ | ❌ (401) |
+
+  운영·개발 서버는 서로의 프론트 도메인을 허용하지 않는다(`dev.threadoffate.site` → 운영 API 는 CORS 403). 허용 도메인을 늘리려면 백엔드에 요청한다(EC2 `.env` 의 `CORS_ALLOWED_ORIGINS`)
 
 ## 10. 소개팅 프로필·후보 추천
 
-모든 `/api/dating/**` 요청에 로그인 쿠키(`wks_token`)가 필요하다 (§9 참고, `credentials: 'include'` 필수). 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
+모든 `/api/dating/**` 요청에 로그인 쿠키(`wks_token`)가 필요하다 (§9 참고, `credentials: 'include'` 필수) — **단 10.6(학교 이메일 인증)은 매직링크 토큰 자체가 신원 증명이라 예외다.** 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
 
 ### 10.1 사진 업로드 준비 — `POST /api/dating/profile/photo`
 
@@ -637,6 +686,8 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 ```
 
 모든 필드가 필수다. `contactValue`는 문자열이며 `PHONE`이면 전화번호, `INSTAGRAM`이면 인스타그램 아이디(예: `my_insta_id`)를 넣는다. `photoId`는 **로그인한 회원에게 발급됐고 S3에 파일 업로드가 완료된 사진**이어야 한다. 계정에 연결된 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
+
+**`reapplyToken`(선택, 2026-09-26 추가)**: 기존 사전신청자 재신청(§5 `GET /api/signups/reapply`)에서만 넣는다. 값이 있으면 `email`이 **초대받은 주소와 같아야 하고**(다르면 `INVALID_INPUT` 400), 학교메일 인증을 이미 끝난 것으로 처리한다(`emailVerified: true`, 인증 메일 발송 없음). 만료·위조·이미 쓴 토큰은 `INVALID_TOKEN` 400. 일반 신청에서는 넣지 않는다 — 넣지 않으면 등록 후 인증 메일이 발송된다(§10.6).
 
 **응답 201 예시**
 
@@ -726,10 +777,19 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 - `candidateId`가 내 현재 추천 목록(Top 3)에 없으면 `DATING_PROFILE_NOT_FOUND` 404
 - `REASON`은 첫 해금 성공 시점에 LLM으로 생성해 캐싱한다(7.3) — 생성이 실패하면 `LLM_UNAVAILABLE` 503이지만 **차감은 이미 끝난 뒤**이므로 다시 호출하면 차감 없이 생성만 재시도한다
 
+### 10.6 학교 이메일 인증 — `GET /api/dating/profile/verify?token={token}`
+
+프로필 등록(10.2) 성공 직후 서버가 `email`로 인증 메일을 자동 발송한다(`signup/`의 매직링크와 같은 구조, TBD-16 해결). 메일의 링크를 누르면 이 API가 호출된다.
+
+- 성공: `302` — 프론트 완료 페이지로 리다이렉트. 이후 `emailVerified`가 `true`로 바뀌고 `GET /api/dating/recommendations`가 더 이상 `DATING_NOT_VERIFIED`를 던지지 않는다
+- 실패(만료·위조·재사용 토큰): `400 INVALID_TOKEN`
+- 메일 발송 자체가 실패해도(SMTP 오류) 프로필 등록은 그대로 성공한다 — **현재 재발송 API는 없다.**
+- 재신청 초대(`reapplyToken`)로 등록한 경우에는 이 단계가 없다. 초대 메일 수신이 곧 주소 소유 증명이라 등록 즉시 `emailVerified: true`다
+
 ### #84 구현 상태와 남은 연동
 
 - 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
-- 학교 메일 인증 완료를 소개팅 프로필에 반영하는 연동은 별도 작업이다. 연동 전에는 `GET /api/dating/recommendations`가 `DATING_NOT_VERIFIED` 403을 반환한다.
+- 학교 메일 인증 완료를 소개팅 프로필에 반영하는 연동은 **구현됐다(2026-09-26, 10.6 참고).**
 - 정보 해금(§10.5)은 구현됐다(2026-09-26). **리롤 API는 아직 없다**(plan.md TBD-6, 비용 미정). 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 매칭 요청은 §11을 본다.
 
 ---

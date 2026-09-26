@@ -13,6 +13,8 @@ services:
     # 운영과 동일 패턴(git-workflow.md "GitHub Secrets") — GitHub Actions 는 이 파일을 만들거나 건드리지 않는다.
     env_file: .env
     environment:
+      # 빠지면 application-dev.yml 이 안 읽혀 datasource url 이 없어 기동에 실패한다 (2026-09-26 첫 기동 때 겪음)
+      SPRING_PROFILES_ACTIVE: dev
       # 공유 postgres 컨테이너 이름 고정. .env 에서 실수로 바꿀 수 없게 여기 둔다
       DB_HOST: wks-postgres
       DB_PORT: 5432

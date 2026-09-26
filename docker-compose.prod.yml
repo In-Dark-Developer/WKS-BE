@@ -43,6 +43,16 @@ services:
       AWS_S3_BUCKET: ${AWS_S3_BUCKET}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # 이 서비스는 env_file 을 안 쓰고 여기 적은 변수만 컨테이너에 넘긴다. 앱이 새 환경변수를 읽게 되면
+      # 여기에도 추가해야 한다 — 빠뜨려도 기동은 돼서(로그인은 KAKAO_UNAVAILABLE 로만 막힘) 알아채기 어렵다.
+      DATING_VERIFY_REDIRECT_URL: ${DATING_VERIFY_REDIRECT_URL}
+      REAPPLY_URL: ${REAPPLY_URL}
+      REAPPLY_INVITE_TTL_HOURS: ${REAPPLY_INVITE_TTL_HOURS:-48}
+      REAPPLY_CAMPAIGN_MODE: ${REAPPLY_CAMPAIGN_MODE:-off}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      KAKAO_ALLOWED_REDIRECT_URIS: ${KAKAO_ALLOWED_REDIRECT_URIS:-}
+      JWT_SECRET: ${JWT_SECRET:-}
       JAVA_TOOL_OPTIONS: "-Xmx300m -XX:MaxMetaspaceSize=128m"
     logging:
       driver: json-file

@@ -146,6 +146,8 @@ member  →  result       허용 (내 결과 조회, `GET /api/me/result`)
 result  →  member       금지 (`Result` 는 `Long memberId` 컬럼만 가진다. 엔티티·패키지 참조 없음)
 member  →  auth         금지
 dating  →  result·compatibility·member·wallet   허용
+dating  →  signup    허용 (2026-09-26, 재신청 초대 토큰 검증·소비만. 축제 뒤 캠페인과 함께 지운다)
+signup  →  dating    금지 (뒤집으면 순환이다. 캠페인 대상 조회도 signup 쪽 테이블만 본다)
 compatibility  →  wallet   허용 (친구 궁합 등록 시 공유자에게 실 +3)
 wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 ```
@@ -183,9 +185,21 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
      → verified_at 기록 + used_at 기록 → 프론트 완료 페이지로 302
 ```
 
-매직링크는 토큰 조회 후 리다이렉트가 전부다. V1 에서는 이 방식을 **소개팅의 학교 메일 재학 인증**으로 재사용한다.
-메일 링크는 다른 브라우저·메일 앱에서 열리므로 `Authorization` 헤더가 없다. 토큰이 곧 자격이라 `verify` 는 인증 없이 열려 있다.
-인증 시점·저장 위치·이후 게이트는 미정이다 (plan.md TBD-16).
+매직링크는 토큰 조회 후 리다이렉트가 전부다.
+메일 링크는 다른 브라우저·메일 앱에서 열리므로 로그인 쿠키가 없다. 토큰이 곧 자격이라 `verify` 는 인증 없이 열려 있다 —
+`/api/dating/**` 는 전부 로그인이 필요하지만 `GET /api/dating/profile/verify` 만 인터셉터에서 제외한 이유다.
+
+**V1 에서 같은 방식을 쓰는 링크가 셋이다. 테이블도 셋이다** — 수명과 소비 시점이 달라서 한 테이블에 섞지 않았다.
+
+| 용도 | 테이블 | TTL | 소비 시점 | 완료 시 기록 |
+|---|---|---|---|---|
+| 사전등록 이메일 인증 (파일럿) | `email_verification` | 30분 | 클릭 | `signup.verified_at` |
+| 소개팅 학교메일 재학 인증 (V21) | `dating_email_verification` | 30분 | 클릭 | `dating_profile.verified_at` |
+| 기존 사전신청자 재신청 초대 (V22, 1회성) | `signup_reapply_invite` | 48시간 | **프로필 등록 완료 시** | `dating_profile.verified_at` (즉시 인증) |
+
+재신청 초대만 클릭 시점에 소비되지 않는다. 링크를 누른 뒤 카카오 로그인·사진 업로드를 거쳐야 하므로 그 흐름이
+끝날 때까지 살아 있어야 한다. 초대 메일을 받은 사람만 그 토큰을 가질 수 있으므로 완료 시점에 학교메일 인증을
+이미 끝난 것으로 본다(인증 메일을 한 번 더 보내지 않는다).
 
 ### 카카오 로그인 (2026-09-21 확정 · 구현 전)
 
@@ -319,6 +333,26 @@ CREATE TABLE thread_ledger (
     ref_id          VARCHAR(64)  NOT NULL,           -- NULL 금지: NULL 이면 unique 가 중복을 못 막는다 (Postgres 는 NULL 끼리 다르다고 본다)
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     UNIQUE (member_id, reason, ref_id)
+);
+
+-- 소개팅 학교메일 재학 인증 (V21, TBD-16 종료). email_verification 과 구조가 같지만 signup 이 아니라
+-- 프로필을 참조한다 — signup 은 로그인 개념이 생기기 전 스키마라 재사용하지 않았다
+CREATE TABLE dating_email_verification (
+    token             VARCHAR(64)  PRIMARY KEY,
+    dating_profile_id UUID         NOT NULL REFERENCES dating_profile(id) ON DELETE CASCADE,
+    expires_at        TIMESTAMPTZ  NOT NULL,
+    used_at           TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- 기존 사전신청자 재신청 초대 (V22). TTL 48시간이고, 클릭이 아니라 프로필 등록이 끝날 때 소비된다.
+-- 축제(2026-10-01) 뒤에는 이 테이블과 signup/ 재신청 코드를 통째로 버려도 된다
+CREATE TABLE signup_reapply_invite (
+    token           VARCHAR(64)  PRIMARY KEY,
+    signup_id       BIGINT       NOT NULL REFERENCES signup(id) ON DELETE CASCADE,
+    expires_at      TIMESTAMPTZ  NOT NULL,
+    used_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
 -- 소개팅 프로필·추천·요청은 V15~V17, 소개팅 궁합 이유 캐시는 V18에 추가한다. 해금·실 원장은 후속 작업이다 (plan.md §7)

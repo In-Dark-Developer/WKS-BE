@@ -56,11 +56,22 @@ app:
     base-url: ${BACKEND_BASE_URL:http://localhost:8080}
   frontend:
     verify-redirect-url: ${VERIFY_REDIRECT_URL:http://localhost:3000/verify}
+    dating-verify-redirect-url: ${DATING_VERIFY_REDIRECT_URL:http://localhost:3000/dating/verify}
+    # 재신청 초대 메일이 가리키는 프론트 페이지. 백엔드를 거치지 않는다 — 토큰은 클릭 시점에 소비되지 않는다
+    reapply-url: ${REAPPLY_URL:http://localhost:3000/dating/reapply}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   signup:
     email-verification-ttl-minutes: 30
     allowed-email-domains: ${SIGNUP_ALLOWED_EMAIL_DOMAINS:}
+    # 기존 사전신청자 재신청 초대. 축제 전에 한 번 쓰고 버리는 값들이다
+    reapply-invite-ttl-hours: ${REAPPLY_INVITE_TTL_HOURS:48}
+    reapply-campaign:
+      email-domain: ${REAPPLY_CAMPAIGN_EMAIL_DOMAIN:dgu.ac.kr}
+      # off | dry-run(대상 수만 로그) | send(실제 발송). 켠 채로 두면 재기동마다 돈다 — 쓰고 나면 off 로 되돌린다
+      mode: ${REAPPLY_CAMPAIGN_MODE:off}
+  dating:
+    email-verification-ttl-minutes: 30
   aws:
     region: ${AWS_REGION:ap-northeast-2}
     s3:

@@ -5,6 +5,13 @@ EC2에서 **직접 실행**하는 문서다. 여기 적힌 명령은 이 세션�
 
 전제: 같은 EC2, 같은 Elastic IP에서 nginx·postgres 컨테이너 하나씩을 운영·개발이 공유한다 (`docs/architecture.md`, `docker-compose.prod.yml` 참고).
 
+> **실행 이력: 2026-09-26 곽도윤이 1~9단계 완료, 운영·개발 모두 `/api/health` 200.** 아래 본문은 그때 실제로 막힌 곳을
+> 반영해 고친 판이다. 다시 처음부터 할 일은 없고, 서버를 새로 만들 때나 장애 복구 때 참고한다.
+> 이후 반영할 것: `nginx/api-dev.conf` 가 바뀌면 11단계를 따른다.
+
+**명령어 붙여넣기 주의**: `\` 로 줄을 이은 여러 줄 명령을 SSH 터미널에 붙여넣으면 줄바꿈이 깨져 옵션이 합쳐질 수
+있다(certbot 이 `unrecognized arguments: --webroot` 로 실패했다). 한 줄로 합쳐서 붙여넣는다.
+
 ---
 
 ## 0. 사전 조건
@@ -13,6 +20,21 @@ EC2에서 **직접 실행**하는 문서다. 여기 적힌 명령은 이 세션�
 - 아래 파일들이 이미 `dev`(→`main`, 운영 쪽 파일은 `main`까지) 브랜치에 머지돼 EC2로 받을 준비가 됐다:
   `docker-compose.dev.yml`, `.env.dev.example`, `nginx/api-dev.bootstrap.conf`, `nginx/api-dev.conf`, `db/init/init-wks-dev.sql`
 - **운영 compose 변경(wks-edge 네트워크 추가)은 2026-09-23 곽도윤이 diff를 확인·승인했다** (`docker-compose.prod.yml`에 이미 반영됨). EC2에 실제로 반영하는 지점이 이 문서의 2-2단계다
+- **EC2 에는 저장소 전체가 없다.** `deploy.yml` 은 `docker-compose.prod.yml`·`nginx/` 만, `deploy-dev.yml` 은
+  `docker-compose.dev.yml` 만 보낸다. `db/init/init-wks-dev.sql`·`.env.dev.example` 은 직접 옮기거나 EC2 에서 만든다
+
+파일을 로컬(Windows)에서 EC2 로 보낼 때는 `.pem` 키로 `scp` 를 쓴다 (`.ppk` 는 PuTTY 전용이라 OpenSSH `scp` 가 못 읽는다 — 그땐 `pscp`):
+
+```powershell
+scp -i "<키 경로>\WKS.pem" "<저장소 경로>\<파일>" ubuntu@<Elastic IP>:/opt/wks-dev/
+```
+
+`UNPROTECTED PRIVATE KEY FILE` 로 거부되면 키 파일 권한부터 좁힌다:
+
+```powershell
+icacls "<키 경로>\WKS.pem" /inheritance:r
+icacls "<키 경로>\WKS.pem" /grant:r "$($env:USERNAME):(R)"
+```
 
 ---
 
@@ -75,13 +97,29 @@ postgres는 수 초 내 재기동하지만 그 사이 앱의 DB 커넥션이 끊
 
 ## 3. 개발 DB·계정 생성
 
+`/tmp/init-wks-dev.filled.sql` 은 저절로 생기지 않는다. 내용이 짧으니 **EC2 에서 바로 만든다** (저장소의
+`db/init/init-wks-dev.sql` 에서 주석을 뺀 것과 같다). 비밀번호는 4단계 `.env` 의 `DB_PASSWORD` 와 같은 값을 쓴다.
+저장소 원본은 플레이스홀더 그대로 둔다 — 채운 사본을 커밋하지 않는다.
+
 ```bash
+cat > /tmp/init-wks-dev.filled.sql <<'EOF'
+CREATE ROLE wks_dev WITH LOGIN PASSWORD '<비밀번호>';
+CREATE DATABASE wks_dev OWNER wks_dev;
+REVOKE CONNECT ON DATABASE wks FROM PUBLIC;
+GRANT CONNECT ON DATABASE wks TO wks;
+REVOKE CONNECT ON DATABASE wks_dev FROM PUBLIC;
+GRANT CONNECT ON DATABASE wks_dev TO wks_dev;
+EOF
+
 cd /opt/wks
-# db/init/init-wks-dev.sql 을 EC2로 옮기고, CHANGE_ME_STRONG_PASSWORD 를 .env.dev 의 DB_PASSWORD 와
-# 같은 값으로 바꾼 뒤 실행한다 (원본 파일은 플레이스홀더 그대로 유지 — 채운 사본을 커밋하지 않는다)
-docker compose -f docker-compose.prod.yml exec -T postgres \
-  psql -U wks -d wks -v ON_ERROR_STOP=1 -f - < /tmp/init-wks-dev.filled.sql
+docker compose -f docker-compose.prod.yml exec -T postgres psql -U wks -d wks -v ON_ERROR_STOP=1 -f - < /tmp/init-wks-dev.filled.sql
 rm /tmp/init-wks-dev.filled.sql   # 비밀번호가 든 임시 파일은 바로 지운다
+```
+
+비밀번호를 나중에 바꿀 때 (`wks` 는 슈퍼유저라 `wks_dev` DB 에 붙을 수 있다). 바꾼 뒤 `.env` 도 같이 고친다:
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres psql -U wks -d wks_dev -c "ALTER ROLE wks_dev WITH PASSWORD '<새 비밀번호>';"
 ```
 
 확인 (**핵심 방향**: 아래 명령이 permission denied로 실패해야 정상):
@@ -105,12 +143,31 @@ sudo chown $USER:$USER /opt/wks-dev
 cd /opt/wks-dev
 ```
 
-`docker-compose.dev.yml`은 `dev` push마다 `deploy-dev.yml`이 자동으로 여기에 scp한다 — 최초 1회는 수동으로 옮겨도 된다.
+`docker-compose.dev.yml`은 `dev` push마다 `deploy-dev.yml`이 자동으로 여기에 scp한다 — 최초 1회는 0단계의 `scp` 로
+`docker-compose.dev.yml`·`.env.dev.example` 두 개를 옮긴다. 옮긴 뒤 `cat .env.dev.example` 로 내용이 env 템플릿인지
+먼저 본다 (로컬 파일이 compose 내용으로 덮여 있던 채로 보내져 두 파일이 똑같아진 적이 있다).
+
+**실제 값은 EC2 의 `.env` 에만 쓴다. 로컬 저장소의 `.env.dev.example` 을 채우지 않는다** — 커밋 대상 템플릿이다
+(실제 Gemini 키를 여기 채웠다가 되돌린 적이 있다).
 
 ```bash
-cp .env.dev.example .env          # 저장소에서 미리 받아둔 예시 파일 기준
-vi .env                           # 실제 값 채우기 (DB_PASSWORD는 3단계와 동일 값, KAKAO_* 는 개발용 앱 키)
+cp .env.dev.example .env
+vi .env                           # 실제 값 채우기
 chmod 600 .env
+```
+
+| 키 | 주의 |
+|---|---|
+| `DB_PASSWORD` | 3단계 `wks_dev` 비밀번호와 같은 값 |
+| `JWT_SECRET` | **32바이트 이상**(`openssl rand -base64 32`). 짧으면 `JwtProvider` 가 기동을 막는다 — 문자열을 UTF-8 바이트 그대로 키로 쓰고 base64 디코딩은 안 한다. 운영과 다른 값 |
+| `GOOGLE_API_KEY` | 운영과 다른 키. 같으면 dev 호출이 운영 하루 한도(`gemini.max-per-day`)를 깎는다 |
+| `KAKAO_*` | 개발용 카카오 앱 키. 비워도 앱은 뜬다(로그인만 `KAKAO_UNAVAILABLE`) |
+| `MAIL_*`·`AWS_*` | 비워도 앱은 뜬다(해당 기능만 동작 안 함) |
+
+값은 대화·채팅에 `cat` 으로 붙여넣지 않는다. 빈 키만 확인한다 (아무것도 안 나오면 전부 채워진 것):
+
+```bash
+grep -E '^[A-Za-z_]+=$' .env
 ```
 
 ---
@@ -153,8 +210,11 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint certbot certbot 
   --email <이메일> --agree-tos --no-eff-email
 ```
 
+인증서는 호스트 경로가 아니라 `certbot-etc` named volume 에 들어간다. 호스트에서 `sudo ls /etc/letsencrypt/...` 하면
+**성공했어도 항상 없다고 나온다.** 볼륨을 마운트한 nginx 컨테이너 안에서 확인한다:
+
 ```bash
-sudo ls /etc/letsencrypt/live/api-dev.threadoffate.site/   # fullchain.pem, privkey.pem 확인
+docker compose -f docker-compose.prod.yml exec nginx ls -la /etc/letsencrypt/live/api-dev.threadoffate.site/   # fullchain.pem, privkey.pem
 ```
 
 **실패 시**: 대부분 DNS 전파 미완료(`dig` 재확인) 또는 5단계 80번 블록이 제대로 reload 안 된 경우다. `docker compose -f docker-compose.prod.yml logs nginx`로 확인.
@@ -173,15 +233,35 @@ curl -fsS https://api.threadoffate.site/api/health    # 운영 영향 없는지 
 
 `nginx -t` 통과 전에는 절대 reload하지 않는다 — 6단계에서 인증서 파일이 실제로 있는지 먼저 확인했는지 다시 체크.
 
+**`host not found in upstream "wks-app-dev"` 로 `nginx -t` 가 실패하면** EC2 의 `nginx/api-dev.conf` 가
+resolver 적용 전(2026-09-26 이전) 판이다. 그 판은 dev 컨테이너가 떠 있어야만 통과한다. 바로 bootstrap 으로 되돌려
+디스크에 깨진 설정을 남기지 않는다 — 남겨두면 nginx 가 재시작될 때 운영까지 같이 못 뜬다:
+
+```bash
+cp nginx/api-dev.bootstrap.conf nginx/api-dev.conf.active
+docker compose -f docker-compose.prod.yml exec nginx nginx -t
+```
+
+그 뒤 8단계(앱 기동)를 먼저 하고 7단계를 다시 한다. resolver 판(현재 저장소)은 dev 앱이 없어도 `-t` 를 통과한다.
+
 ---
 
 ## 8. 개발 앱 기동
 
+GHCR 이미지는 private 이라 **손으로 pull 하려면 먼저 로그인해야 한다** (`denied` 가 나면 이것). 배포 워크플로도
+매번 `docker login` 을 하지만 그 `GITHUB_TOKEN` 은 잡이 끝나면 무효가 된다 — EC2 에 남은 로그인 정보로는 수동 pull 이
+안 된다. GitHub 개인 토큰(classic, `read:packages` 만)으로 로그인한다. 워크플로가 다음 배포 때 이 로그인 정보를
+자기 토큰으로 덮어쓰므로, 나중에 다시 손으로 pull 할 때도 다시 로그인한다.
+
 ```bash
+echo <토큰> | docker login ghcr.io -u <GitHub 아이디> --password-stdin
 cd /opt/wks-dev
 docker compose -p wks-dev -f docker-compose.dev.yml pull
 docker compose -p wks-dev -f docker-compose.dev.yml up -d
 ```
+
+`No active profile set` 로 뜨고 `Failed to configure a DataSource: 'url' attribute is not specified` 로 죽으면
+EC2 의 `docker-compose.dev.yml` 에 `SPRING_PROFILES_ACTIVE: dev` 가 없는 것이다 (저장소 판에는 있다).
 
 **반드시 `-p wks-dev`를 붙인다.** 빠뜨리면 컴포즈 기본 프로젝트명(디렉토리명 `wks-dev`라 사실 같겠지만, 운영 쪽에서 실수로 이 명령을 `/opt/wks`에서 실행하면 운영 컨테이너를 덮어쓸 수 있다 — **항상 디렉토리도 함께 확인**한다.
 
@@ -225,6 +305,27 @@ curl -fsS https://api.threadoffate.site/api/health           # 운영 정상 확
 ### 2-2단계(운영 compose 변경) 롤백
 
 변경 전 `docker-compose.prod.yml`(wks-edge 네트워크 추가 전 버전)로 되돌리고 `docker compose -f docker-compose.prod.yml up -d`. postgres·app·nginx가 다시 재생성되며 같은 규모의 다운타임(약 30~60초)이 발생한다.
+
+---
+
+## 11. `nginx/api-dev.conf` 가 바뀌었을 때
+
+nginx 가 실제로 읽는 건 `nginx/api-dev.conf.active` 이고, **이 파일은 어떤 배포도 갱신하지 않는다.** `deploy.yml` 은
+`main` push 때 `nginx/api-dev.conf` 를 EC2 로 보내기만 한다. 그래서 `api-dev.conf` 를 고친 PR 이 `main` 까지
+릴리즈된 뒤 한 번 직접 반영한다 (2026-09-26 resolver 변경이 첫 대상):
+
+```bash
+cd /opt/wks
+diff nginx/api-dev.conf nginx/api-dev.conf.active                 # 무엇이 바뀌는지 확인
+cp nginx/api-dev.conf.active /tmp/api-dev.conf.active.bak          # 되돌릴 사본
+cp nginx/api-dev.conf nginx/api-dev.conf.active
+docker compose -f docker-compose.prod.yml exec nginx nginx -t       # ⚠️ 실패하면 .bak 으로 되돌리고 reload 안 함
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+curl -sS -o /dev/null -w "prod: %{http_code}\n" https://api.threadoffate.site/api/health
+curl -sS -o /dev/null -w "dev: %{http_code}\n" https://api-dev.threadoffate.site/api/health
+```
+
+헬스체크는 `curl -fsS` 대신 위처럼 상태 코드를 찍는다. `-f` 는 실패해도 아무것도 안 찍고 넘어갈 수 있어 성공과 구분이 안 된다.
 
 ---
 

@@ -2,10 +2,10 @@
 
 백엔드 3인. **이슈 기반 브랜치 → dev 병합 → dev를 main으로 릴리즈** 구조.
 
-> **⚠️ 현재 운영 상태 (2026-09-21).** 아래 본문은 목표 구조이고, 실제와 다른 부분은 ⚠️ 로 표시했다.
+> **⚠️ 현재 운영 상태 (2026-09-26).** 아래 본문은 목표 구조이고, 실제와 다른 부분은 ⚠️ 로 표시했다.
 >
-> - **`dev` 에 push 하면 EC2 로 자동 배포된다** (`.github/workflows/deploy.yml`). 개발 서버가 따로 없어서 `dev` push 가 곧 운영 도메인(`api.threadoffate.site`) 배포다. `main` 배포는 구성돼 있지 않다 (미정)
-> - **배포 파이프라인이 테스트를 돌리지 않는다.** Docker 이미지를 `bootJar -x test` 로 만든다. PR 용 CI 워크플로도 없다. 머지 전에 로컬에서 `./gradlew test` 를 직접 돌린다
+> - **`dev` push → 개발 서버(`api-dev.threadoffate.site`), `main` push → 운영(`api.threadoffate.site`).** 개발 서버는 2026-09-26 EC2 에 떠서 동작 확인했다. 자세한 건 아래 "CI/CD 매핑"
+> - **PR CI 는 있다** (`ci.yml`, `dev`·`main` 대상 PR 에서 `./gradlew build`). 다만 브랜치 보호가 없어 CI 가 빨간불이어도 머지는 막히지 않는다. 배포 이미지는 여전히 `bootJar -x test` 라 **배포 단계는 테스트를 안 돌린다** — CI 결과를 보고 머지한다
 > - **브랜치 보호 설정은 할 수 없다** (private 저장소 무료 플랜, handoff 현재 상태). PR 리뷰가 유일한 방어선이다
 
 ---
@@ -204,6 +204,10 @@ GitHub → Settings → Branches
 기존 운영 컨테이너는 계속 떠 있으니 서비스 중단은 아니지만, **핫픽스가 필요하면 이 공백 중엔 자동 배포가
 안 된다는 걸 팀이 알고 있어야 한다.** 이 변경을 머지하면 가급적 빨리 첫 `dev`→`main` PR을 만들어 파이프라인이
 실제로 동작하는지 확인할 것 — `docs/handoff.md`에도 남겨둠.
+
+**배포가 자동으로 안 하는 것** (둘 다 EC2 에서 손으로 한다, `docs/runbook-dev-server.md`):
+- **`.env` 는 어떤 배포도 만들거나 고치지 않는다.** 앱이 새 환경변수를 읽게 되면 ① 운영은 `docker-compose.prod.yml` 의 `app.environment` 에도 추가하고(운영은 `env_file` 을 안 써서 여기 없으면 컨테이너에 안 들어간다) ② EC2 의 `/opt/wks/.env`·`/opt/wks-dev/.env` 에 값을 넣는다. 개발은 `env_file: .env` 라 ②만 하면 된다
+- **nginx 가 읽는 `nginx/api-dev.conf.active` 는 배포가 갱신하지 않는다.** `api-dev.conf` 를 고치면 `main` 릴리즈 후 runbook 11단계로 반영한다
 
 **롤백을 실제로 한 번 해본다.** 문서로만 써두면 당일에 작동하지 않는다.
 
