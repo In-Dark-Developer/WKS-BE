@@ -56,7 +56,11 @@ class JwtProviderTest {
     void 위조된_토큰은_검증에_실패한다() {
         JwtProvider provider = provider(SECRET, 30);
         String token = provider.issue(42L);
-        String tampered = token.substring(0, token.length() - 1) + (token.endsWith("A") ? "B" : "A");
+        // 마지막 글자는 바꾸지 않는다 — 32바이트 서명의 base64url 끝 글자는 하위 2비트가 버려지는 자리라
+        // A↔B 처럼 그 비트만 다르면 같은 서명으로 디코딩돼 검증이 통과해버린다(가끔 실패하던 원인).
+        int sigStart = token.lastIndexOf('.') + 1;
+        char replaced = token.charAt(sigStart) == 'A' ? 'B' : 'A';
+        String tampered = token.substring(0, sigStart) + replaced + token.substring(sigStart + 1);
 
         assertThat(provider.verify(tampered)).isEmpty();
     }

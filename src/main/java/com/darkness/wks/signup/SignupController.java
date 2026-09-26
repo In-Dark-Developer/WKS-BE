@@ -7,6 +7,7 @@ import com.darkness.wks.signup.dto.PhotoUploadUrlRequest;
 import com.darkness.wks.signup.dto.PhotoUploadUrlResponse;
 import com.darkness.wks.signup.dto.ResendSignupRequest;
 import com.darkness.wks.signup.dto.ResendSignupResponse;
+import com.darkness.wks.signup.dto.SignupReapplyResponse;
 import com.darkness.wks.signup.dto.SignupResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -38,6 +39,7 @@ public class SignupController {
 
     private final SignupService signupService;
     private final PhotoUploadService photoUploadService;
+    private final SignupReapplyService reapplyService;
 
     @Value("${app.frontend.verify-redirect-url}")
     private String verifyRedirectUrl;
@@ -148,5 +150,31 @@ public class SignupController {
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(verifyRedirectUrl))
                 .build();
+    }
+
+    @Operation(summary = "재신청 폼 자동 채움", description = """
+            기존 사전신청자에게 보낸 재신청 초대 링크의 토큰으로 당시 입력값을 돌려준다. 로그인 불필요이고
+            토큰은 여기서 소비되지 않는다 — 소개팅 프로필 등록(POST /api/dating/profile)까지 유효하다.
+            사전신청 때 선택값이라 비어 있던 항목은 null 이므로 화면에서 받아야 한다.
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "만료·위조·이미 완료된 토큰",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "success": false,
+                                      "error": {
+                                        "code": "INVALID_TOKEN",
+                                        "message": "유효하지 않거나 만료된 토큰입니다."
+                                      }
+                                    }
+                                    """)))
+    })
+    @GetMapping("/reapply")
+    public ApiResponse<SignupReapplyResponse> reapply(
+            @Parameter(description = "재신청 초대 메일의 토큰") @RequestParam String token
+    ) {
+        return ApiResponse.success(reapplyService.prefill(token));
     }
 }

@@ -85,7 +85,8 @@ docker compose up -d                                       # PostgreSQL 16
 ## 작업 흐름
 
 이슈 → 브랜치(`dev` 에서 딴다, `feat/<이슈번호>-<설명>`) → PR(**base 는 `dev`**). 이슈 없는 브랜치는 만들지 않는다. 자세한 건 `docs/git-workflow.md`.
-현재 **`dev` 에 push 하면 테스트 없이 EC2 로 자동 배포된다** (`.github/workflows/deploy.yml`, PR 용 CI 는 없다). 머지 전에 로컬에서 `./gradlew test` 를 돌리고, 깨진 마이그레이션이나 시크릿을 dev 로 보내지 않는다.
+**`dev` push → 개발 서버(`deploy-dev.yml`), `main` push → 운영(`deploy.yml`)** 으로 자동 배포된다. 두 서버는 같은 EC2 의 nginx·postgres 를 나눠 쓴다. PR CI(`ci.yml`)는 있지만 배포 단계는 테스트를 안 돌리고 브랜치 보호도 없다 — CI 가 초록인지 보고 머지하고, 깨진 마이그레이션이나 시크릿을 보내지 않는다.
+앱이 새 환경변수를 읽게 되면 `docker-compose.prod.yml` 의 `app.environment` 에도 추가한다. 운영은 `env_file` 을 안 써서 빠뜨려도 앱은 뜨고 기능만 조용히 꺼진다. 서버 작업은 `docs/runbook-dev-server.md`.
 커밋 메시지는 한국어 `type: 내용`, 50자 이내. AI 가 쓴 문구를 그대로 쓰지 않는다. AI 가 만든 코드도 PR 리뷰를 거친다.
 
 ## Spring Boot 4 주의

@@ -28,6 +28,9 @@ class SignupControllerTest {
     @Mock
     private PhotoUploadService photoUploadService;
 
+    @Mock
+    private SignupReapplyService reapplyService;
+
     @InjectMocks
     private SignupController signupController;
 
@@ -62,6 +65,15 @@ class SignupControllerTest {
         ResendSignupResponse body = signupController.resend(request).data();
 
         assertThat(body).isEqualTo(response);
+    }
+
+    @Test
+    void returnsReapplyPrefill() {
+        var prefill = new com.darkness.wks.signup.dto.SignupReapplyResponse("dev@dgu.ac.kr", null,
+                "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개");
+        when(reapplyService.prefill("token")).thenReturn(prefill);
+
+        assertThat(signupController.reapply("token").data()).isEqualTo(prefill);
     }
 
     @Test

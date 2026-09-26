@@ -40,6 +40,6 @@ out/
 application-local.yml
 .env
 .env.prod
-.env
+.env.dev
 *.log
 .DS_Store

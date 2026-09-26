@@ -7,6 +7,7 @@ import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.ResultService;
 import com.darkness.wks.result.dto.ResultResponse;
 import com.darkness.wks.result.entity.Result;
+import com.darkness.wks.wallet.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,10 +23,12 @@ public class MeService {
 
     private final ResultRepository resultRepository;
     private final ResultService resultService;
+    private final WalletService walletService;
 
     public MeResponse getMe(Long memberId) {
         boolean hasResult = resultRepository.existsByMemberId(memberId);
-        return new MeResponse(memberId, hasResult, false, 0);
+        int threadBalance = walletService.getBalance(memberId);
+        return new MeResponse(memberId, hasResult, false, threadBalance);
     }
 
     public ResultResponse getMyResult(Long memberId) {

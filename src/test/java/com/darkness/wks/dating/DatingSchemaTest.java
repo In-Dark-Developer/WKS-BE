@@ -100,6 +100,12 @@ class DatingSchemaTest {
     DatingRequestRepository requestRepository;
 
     @Autowired
+    DatingUnlockChargeService unlockChargeService;
+
+    @Autowired
+    com.darkness.wks.wallet.WalletService walletService;
+
+    @Autowired
     WebApplicationContext webContext;
 
     @Autowired
@@ -198,6 +204,56 @@ class DatingSchemaTest {
                 SELECT reason_content FROM dating_recommendation
                 WHERE viewer_member_id = ? AND candidate_profile_id = ?
                 """, String.class, viewer.getMemberId(), candidateId)).isEqualTo("소개팅 이유");
+    }
+
+    /**
+     * getCurrent() 의 추천 선정에 기대지 않고 추천 행을 직접 만든다. 이 클래스의 다른 테스트는
+     * @Transactional 롤백 없이 프로필을 커밋하므로, verified 프로필을 만들면 이후 실행되는 다른
+     * 테스트의 top-3 후보 풀을 오염시켜 그 테스트의 recipient 가 top-3 밖으로 밀려날 수 있다
+     * (실제로 겪은 순서 의존 실패). 그래서 candidate 는 인증(markVerified) 하지 않는다 —
+     * chargeAndMarkUnlocked 는 candidate.isEligible() 을 보지 않으므로 이 테스트엔 영향 없다.
+     */
+    private UUID directRecommendation(DatingProfile viewer, Long candidateKakaoId, Gender candidateGender) {
+        Member candidateMember = memberRepository.saveAndFlush(new Member(candidateKakaoId));
+        Result candidateResult = new Result("테스트", LocalDate.of(2000, 1, 1), null, null,
+                candidateGender, "계해", "임술", "기유", null);
+        candidateResult.linkMember(candidateMember.getId());
+        resultRepository.saveAndFlush(candidateResult);
+        DatingPhoto photo = photoRepository.saveAndFlush(new DatingPhoto(candidateMember.getId(),
+                "dating-photos/" + candidateMember.getId() + "/" + UUID.randomUUID()));
+        DatingProfile candidate = profileRepository.saveAndFlush(new DatingProfile(candidateMember.getId(),
+                candidateKakaoId + "@dgu.ac.kr", "김후보", ContactMethod.INSTAGRAM, "test", "학과", "INFP",
+                "소개", photo));
+        // 일부러 markVerified() 하지 않는다 — 위 설명 참고
+
+        recommendationRepository.saveAndFlush(
+                new com.darkness.wks.dating.entity.DatingRecommendation(viewer.getMemberId(), candidate, 80));
+        return candidate.getId();
+    }
+
+    @Test
+    void unlockChargesOnceAndSecondCallIsFree() {
+        DatingProfile viewer = profile(960001L, Gender.MALE, "갑자", "을축", "병인");
+        UUID candidateId = directRecommendation(viewer, 960002L, Gender.FEMALE);
+        walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
+                viewer.getMemberId().toString(), 10);
+
+        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId, DatingUnlockField.NAME);
+        assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(3); // 10 - 7(NAME)
+
+        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId, DatingUnlockField.NAME);
+        assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(3); // 이미 해금 — 추가 차감 없음
+    }
+
+    @Test
+    void unlockWithInsufficientBalanceThrows402() {
+        DatingProfile viewer = profile(960003L, Gender.MALE, "갑자", "을축", "병인");
+        UUID candidateId = directRecommendation(viewer, 960004L, Gender.FEMALE);
+
+        assertThatThrownBy(() -> unlockChargeService.chargeAndMarkUnlocked(
+                viewer.getMemberId(), candidateId, DatingUnlockField.PHOTO))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_THREAD);
     }
 
     @Test
