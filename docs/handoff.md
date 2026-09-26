@@ -24,7 +24,7 @@
 | `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
 | Flyway 최신 버전 | V23 (`dev` 기준, 2026-09-27 로컬 확인). V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
-| 실(재화) | 🔧 **2026-09-26, 원장·자동지급 3종·소개팅 해금 API 구현 완료**(`feat/wallet`, PR 대기). 제휴처 보상(`PARTNER`)·리롤은 미구현 — 아래 2026-09-26 기록 |
+| 실(재화) | ✅ 원장·자동지급 3종·소개팅 해금 `dev` 머지 완료(#97). 🔧 2026-09-27 리롤 구현(TBD-6 종료, 미커밋). 🔧 2026-09-27 해금을 여러 필드 묶음 요청으로 변경(전체 해금 포함, 미커밋). 제휴처 보상(`PARTNER`)은 미구현 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -107,6 +107,7 @@
 | `INVALID_EMAIL_CODE` (400) | 곽도윤 (2026-09-26, 학교메일 코드 인증) | ✅ §1·§10.7 |
 | `EMAIL_CODE_RATE_LIMITED` (429) | 곽도윤 (2026-09-26, 코드 재발송 쿨다운·일일 한도) | ✅ §1·§10.7 |
 | `MAIL_UNAVAILABLE` (503) | 곽도윤 (2026-09-26, 코드 메일 발송 실패) | ✅ §1·§10.7 |
+| `DATING_NO_MORE_CANDIDATES` (409) | 곽도윤 (2026-09-27, 리롤할 새 후보 없음) | ✅ §1·§10.4.1 |
 
 ---
 
@@ -114,6 +115,10 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-27 | `GET /api/me` 의 `hasDatingProfile` 이 이제 실제 값이다(그동안 항상 `false`). 소개팅 프로필 등록(=학교메일 인증 완료 신청자)이면 `true`. 형식 변경 없음. `api-spec.md` §9 | ❌ |
+| 2026-09-27 | **[해금 요청·응답 형식 변경, 프론트 대응 필수]** `POST /api/dating/candidates/{candidateId}/unlock` 요청 `{"field":"PHOTO"}` → `{"fields":["PHOTO","NAME"]}`(하나만 열어도 배열), 응답 `field`·`value` → `values: {"PHOTO": "...", "NAME": "..."}` + `balance`. 네 개 전부 = 전체 해금(25, 이미 연 필드는 빠짐). 잔액 부족 402면 **아무 필드도 안 열린다.** `api-spec.md` §10.5 | ❌ |
+| 2026-09-27 | **[리롤 신규]** `POST /api/dating/recommendations/reroll` — 현재 카드 3장을 전부 새 후보로 교체. 하루(KST) 1회 무료, 이후 5실. 응답 `candidates`·`rerollCost`·`threadBalance`. 새 후보 없으면 409 `DATING_NO_MORE_CANDIDATES`(차감 없음), 잔액 부족 402. `GET /api/dating/recommendations` 에 `rerollCost` 필드 추가. **연타 방지는 프론트 몫.** `api-spec.md` §10.4·§10.4.1 | ❌ |
+| 2026-09-27 | **[재신청 흐름 변경, 프론트 대응 필수]** 재신청 초대 링크는 **학교메일 인증을 대신하지 않는다.** `/dating/reapply` 흐름: `GET /api/signups/reapply`(폼 채움·`resultId`) → `POST /api/auth/kakao` 에 `resultId`(결과 연결) → **코드 인증(§10.7)** → 사진 → `POST /api/dating/profile`. 즉 로그인 뒤는 일반 신청과 동일. `reapplyToken` 은 서버가 무시(폐기 예정, 안 보내도 됨). 응답의 `email` 은 사전신청 주소라 학교메일이 아닐 수 있음 — 학교 이메일 칸에 그대로 채우지 말 것. 카카오 로그인 왕복 동안 `resultId` 보관 필수. `api-spec.md` §5 | ❌ |
 | 2026-09-26 | `POST /api/results` 를 **`credentials: 'include'`** 로 호출하면, 로그인 상태이고 계정에 결과가 없을 때 새 결과가 계정에 연결된다(로그인 후 사주를 본 사람이 소개팅 등록에서 `RESULT_NOT_FOUND` 나던 문제). 요청·응답 형식 변경 없음, 비로그인 동작 그대로. `api-spec.md` §2 | ❌ |
 | 2026-09-26 | **[소개팅 학교메일 인증 방식 변경, 프론트 대응 필수]** 매직링크 → **프로필 등록 전 6자리 코드.** `POST /api/dating/email-codes`(인증 버튼 → 발송)·`POST /api/dating/email-codes/verify`(코드 입력) 신규. `POST /api/dating/profile` 은 코드 인증 안 한 이메일이면 `DATING_NOT_VERIFIED` 403 (요청 필드 변경 없음, 응답 `emailVerified` 는 항상 `true`). 에러코드 3개 추가(`INVALID_EMAIL_CODE` 400·`EMAIL_CODE_RATE_LIMITED` 429·`MAIL_UNAVAILABLE` 503). **`/dating/verify` 페이지는 만들 필요 없어짐.** 재신청(`reapplyToken`)은 그대로 인증 생략. `api-spec.md` §10 머리말·§10.7 | ❌ |
 | 2026-09-27 | #102 `GET /api/dating/requests` 목록에 `counterpart` 추가. 받은 목록은 발신자 이름·학과·원본 사진 임시 URL 무료 제공, 보낸 목록은 기존 해금 상태 유지. 연락처는 수락 후 공개 | ❌ |
@@ -168,6 +173,143 @@
 ---
 
 ## 기록
+
+### 2026-09-27 (일) · 곽도윤 · member/ `GET /api/me` 의 `hasDatingProfile` 연결 · Claude Code
+
+**한 일**
+- `MeService.getMe` 가 `hasDatingProfile` 을 `false` 고정으로 넘기던 것을 `DatingProfileRepository.existsByMemberId` 로 바꿨다.
+  소개팅이 구현된 뒤에도 남아 있어서, 신청한 사람도 프론트에서 미신청으로 보였다
+- 판정 기준은 **프로필 행 존재**(사용자 결정). V24 부터 프로필은 코드 인증 뒤에만 만들어져 사실상 "인증된 신청자"와 같고,
+  `POST /api/dating/profile` 이 `DATING_PROFILE_CONFLICT` 를 내는 조건·`GET /api/dating/profile` 이 200 을 주는 조건과 일치한다
+- `member → dating` 의존을 허용했다(사용자 결정). `dating → member` 가 이미 있어 순환이지만 존재 조회 한 곳뿐이라 감수
+
+**건드린 파일/패키지**
+- `member/` — `MeService`, `dto/MeResponse`(주석)
+- 테스트: `MeServiceTest` 신규(프로필 유무 2건)
+
+**다음 사람이 알아야 할 것**
+- 폐기 예정 V21 매직링크로 만든 미인증 프로필이 남아 있으면 그 사람도 `true` 다(재등록하면 어차피 CONFLICT)
+- `member → dating` 으로 더 넓히지 않는다. 필요하면 `architecture.md` §3 표부터 고친다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §9 (`hasDatingProfile`·`threadBalance` "고정" 문구 삭제), `architecture.md` §3 의존 표에 `member → dating` 추가
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 `hasDatingProfile` 항목
+
+### 2026-09-27 (일) · 곽도윤 · dating/ 해금 묶음 요청 (전체 해금 포함) · Claude Code
+
+**한 일**
+- 해금을 필드 하나씩이 아니라 **사용자가 고른 필드를 한 요청에 묶어** 받게 바꿨다(사용자 결정, 계약 변경 A안 — 기존 필드 교체).
+  요청 `fields: [...]`, 응답 `values: {필드명: 값}` + `balance`
+- plan.md §1.4 "전체 해금 25"는 10+7+5+3 합과 같아 **별도 API 없이 네 개 전부 보내는 것**으로 처리. 이미 연 필드는 비용에서 빠진다
+- 차감은 한 트랜잭션에서 필드마다 `debit`(바깥 트랜잭션에 합류). 중간에 402가 나면 앞서 차감한 필드까지 롤백 — 반쪽 해금 없음.
+  `ref_id` 는 기존과 같은 `추천행ID:필드` 라 UNIQUE 중복 방지·기존 해금 데이터 그대로 유효. **Flyway 추가 없음**
+- REASON LLM 호출은 여전히 차감 트랜잭션 밖. 실패하면 503이지만 묶음 전체의 차감·해금은 커밋된 뒤라 재요청 시 무료
+
+**건드린 파일/패키지**
+- `dating/` — `DatingUnlockController`, `DatingUnlockService`, `DatingUnlockChargeService`, `dto/DatingUnlockRequest`, `dto/DatingUnlockResponse`
+- 테스트: `DatingUnlockServiceTest`(묶음·중복 1건 추가), `DatingSchemaTest`(이미 연 필드 제외 차감·전체 해금, 중간 잔액 부족 시 전부 롤백 2건 추가)
+
+**다음 사람이 알아야 할 것**
+- 응답 `values` 키 순서는 enum 순서(PHOTO·NAME·DEPARTMENT·REASON)다. 요청 순서가 아니다
+- 중복 필드는 `EnumSet` 으로 한 번으로 친다
+
+**막힌 것 / 넘기는 것**
+- `dating/` 담당이 아직 미정 — 이번 변경도 리뷰 필요
+
+**문서 변경**
+- `api-spec.md` §10.5·§12, `plan.md` §8.5, `backend-requirements.md` FR-DT-06
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 해금 항목. 단건 `field` 로 붙였다면 400 이 난다
+
+### 2026-09-27 (일) · 곽도윤 · dating/·wallet/ 소개팅 후보 리롤 (TBD-6 종료) · Claude Code
+
+**한 일**
+- TBD-6 사용자 결정: **KST 날짜 기준 하루 1회 무료, 이후 회당 5실 / 현재 카드 3장 전부 교체(해금·요청 중인 카드 포함) /
+  새 후보가 한 명도 없으면 차감 없이 거부**. 새 후보가 1~2명이면 그 수만큼만 교체하고 비용은 같다
+- `POST /api/dating/recommendations/reroll` 추가. 응답 `candidates`·`rerollCost`(다음 리롤 비용)·`threadBalance`
+- `GET /api/dating/recommendations` 응답에 `rerollCost` 추가(필드 추가만) — 버튼에 "무료"/"5실" 표시용
+- 원장: `reason = REROLL`, `ref_id = KST날짜#회차`(예 `2026-09-29#2`). **무료분도 `amount = 0` 행으로 남겨** 오늘 몇 번째인지
+  센다 — 별도 카운터 테이블이 필요 없어 **Flyway 추가 없음**
+- 선정·차감·카드 교체가 한 트랜잭션. 402(잔액 부족)·409(후보 없음)면 카드도 원장도 그대로
+- `DatingRecommendationService` 의 후보 선정 로직을 `getCurrent`·`reroll` 이 같이 쓰도록 메서드로 뽑았다(동작 변경 없음)
+
+**건드린 파일/패키지**
+- `dating/` — `DatingRecommendationService`, `DatingController`(엔드포인트·Swagger), `dto/DatingRecommendationResponse`(`rerollCost`),
+  신규 `dto/DatingRerollResponse`
+- `wallet/` — `WalletService.countEntries`, `ThreadLedgerRepository`(접두어 카운트), `LedgerReason`(주석)
+- `common/exception/ErrorCode` — `DATING_NO_MORE_CANDIDATES`(409) 추가
+- 테스트: `DatingSchemaTest` 3건(무료→유료·중복 없음·401, 잔액 부족 시 카드 유지, 후보 소진 시 차감 없이 409).
+  `./gradlew test` 전체 254건 통과
+
+**다음 사람이 알아야 할 것**
+- **연타를 서버가 막지 않는다.** 두 번 누르면 두 번 리롤되고 두 번째는 유료다(회차가 달라 UNIQUE 에 안 걸린다).
+  프론트가 요청 중 버튼을 막아야 한다
+- 리롤로 내린 카드의 후보는 다시 추천되지 않는다(plan §7.3). 해금에 쓴 실은 돌려주지 않는다 — 사용자 결정("전부 교체")
+- 후보 풀이 작아 몇 번 리롤하면 409 가 난다. 축제 초반엔 흔할 수 있다
+- 리롤 회차 잠금은 기존 `getCurrent` 와 같은 `member` 행 비관적 잠금을 쓴다(원장 advisory lock 은 그 안에서 한 번 더)
+
+**막힌 것 / 넘기는 것**
+- `ErrorCode.java` 변경 **팀 채널 공지 필요**
+- 전체 해금(25) 일괄 API 는 여전히 없다(프론트가 4번 호출) — 별도 결정 필요
+
+**문서 변경**
+- `docs/plan.md` — §1.4 리롤 비용 표, §8.4 설명, §9.4 `ref_id` 규칙, TBD-6 삭제·종료 메모
+- `docs/api-spec.md` — §1 에러표, §10.4 `rerollCost`, 신설 §10.4.1 리롤, §12 소모 표
+- `docs/architecture.md` — §5 `ref_id` 규칙(UNLOCK·REROLL)
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 리롤 줄
+
+---
+
+### 2026-09-27 (일) · 곽도윤 · signup/·dating/ 재신청 초대를 "결과 연결용"으로 변경 (인증 생략 제거) · Claude Code
+
+**한 일**
+- 사용자 정정: 사전신청은 이메일 인증 없이 받았고 gmail 등으로 신청한 사람이 많다. 그래서 **재신청 초대 링크는
+  학교메일 소유를 증명하지 못한다.** 초대의 목적은 "사전신청 때 만든 사주 결과를 카카오 계정에 잇는 것"이고,
+  학교메일 인증·사진·신청은 로그인 뒤 일반 신청과 똑같이 한다. 2026-09-26 구현(초대 = 인증 생략)을 이에 맞게 고쳤다
+- 캠페인 대상: `@dgu.ac.kr` 필터 제거 → **사주 결과가 있고 아직 어느 계정에도 연결되지 않은** 사전신청자 전원
+  (+ 아직 유효한 초대가 없는 사람). `REAPPLY_CAMPAIGN_EMAIL_DOMAIN` 설정 삭제
+- "완료" 판정: 프로필 등록 때 토큰 소비 → **카카오 로그인으로 `result.member_id` 가 채워지면 완료**(대상 쿼리에서 빠짐).
+  토큰은 더 이상 소비하지 않고 만료로만 끝난다
+- `POST /api/dating/profile`: `reapplyToken` 분기(초대 이메일 일치 검사·인증 생략·토큰 소비) 제거 → 모두 코드 인증 필수.
+  `reapplyToken` 필드는 계약 삭제라 **남겨 두고 무시**(Swagger deprecated)
+- `dating → signup` 의존 제거(`DatingProfileService` 가 `SignupReapplyService` 를 안 씀). 초대 메일 문구 변경
+
+**건드린 파일/패키지**
+- `signup/` — `SignupRepository`(대상 쿼리), `SignupReapplyService`(도메인 필터·`invitedEmail`·`consumeInvite` 제거, 메일 문구),
+  `entity/SignupReapplyInvite`(`markUsed` 제거)
+- `dating/` — `DatingProfileService`, `DatingController`(Swagger), `dto/DatingProfileRequest`(`reapplyToken` deprecated)
+- `application.yml` — `app.signup.reapply-campaign.email-domain` 삭제
+- 테스트: `SignupReapplyServiceTest`·`SignupReapplyFlowTest`(도메인 무관 대상, 로그인 → 결과 연결 → 대상 제외,
+  초대 회원도 코드 인증 없으면 403)·`DatingProfileServiceTest` 갱신. `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- 대상이 **사전신청자 전원(결과 있는 사람)** 으로 늘었다. 발송 전 `dry-run` 으로 수를 꼭 보고, Gmail 하루 약 500통 한도를 넘으면
+  나눠 보낸다(실패분·만료분은 재실행 때 다시 대상이 된다)
+- 이미 결과가 있는 계정으로 로그인하면 계정 결과가 우선이라 사전신청 결과는 연결되지 않는다 → 그 사전신청은 계속 "미연결"로
+  남아 48시간 뒤 재실행하면 초대를 또 받는다. 축제 기간 한두 번 돌리는 용도라 감수했다
+- `signup_reapply_invite.used_at` 은 이제 안 쓴다(예전 방식 흔적). 개발 DB 에 기존 행이 있어도 무해하다
+
+**막힌 것 / 넘기는 것**
+- `application.yml` 변경 팀 채널 공지 필요
+- `reapplyToken` 필드 삭제 여부 팀 확인
+
+**문서 변경**
+- `docs/plan.md` — TBD-16 아래 "재신청 초대 변경" 결정 추가(이전 "초대 = 소유 증명" 문구 폐기 명시)
+- `docs/api-spec.md` — §5 `GET /api/signups/reapply`(목적·대상·흐름·`email` 주의), §10.2 `reapplyToken` 폐기 예정, §10.6 문구
+- `docs/architecture.md` — §3 `dating → signup` 금지로 되돌림, §4 매직링크 표·설명, §5 스키마 주석
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 첫 줄
+
+---
 
 ### 2026-09-27 (일) · 최선우 · dating/ 요청 목록 상대 프로필 (#102) · Codex
 

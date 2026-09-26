@@ -20,11 +20,11 @@ public record DatingProfileRequest(
         @NotBlank @Pattern(regexp = "^[EI][SN][TF][JP]$") String mbti,
         @NotBlank @Size(max = 500) String bio,
         @NotNull UUID photoId,
+        // 2026-09-27 부터 쓰지 않는다. 재신청 초대가 학교메일 인증을 대신하지 않게 바뀌어서 서버가 무시한다.
+        // 프론트 계약의 필드 삭제라 팀 확인 전까지는 받기만 한다(AGENTS.md)
         @Size(max = 64)
-        @Schema(description = """
-                기존 사전신청자 재신청 초대 토큰(선택). 값이 있으면 초대받은 이메일과 email 이 같아야 하고,
-                학교메일 인증을 이미 끝난 것으로 처리한다 — 별도 인증 메일을 보내지 않는다.
-                일반 신청에서는 넣지 않는다.
+        @Schema(deprecated = true, description = """
+                폐기 예정 — 서버가 무시한다. 재신청 사전신청자도 학교메일 코드 인증(POST /api/dating/email-codes)을 거친다.
                 """) String reapplyToken
 ) {
 }

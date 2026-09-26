@@ -30,6 +30,15 @@ public class WalletService {
     }
 
     /**
+     * 같은 사유로 {@code ref_id} 가 접두어로 시작하는 원장 행 수. 리롤처럼 하루에 여러 번 일어나는
+     * 사유의 "오늘 몇 번째인가"를 세는 데 쓴다 — 무료분도 {@code amount = 0} 행으로 남기므로 센다.
+     */
+    @Transactional(readOnly = true)
+    public int countEntries(Long memberId, LedgerReason reason, String refIdPrefix) {
+        return (int) ledgerRepository.countByMemberIdAndReasonAndRefIdStartingWith(memberId, reason, refIdPrefix);
+    }
+
+    /**
      * 실을 지급한다. {@code ref_id} 가 이미 쓰였으면(같은 사유로 이미 지급됨) 아무 일도 하지 않는다 —
      * 호출부가 매번 조건 없이 불러도 안전하다(가입 보너스·출석·친구 등록 전부 이 방식).
      *

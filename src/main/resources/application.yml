@@ -22,6 +22,10 @@ spring:
           writetimeout: 5000
 
 server:
+  # nginx 가 HTTPS 를 끊고 앱에는 http 로 넘기므로, X-Forwarded-Proto 를 안 믿으면 앱이 자기 주소를 http:// 로 안다
+  # (Swagger 서버 URL 이 http 로 나와 "Try it out" 이 막혔다). native = Tomcat RemoteIpValve 라 사설망(도커 네트워크)
+  # 프록시가 보낸 헤더만 믿는다 — 외부에서 8080 으로 직접 온 요청의 위조 헤더는 무시된다
+  forward-headers-strategy: native
   error:
     whitelabel:
       enabled: false
@@ -67,7 +71,6 @@ app:
     # 기존 사전신청자 재신청 초대. 축제 전에 한 번 쓰고 버리는 값들이다
     reapply-invite-ttl-hours: ${REAPPLY_INVITE_TTL_HOURS:48}
     reapply-campaign:
-      email-domain: ${REAPPLY_CAMPAIGN_EMAIL_DOMAIN:dgu.ac.kr}
       # off | dry-run(대상 수만 로그) | send(실제 발송). 켠 채로 두면 재기동마다 돈다 — 쓰고 나면 off 로 되돌린다
       mode: ${REAPPLY_CAMPAIGN_MODE:off}
   dating:

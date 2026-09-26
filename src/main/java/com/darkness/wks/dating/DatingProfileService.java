@@ -11,7 +11,6 @@ import com.darkness.wks.dating.entity.DatingEmailVerification;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
 import com.darkness.wks.result.ResultRepository;
-import com.darkness.wks.signup.SignupReapplyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -38,20 +37,18 @@ public class DatingProfileService {
     private final DatingPhotoService photoService;
     private final DatingEmailVerificationService emailVerificationService;
     private final DatingEmailCodeService emailCodeService;
-    private final SignupReapplyService reapplyService;
 
     @Value("${app.signup.allowed-email-domains:}")
     private String allowedDomainsRaw;
 
     public DatingProfileService(DatingProfileRepository profileRepository, ResultRepository resultRepository,
                                 DatingPhotoService photoService, DatingEmailVerificationService emailVerificationService,
-                                DatingEmailCodeService emailCodeService, SignupReapplyService reapplyService) {
+                                DatingEmailCodeService emailCodeService) {
         this.profileRepository = profileRepository;
         this.resultRepository = resultRepository;
         this.photoService = photoService;
         this.emailVerificationService = emailVerificationService;
         this.emailCodeService = emailCodeService;
-        this.reapplyService = reapplyService;
     }
 
     @Transactional
@@ -63,9 +60,9 @@ public class DatingProfileService {
         if (!resultRepository.existsByMemberId(memberId)) {
             throw new BusinessException(ErrorCode.RESULT_NOT_FOUND);
         }
-        boolean invited = hasUsableReapplyInvite(request);
-        if (!invited && !emailCodeService.isVerified(memberId, normalize(request.email()))) {
-            // 학교메일 인증은 등록 전에 코드로 끝낸다(V24). 인증 안 된 프로필은 더 이상 만들지 않는다
+        // 학교메일 인증은 등록 전에 코드로 끝낸다(V24). 재신청 초대로 온 사전신청자도 예외 없다 —
+        // 사전신청 이메일은 학교메일이 아니거나 인증된 적이 없다. 인증 안 된 프로필은 만들지 않는다
+        if (!emailCodeService.isVerified(memberId, normalize(request.email()))) {
             throw new BusinessException(ErrorCode.DATING_NOT_VERIFIED);
         }
         DatingPhoto photo = photoService.verifyOwnedPhoto(memberId, request.photoId());
@@ -80,11 +77,6 @@ public class DatingProfileService {
             throw new BusinessException(ErrorCode.DATING_PROFILE_CONFLICT);
         }
         saved.markVerified(Instant.now());
-        if (invited) {
-            // 초대 메일을 받은 사람만 이 토큰을 가질 수 있으므로 학교메일 소유는 이미 증명됐다.
-            // 등록이 롤백되면 초대도 같이 살아난다(같은 트랜잭션)
-            reapplyService.consumeInvite(request.reapplyToken());
-        }
         return DatingProfileResponse.from(saved);
     }
 
@@ -124,18 +116,6 @@ public class DatingProfileService {
     public void verifyEmail(String token) {
         DatingEmailVerification verification = emailVerificationService.verify(token);
         verification.getProfile().markVerified(Instant.now());
-    }
-
-    private boolean hasUsableReapplyInvite(DatingProfileRequest request) {
-        String token = request.reapplyToken();
-        if (token == null || token.isBlank()) {
-            return false;
-        }
-        if (!reapplyService.invitedEmail(token).equals(normalize(request.email()))) {
-            // 초대는 그 주소의 소유 증명일 뿐이다 — 다른 주소의 인증으로 넘겨 쓸 수 없다
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        return true;
     }
 
     public DatingProfileResponse getMine(Long memberId) {

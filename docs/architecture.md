@@ -145,9 +145,10 @@ auth    →  result       허용 (로그인 시 결과 연결·복원)
 member  →  result       허용 (내 결과 조회, `GET /api/me/result`)
 result  →  member       금지 (`Result` 는 `Long memberId` 컬럼만 가진다. 엔티티·패키지 참조 없음)
 member  →  auth         금지
+member  →  dating       허용 (`GET /api/me` 의 `hasDatingProfile` 존재 조회만. `dating → member` 와 순환이지만 조회 한 곳이라 감수, 2026-09-27)
 dating  →  result·compatibility·member·wallet   허용
-dating  →  signup    허용 (2026-09-26, 재신청 초대 토큰 검증·소비만. 축제 뒤 캠페인과 함께 지운다)
-signup  →  dating    금지 (뒤집으면 순환이다. 캠페인 대상 조회도 signup 쪽 테이블만 본다)
+dating  →  signup    금지 (2026-09-26 에 초대 토큰 검증용으로 열었다가 2026-09-27 초대가 학교메일 인증을 대신하지 않게 바뀌며 다시 닫았다)
+signup  →  dating    금지 (캠페인 대상 조회도 signup·result 쪽만 본다)
 compatibility  →  wallet   허용 (친구 궁합 등록 시 공유자에게 실 +3)
 wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 ```
@@ -195,11 +196,13 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 |---|---|---|---|---|
 | 사전등록 이메일 인증 (파일럿) | `email_verification` | 30분 | 클릭 | `signup.verified_at` |
 | ~~소개팅 학교메일 재학 인증 (V21)~~ **폐기 예정** — 새 발급 없음, V24 코드 인증이 대체 | `dating_email_verification` | 30분 | 클릭 | `dating_profile.verified_at` |
-| 기존 사전신청자 재신청 초대 (V22, 1회성) | `signup_reapply_invite` | 48시간 | **프로필 등록 완료 시** | `dating_profile.verified_at` (즉시 인증) |
+| 기존 사전신청자 재신청 초대 (V22, 1회성) | `signup_reapply_invite` | 48시간 | **소비 안 함** (만료로만 끝남) | 없음 — 카카오 로그인 때 `result.member_id` 가 채워지면 완료 |
 
-재신청 초대만 클릭 시점에 소비되지 않는다. 링크를 누른 뒤 카카오 로그인·사진 업로드를 거쳐야 하므로 그 흐름이
-끝날 때까지 살아 있어야 한다. 초대 메일을 받은 사람만 그 토큰을 가질 수 있으므로 완료 시점에 학교메일 인증을
-이미 끝난 것으로 본다(인증 메일을 한 번 더 보내지 않는다).
+**재신청 초대는 인증이 아니라 "사주 결과 → 계정 연결" 링크다 (2026-09-27 변경).** 사전신청은 로그인·이메일 인증 없이
+받았고 이메일도 gmail 등이 많아서, 초대 메일을 받았다는 사실이 학교메일 소유를 증명하지 못한다. 그래서 초대는
+① 사전신청 입력값 + `resultId` 를 돌려주고(`GET /api/signups/reapply`) ② 프론트가 그 `resultId` 를 카카오 로그인에
+실어 결과를 계정에 잇는 데만 쓴다. 학교메일 인증·사진·프로필 등록은 일반 신청과 똑같다(코드 인증).
+캠페인 대상은 **결과가 있고 아직 계정에 연결되지 않은** 사전신청자라, 로그인까지 마친 사람은 재실행해도 다시 받지 않는다.
 
 ### 소개팅 학교메일 6자리 코드 (V24, 2026-09-26)
 
@@ -375,7 +378,7 @@ CREATE TABLE dating_email_code (
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
--- 기존 사전신청자 재신청 초대 (V22). TTL 48시간이고, 클릭이 아니라 프로필 등록이 끝날 때 소비된다.
+-- 기존 사전신청자 재신청 초대 (V22). TTL 48시간, 소비하지 않는다(used_at 은 2026-09-27 이전 방식의 흔적).
 -- 축제(2026-10-01) 뒤에는 이 테이블과 signup/ 재신청 코드를 통째로 버려도 된다
 CREATE TABLE signup_reapply_invite (
     token           VARCHAR(64)  PRIMARY KEY,
@@ -398,7 +401,7 @@ CREATE TABLE signup_reapply_invite (
 - **`name`·`phone` 컬럼은 없다. 추가하지 마라**
 - **`member` 에 프로필 컬럼(닉네임·이메일·이름·프로필 사진)을 추가하지 마라.** 로그인 식별자는 `kakao_id` 하나다
 - **한 계정에 결과를 둘 이상 연결하지 마라.** `result.member_id` 는 계정당 1개(부분 unique)다. 병합은 V2 (plan §1.1)
-- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = compatibility id, `PARTNER` = 제휴 코드. `UNLOCK`·`REQUEST`·`REROLL` 은 소개팅 명세 확정 시 정한다
+- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = compatibility id, `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
 
 ---
 

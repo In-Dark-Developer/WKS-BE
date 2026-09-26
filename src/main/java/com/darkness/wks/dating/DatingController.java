@@ -12,6 +12,7 @@ import com.darkness.wks.dating.dto.DatingPhotoUploadResponse;
 import com.darkness.wks.dating.dto.DatingProfileRequest;
 import com.darkness.wks.dating.dto.DatingProfileResponse;
 import com.darkness.wks.dating.dto.DatingRecommendationResponse;
+import com.darkness.wks.dating.dto.DatingRerollResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -130,7 +131,7 @@ public class DatingController {
             사진이어야 한다. email은 **이 계정으로 코드 인증을 마친 학교 이메일**이어야 한다(아니면
             DATING_NOT_VERIFIED) — 그래서 등록된 프로필은 항상 emailVerified가 true다.
             프로필 수정·사진 교체 API는 V1에 없다.
-            reapplyToken(선택)은 기존 사전신청자 재신청 전용 — 넣으면 코드 인증 없이 인증 완료 처리된다.
+            재신청 초대로 들어온 사전신청자도 똑같이 코드 인증을 거친다. reapplyToken 은 폐기 예정이라 무시한다.
             """,
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "photoId는 사진 업로드 URL 발급 응답에서 받은 실제 값으로 교체",
@@ -142,8 +143,7 @@ public class DatingController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "등록 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = """
-                    INVALID_EMAIL_DOMAIN — 학교 메일 아님 / INVALID_INPUT — 입력값·전화번호 형식 오류, \
-                    재신청 초대와 다른 이메일 / INVALID_TOKEN — 만료·위조·이미 쓴 reapplyToken""",
+                    INVALID_EMAIL_DOMAIN — 학교 메일 아님 / INVALID_INPUT — 입력값·전화번호 형식 오류""",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHENTICATED — 로그인 쿠키 없음·만료·위조",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -222,5 +222,28 @@ public class DatingController {
     @GetMapping("/recommendations")
     public ApiResponse<DatingRecommendationResponse> recommendations(@CurrentMember Long memberId) {
         return ApiResponse.success(recommendationService.getCurrent(memberId));
+    }
+
+    @Operation(summary = "후보 리롤", description = """
+            현재 카드를 전부 내리고 한 번도 안 나온 후보로 최대 3명을 새로 뽑는다. 해금·요청 중인 카드도
+            내려간다(보낸 요청은 요청 목록에서 계속 보인다). KST 날짜 기준 하루 1회 무료, 이후 회당 5실.
+            새 후보가 한 명도 없으면 차감 없이 409. 새 후보가 1~2명이면 그 수만큼만 오고 비용은 같다.
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "리롤 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHENTICATED — 로그인 쿠키 없음·만료·위조",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description = "INSUFFICIENT_THREAD — 무료분을 다 썼고 잔액이 5실 미만. 카드는 그대로",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "DATING_NOT_VERIFIED — 학교 이메일 인증 전",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "DATING_PROFILE_NOT_FOUND — 내 프로필 없음 / RESULT_NOT_FOUND — 계정에 연결된 사주 결과 없음",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DATING_NO_MORE_CANDIDATES — 새로 추천할 후보가 없음. 차감·카드 변경 없음",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping("/recommendations/reroll")
+    public ApiResponse<DatingRerollResponse> reroll(@CurrentMember Long memberId) {
+        return ApiResponse.success(recommendationService.reroll(memberId));
     }
 }

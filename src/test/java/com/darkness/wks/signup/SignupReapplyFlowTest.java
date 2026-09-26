@@ -2,19 +2,15 @@ package com.darkness.wks.signup;
 
 import com.darkness.wks.common.ContactMethod;
 import com.darkness.wks.common.Gender;
-import com.darkness.wks.common.exception.BusinessException;
-import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.common.auth.JwtProvider;
 import com.darkness.wks.dating.DatingEmailVerificationService;
 import com.darkness.wks.dating.DatingPhotoRepository;
 import com.darkness.wks.dating.DatingPhotoService;
 import com.darkness.wks.dating.DatingProfileRepository;
-import com.darkness.wks.dating.DatingProfileService;
-import com.darkness.wks.dating.dto.DatingProfileRequest;
-import com.darkness.wks.dating.dto.DatingProfileResponse;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
 import com.darkness.wks.member.MemberRepository;
+import com.darkness.wks.member.MemberService;
 import com.darkness.wks.member.entity.Member;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
@@ -100,7 +96,7 @@ class SignupReapplyFlowTest {
     DatingProfileRepository profileRepository;
 
     @Autowired
-    DatingProfileService profileService;
+    MemberService memberService;
 
     @Autowired
     DatingEmailVerificationService datingVerificationService;
@@ -139,91 +135,42 @@ class SignupReapplyFlowTest {
     }
 
     @Test
-    void targetsOnlyCoverSignupsWithResultAndWithoutLiveInvite() {
-        Signup eligible = signup("eligible-" + UUID.randomUUID() + "@dgu.ac.kr", result(null));
-        Signup noResult = signup("no-result-" + UUID.randomUUID() + "@dgu.ac.kr", null);
-        Signup otherDomain = signup("other-" + UUID.randomUUID() + "@gmail.com", result(null));
-        Signup alreadyInvited = signup("invited-" + UUID.randomUUID() + "@dgu.ac.kr", result(null));
+    void targetsCoverUnlinkedResultsOfAnyDomainWithoutLiveInvite() {
+        Signup schoolMail = signup("school-" + UUID.randomUUID() + "@dgu.ac.kr", result(null));
+        Signup gmail = signup("gmail-" + UUID.randomUUID() + "@gmail.com", result(null));
+        Signup noResult = signup("no-result-" + UUID.randomUUID() + "@gmail.com", null);
+        Signup alreadyInvited = signup("invited-" + UUID.randomUUID() + "@gmail.com", result(null));
         inviteRepository.saveAndFlush(new SignupReapplyInvite(UUID.randomUUID().toString(), alreadyInvited,
                 Instant.now().plusSeconds(3600)));
-        Signup alreadyDone = signup("done-" + UUID.randomUUID() + "@dgu.ac.kr", result(null));
-        SignupReapplyInvite usedInvite = new SignupReapplyInvite(UUID.randomUUID().toString(), alreadyDone,
-                Instant.now().plusSeconds(3600));
-        usedInvite.markUsed(Instant.now());
-        inviteRepository.saveAndFlush(usedInvite);
-        Signup expiredInvite = signup("expired-" + UUID.randomUUID() + "@dgu.ac.kr", result(null));
+        // 결과가 이미 계정에 연결됐으면 초대의 목적을 이룬 것이다
+        Member owner = memberRepository.saveAndFlush(new Member(770010L));
+        Signup alreadyLinked = signup("linked-" + UUID.randomUUID() + "@gmail.com", result(owner.getId()));
+        Signup expiredInvite = signup("expired-" + UUID.randomUUID() + "@gmail.com", result(null));
         inviteRepository.saveAndFlush(new SignupReapplyInvite(UUID.randomUUID().toString(), expiredInvite,
                 Instant.now().minusSeconds(1)));
 
         var targetIds = reapplyService.findTargets().stream()
                 .map(SignupReapplyService.ReapplyTarget::signupId).toList();
 
-        assertThat(targetIds).contains(eligible.getId(), expiredInvite.getId());
-        assertThat(targetIds).doesNotContain(noResult.getId(), otherDomain.getId(),
-                alreadyInvited.getId(), alreadyDone.getId());
+        assertThat(targetIds).contains(schoolMail.getId(), gmail.getId(), expiredInvite.getId());
+        assertThat(targetIds).doesNotContain(noResult.getId(), alreadyInvited.getId(), alreadyLinked.getId());
     }
 
+    /** 초대 링크 → 폼 자동 채움의 resultId 로 카카오 로그인하면 사전신청 결과가 계정에 붙고 캠페인 대상에서 빠진다 */
     @Test
-    void invitedReapplyCreatesVerifiedProfileWithoutVerificationMail() {
-        Member member = memberRepository.saveAndFlush(new Member(770001L));
-        String email = "reapply-" + UUID.randomUUID() + "@dgu.ac.kr";
-        Signup signup = signup(email, result(member.getId()));
+    void kakaoLoginWithInvitedResultIdLinksPreSignupResult() {
+        Result result = result(null);
+        Signup signup = signup("prelink-" + UUID.randomUUID() + "@gmail.com", result);
         SignupReapplyInvite invite = reapplyService.issueInvite(signup.getId());
-        DatingPhoto photo = photoRepository.saveAndFlush(
-                new DatingPhoto(member.getId(), "dating-photos/" + member.getId() + "/" + UUID.randomUUID()));
-        when(photoService.verifyOwnedPhoto(member.getId(), photo.getId())).thenReturn(photo);
 
-        DatingProfileResponse response = profileService.create(member.getId(),
-                request(email, photo.getId(), invite.getToken()));
+        UUID resultId = reapplyService.prefill(invite.getToken()).resultId();
+        MemberService.LoginResult login = memberService.loginAndLink(770011L, resultId.toString());
 
-        assertThat(response.emailVerified()).isTrue();
-        assertThat(profileRepository.findByMemberId(member.getId()).orElseThrow().isEligible()).isTrue();
-        assertThat(inviteRepository.findById(invite.getToken()).orElseThrow().getUsedAt()).isNotNull();
-        verifyNoInteractions(mailSender);
-    }
-
-    /**
-     * 초대는 그 이메일에 묶여 있어서, 재사용 시도는 토큰 검사(INVALID_TOKEN)보다 이메일 중복 검사에
-     * 먼저 걸린다 — 어느 쪽이든 두 번째 계정은 등록되지 않는다.
-     */
-    @Test
-    void usedInviteCannotBeReplayedByAnotherAccount() {
-        Member first = memberRepository.saveAndFlush(new Member(770002L));
-        String email = "replay-" + UUID.randomUUID() + "@dgu.ac.kr";
-        Signup signup = signup(email, result(first.getId()));
-        SignupReapplyInvite invite = reapplyService.issueInvite(signup.getId());
-        DatingPhoto firstPhoto = photoRepository.saveAndFlush(
-                new DatingPhoto(first.getId(), "dating-photos/" + first.getId() + "/" + UUID.randomUUID()));
-        when(photoService.verifyOwnedPhoto(any(), any())).thenReturn(firstPhoto);
-        profileService.create(first.getId(), request(email, firstPhoto.getId(), invite.getToken()));
-
-        Member second = memberRepository.saveAndFlush(new Member(770003L));
-        result(second.getId());
-
-        assertThatThrownBy(() -> profileService.create(second.getId(),
-                request(email, firstPhoto.getId(), invite.getToken())))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DATING_PROFILE_CONFLICT));
-        assertThat(profileRepository.findByMemberId(second.getId())).isEmpty();
-    }
-
-    @Test
-    void forgedInviteTokenIsRejected() {
-        Member member = memberRepository.saveAndFlush(new Member(770004L));
-        result(member.getId());
-        DatingPhoto photo = photoRepository.saveAndFlush(
-                new DatingPhoto(member.getId(), "dating-photos/" + member.getId() + "/" + UUID.randomUUID()));
-
-        assertThatThrownBy(() -> profileService.create(member.getId(),
-                request("forged-" + UUID.randomUUID() + "@dgu.ac.kr", photo.getId(), "not-a-real-token")))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN));
-        assertThat(profileRepository.findByMemberId(member.getId())).isEmpty();
-    }
-
-    private DatingProfileRequest request(String email, UUID photoId, String reapplyToken) {
-        return new DatingProfileRequest(email, "김동국", ContactMethod.INSTAGRAM, "my_ig",
-                "컴퓨터공학과", "INFP", "자기소개", photoId, reapplyToken);
+        assertThat(resultRepository.findById(resultId).orElseThrow().getMemberId())
+                .isEqualTo(login.member().getId());
+        assertThat(reapplyService.findTargets())
+                .extracting(SignupReapplyService.ReapplyTarget::signupId)
+                .doesNotContain(signup.getId());
     }
 
     @Test
@@ -244,11 +191,15 @@ class SignupReapplyFlowTest {
     }
 
     /** 초대 흐름 전체를 HTTP 로 한 번 더 — 로그인 쿠키까지 실어서 프론트가 부를 그대로 확인한다 */
+    /**
+     * 초대는 학교메일 인증이 아니다 — 사전신청 이메일은 gmail 등이고 인증된 적이 없다. 초대로 결과를 연결한
+     * 회원도 학교메일 코드 인증 없이는 등록되지 않는다(예전 reapplyToken 을 실어 보내도 무시된다).
+     */
     @Test
-    void invitedProfileIsCreatedVerifiedOverHttp() throws Exception {
+    void invitedMemberStillNeedsSchoolEmailCodeToRegister() throws Exception {
         Member member = memberRepository.saveAndFlush(new Member(780001L));
-        String email = "http-invite-" + UUID.randomUUID() + "@dgu.ac.kr";
-        SignupReapplyInvite invite = reapplyService.issueInvite(signup(email, result(member.getId())).getId());
+        SignupReapplyInvite invite = reapplyService.issueInvite(
+                signup("http-invite-" + UUID.randomUUID() + "@gmail.com", result(member.getId())).getId());
         DatingPhoto photo = photoRepository.saveAndFlush(
                 new DatingPhoto(member.getId(), "dating-photos/" + member.getId() + "/" + UUID.randomUUID()));
         when(photoService.verifyOwnedPhoto(any(), any())).thenReturn(photo);
@@ -260,14 +211,15 @@ class SignupReapplyFlowTest {
                                 {"email":"%s","name":"김동국","contactMethod":"INSTAGRAM","contactValue":"my_ig",
                                  "department":"컴퓨터공학과","mbti":"INFP","bio":"자기소개","photoId":"%s",
                                  "reapplyToken":"%s"}
-                                """.formatted(email, photo.getId(), invite.getToken())))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.emailVerified").value(true));
+                                """.formatted("school-" + UUID.randomUUID() + "@dgu.ac.kr", photo.getId(),
+                                invite.getToken())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("DATING_NOT_VERIFIED"));
 
+        assertThat(profileRepository.findByMemberId(member.getId())).isEmpty();
         verifyNoInteractions(mailSender);
     }
 
-    /** 매직링크는 메일 앱에서 열려서 로그인 쿠키가 없다 — 인터셉터 제외가 실제로 먹는지 확인한다 */
     @Test
     void datingVerifyLinkWorksWithoutLoginCookie() throws Exception {
         // V24 이후 새 링크는 발급하지 않지만, 그 전에 나간 링크는 계속 눌려야 한다 — 미인증 프로필을 직접 만든다
