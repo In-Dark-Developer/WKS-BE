@@ -619,29 +619,9 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 - 비로그인 사용자는 지금처럼 브라우저에 저장한 `resultId` 로 `GET /api/results/{resultId}` 를 쓴다. 이 API 는 **로그인 사용자의 복원용**이다
 - 로그인 응답의 `restoredResultId` 와 같은 결과를 가리킨다 (계정당 결과는 1개)
 
-### `POST /api/me/result`
-
-**인증 필요.** 로그인한 뒤 새 사주 결과를 만든 경우, 그 결과를 계정에 연결한다. `POST /api/results` 는 계속 익명 API이므로, 소개팅 프로필 등록 전에 이 요청을 별도로 보내야 한다.
-
-**Request**
-
-```json
-{ "resultId": "3f2a0000-0000-4000-8000-000000000001" }
-```
-
-**Response 200**
-
-```json
-{ "success": true, "data": { "resultId": "3f2a0000-0000-4000-8000-000000000001" } }
-```
-
-- 계정에 결과가 없고 요청 결과가 익명이면 연결한다. 이미 계정 결과가 있으면 기존 결과를 유지하고 **기존 결과 ID**를 반환한다. 프론트는 반환된 ID를 이후 요청에 사용한다.
-- `resultId` 누락·형식 오류: `INVALID_INPUT` 400. 결과가 없거나 다른 계정 소유: `RESULT_NOT_FOUND` 404. 로그인 쿠키가 없거나 무효: `UNAUTHENTICATED` 401.
-- 새 사용자의 흐름: `POST /api/results` → `POST /api/me/result` → `POST /api/dating/profile`. 인증 요청에는 `credentials: 'include'`를 설정한다.
-
 ### 인증 규칙
 
-- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, `POST /api/me/result`, 소개팅(`/api/dating/**`), 이후 실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 쿠키 없이 동작하고, 보내도 무시된다**
+- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 소개팅(`/api/dating/**`), 이후 실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 쿠키 없이 동작하고, 보내도 무시된다**
 - 인증이 필요한 API 는 반드시 `credentials: 'include'`(axios는 `withCredentials: true`) 로 호출한다 — 안 그러면 브라우저가 쿠키를 안 실어 보내 401 이 난다
 - `401 UNAUTHENTICATED` 를 받으면 로그인 화면으로 보낸다 (프론트가 지울 토큰은 없다 — 쿠키는 서버가 관리)
 - 토큰을 URL 쿼리에 넣지 않는다. `Authorization` 헤더도 쓰지 않는다 — **쿠키 하나로만 인증한다** (2026-09-25 전환)

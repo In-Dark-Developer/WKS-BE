@@ -316,7 +316,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | NFR-S-05 | P0 | 에러 응답에 스택트레이스·SQL 오류 노출 금지 |
 | NFR-S-06 | P0 | CORS 화이트리스트. 와일드카드 금지 |
 | NFR-S-07 | P0 | 축제 종료 +2주(2026-10-15) 전량 파기. **파기 스크립트를 미리 만든다.** 회원·소개팅 프로필·사진·실 원장이 대상인지는 미결정 (§15) |
-| NFR-S-08 | P0 | 사주 데이터는 기본적으로 익명이다. 회원과의 연결은 `result.member_id` 하나뿐이고 로그인 요청의 `resultId` 또는 로그인 후 명시적 `POST /api/me/result` 로 생긴다 (plan §1.1). 이메일·프로필·연락처와는 묶지 않는다 (§16) |
+| NFR-S-08 | P0 | 사주 데이터는 기본적으로 익명이다. 회원과의 연결은 `result.member_id` 하나뿐이고 로그인 요청에 `resultId` 가 실렸을 때만 생긴다 (plan §1.1). 이메일·프로필·연락처와는 묶지 않는다 (§16) |
 | NFR-S-09 | P0 | `application-local.yml` 은 `.gitignore`. 저장소엔 `.example` 만 |
 
 ### 운영
@@ -496,7 +496,6 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | FR-AU-11 | P0 | `GET /api/me` (인증 필요): 로그인 상태, 결과·프로필 보유 여부, 실 잔액 |
 | FR-AU-12 | P0 | 계정당 결과는 1개다. `result.member_id` 부분 unique 로 DB 가 강제한다 |
 | FR-AU-13 | P0 | `GET /api/me/result` (인증 필요): 계정에 연결된 결과를 `GET /api/results/{resultId}` 와 같은 구조로 돌려준다. 연결된 결과가 없으면 404 `RESULT_NOT_FOUND`. 클라이언트가 `resultId` 를 갖고 있지 않아도 내 결과를 찾을 수 있게 한다 |
-| FR-AU-14 | P0 | `POST /api/me/result` (인증 필요): 익명 결과를 계정에 연결하고 계정 결과 ID를 반환한다. 계정에 이미 결과가 있으면 기존 결과가 우선한다. 존재하지 않거나 다른 계정 소유인 결과는 동일한 404 `RESULT_NOT_FOUND`; 동시 연결에서 결과는 한 계정에만 귀속된다 |
 
 > 서버 쪽 토큰 폐기·기기 관리는 **하지 않는다** (2026-09-21 결정 유지). 로그아웃은 프론트가 로컬 토큰을 지우는 것으로 처리한다(2026-09-23) — 서버 엔드포인트는 없고, 지우지 않은 사본은 만료(15일)까지 유효하다. 가입 보너스 실 10 지급은 §17 FR-TH-04 에서 다룬다.
 > FR-AU-06·07·05 의 `restoredResultId` 응답(연결한 경우 `null`)은 plan.md 에 없던 부분을 채운 것이다 — 기획 확인 필요.
