@@ -65,7 +65,7 @@ public class DatingProfileService {
         }
         boolean invited = hasUsableReapplyInvite(request);
         if (!invited && !emailCodeService.isVerified(memberId, normalize(request.email()))) {
-            // 학교메일 인증은 등록 전에 코드로 끝낸다(V23). 인증 안 된 프로필은 더 이상 만들지 않는다
+            // 학교메일 인증은 등록 전에 코드로 끝낸다(V24). 인증 안 된 프로필은 더 이상 만들지 않는다
             throw new BusinessException(ErrorCode.DATING_NOT_VERIFIED);
         }
         DatingPhoto photo = photoService.verifyOwnedPhoto(memberId, request.photoId());

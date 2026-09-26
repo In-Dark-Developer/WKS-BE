@@ -270,7 +270,7 @@ class SignupReapplyFlowTest {
     /** 매직링크는 메일 앱에서 열려서 로그인 쿠키가 없다 — 인터셉터 제외가 실제로 먹는지 확인한다 */
     @Test
     void datingVerifyLinkWorksWithoutLoginCookie() throws Exception {
-        // V23 이후 새 링크는 발급하지 않지만, 그 전에 나간 링크는 계속 눌려야 한다 — 미인증 프로필을 직접 만든다
+        // V24 이후 새 링크는 발급하지 않지만, 그 전에 나간 링크는 계속 눌려야 한다 — 미인증 프로필을 직접 만든다
         Member member = memberRepository.saveAndFlush(new Member(780002L));
         String email = "verify-" + UUID.randomUUID() + "@dgu.ac.kr";
         DatingPhoto photo = photoRepository.saveAndFlush(

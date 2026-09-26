@@ -177,7 +177,7 @@ public class DatingController {
     }
 
     @Operation(summary = "학교 이메일 인증 (매직링크, 폐기 예정)", deprecated = true, description = """
-            V23 코드 인증으로 바뀌어 새 링크는 더 이상 발급하지 않는다. 이미 발송된 링크만 처리한다.
+            V24 코드 인증으로 바뀌어 새 링크는 더 이상 발급하지 않는다. 이미 발송된 링크만 처리한다.
             성공 시 프론트 완료 페이지로 302 리다이렉트한다. 로그인 쿠키 불필요
             """)
     @ApiResponses({

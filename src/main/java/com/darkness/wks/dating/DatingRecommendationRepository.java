@@ -15,6 +15,10 @@ public interface DatingRecommendationRepository extends JpaRepository<DatingReco
     @Query("SELECT r FROM DatingRecommendation r JOIN FETCH r.candidate WHERE r.viewerMemberId = :memberId")
     List<DatingRecommendation> findAllByViewerMemberId(Long memberId);
 
+    @Query("SELECT r FROM DatingRecommendation r WHERE r.viewerMemberId IN :viewerMemberIds "
+            + "AND r.candidate.id IN :candidateIds")
+    List<DatingRecommendation> findForRequestPairs(List<Long> viewerMemberIds, List<UUID> candidateIds);
+
     boolean existsByViewerMemberIdAndCandidateIdAndActiveTrue(Long viewerMemberId, UUID candidateId);
 
     @Query("SELECT r FROM DatingRecommendation r JOIN FETCH r.candidate "

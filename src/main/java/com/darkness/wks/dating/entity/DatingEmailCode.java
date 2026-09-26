@@ -11,7 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 
-/** 소개팅 학교메일 6자리 코드. 회원당 최근 발송분 한 행만 둔다 (V23) */
+/** 소개팅 학교메일 6자리 코드. 회원당 최근 발송분 한 행만 둔다 (V24) */
 @Entity
 @Table(name = "dating_email_code")
 @Getter

@@ -194,14 +194,14 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 | 용도 | 테이블 | TTL | 소비 시점 | 완료 시 기록 |
 |---|---|---|---|---|
 | 사전등록 이메일 인증 (파일럿) | `email_verification` | 30분 | 클릭 | `signup.verified_at` |
-| ~~소개팅 학교메일 재학 인증 (V21)~~ **폐기 예정** — 새 발급 없음, V23 코드 인증이 대체 | `dating_email_verification` | 30분 | 클릭 | `dating_profile.verified_at` |
+| ~~소개팅 학교메일 재학 인증 (V21)~~ **폐기 예정** — 새 발급 없음, V24 코드 인증이 대체 | `dating_email_verification` | 30분 | 클릭 | `dating_profile.verified_at` |
 | 기존 사전신청자 재신청 초대 (V22, 1회성) | `signup_reapply_invite` | 48시간 | **프로필 등록 완료 시** | `dating_profile.verified_at` (즉시 인증) |
 
 재신청 초대만 클릭 시점에 소비되지 않는다. 링크를 누른 뒤 카카오 로그인·사진 업로드를 거쳐야 하므로 그 흐름이
 끝날 때까지 살아 있어야 한다. 초대 메일을 받은 사람만 그 토큰을 가질 수 있으므로 완료 시점에 학교메일 인증을
 이미 끝난 것으로 본다(인증 메일을 한 번 더 보내지 않는다).
 
-### 소개팅 학교메일 6자리 코드 (V23, 2026-09-26)
+### 소개팅 학교메일 6자리 코드 (V24, 2026-09-26)
 
 ```
 로그인 → POST /api/dating/email-codes {email}  → 이메일 검사(도메인·중복) → 코드 생성·해시 저장(TTL 10분) → 메일
@@ -361,7 +361,7 @@ CREATE TABLE dating_email_verification (
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
--- 소개팅 학교메일 6자리 코드 (V23). 프로필 등록 전에 인증하므로 회원에 묶고, 회원당 최근 발송분 한 행만 둔다
+-- 소개팅 학교메일 6자리 코드 (V24). 프로필 등록 전에 인증하므로 회원에 묶고, 회원당 최근 발송분 한 행만 둔다
 CREATE TABLE dating_email_code (
     member_id         BIGINT       PRIMARY KEY REFERENCES member(id) ON DELETE CASCADE,
     email             VARCHAR(255) NOT NULL,
@@ -386,6 +386,9 @@ CREATE TABLE signup_reapply_invite (
 );
 
 -- 소개팅 프로필·추천·요청은 V15~V17, 소개팅 궁합 이유 캐시는 V18에 추가한다. 해금·실 원장은 후속 작업이다 (plan.md §7)
+
+-- V23: dating_request 에 CANCELLED 상태를 추가하고, 두 프로필 간 UNIQUE 인덱스를
+-- status <> 'CANCELLED' 인 요청에만 적용한다. 취소 이력은 남기고 재요청을 허용한다.
 ```
 
 ### 스키마 규칙

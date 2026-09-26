@@ -22,7 +22,7 @@
 | 배포 상태 | ✅ 2026-09-26: `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버, 둘 다 EC2 에서 동작. `dev` 의 로그인·소개팅 커밋은 아직 `main` 미릴리즈 — **릴리즈 전에 아래 "막혀 있는 것"의 운영 `.env` 항목부터** |
 | 개발 서버 (`api-dev.threadoffate.site`) | ✅ 2026-09-26 기동(`wks_dev` DB, Flyway V18). **단 `SPRING_PROFILES_ACTIVE: dev` 수정이 `dev` 에 머지되기 전에 누가 `dev` 에 push 하면 다시 죽는다** — 아래 2026-09-26 인프라 기록 |
 | `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
-| Flyway 최신 버전 | V18 (`dev` 기준). V19(실 원장)·V20(소개팅 해금 컬럼)은 `feat/wallet` 브랜치에서 구현 완료, PR 대기 — V12는 폐기(아래 예약 표) |
+| Flyway 최신 버전 | V23 (`dev` 기준, 2026-09-27 로컬 확인). V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
 | 실(재화) | 🔧 **2026-09-26, 원장·자동지급 3종·소개팅 해금 API 구현 완료**(`feat/wallet`, PR 대기). 제휴처 보상(`PARTNER`)·리롤은 미구현 — 아래 2026-09-26 기록 |
 | api-spec 프론트 전달 | ❌ 미전달 |
@@ -54,11 +54,12 @@
 
 **파일 만들기 전에 여기 먼저 적는다.** 번호 충돌은 가장 자주 나는 사고다.
 
-| 번호 | 예약자 | 내용 | 상태 |
-|---|---|---|---|
-| V23 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
+| 번호  | 예약자 | 내용 | 상태 |
+|-----|---|---|---|
+| V24 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
+| V23 | 최선우 | #100 소개팅 요청 `CANCELLED` 상태 및 취소 후 재요청 허용을 위한 부분 UNIQUE 인덱스 | dev 머지 완료 (PR #101) |
 | V22 | 곽도윤 | `signup_reapply_invite` (기존 사전신청자 재신청 초대 토큰, TTL 48시간). **축제 후 버려도 되는 1회성 캠페인 테이블** | dev 머지 완료 (#97) |
-| V21 | 곽도윤 | `dating_email_verification` (소개팅 학교메일 인증 매직링크, TBD-16 해결). 기존 사전신청자 백필 캠페인의 전제 작업. **V23 이후 새 발급 없음** | dev 머지 완료 (#97) |
+| V21 | 곽도윤 | `dating_email_verification` (소개팅 학교메일 인증 매직링크, TBD-16 해결). 기존 사전신청자 백필 캠페인의 전제 작업. **V24 이후 새 발급 없음** | dev 머지 완료 (#97) |
 | V20 | 곽도윤 | `dating_recommendation` 에 `photo_unlocked`·`name_unlocked`·`department_unlocked`·`reason_unlocked` 추가 (실 해금 상태) | `feat/wallet` 구현 완료, PR 대기 |
 | V19 | 곽도윤 | `thread_ledger` (실 원장, `ref_id NOT NULL`). **V12 예약을 대체한다** — V13~V18 이 먼저 머지돼 V12 를 쓰면 out-of-order 오류가 난다 (2026-09-26 발견) | `feat/wallet` 구현 완료, PR 대기 |
 | V18 | 최선우 | 소개팅 추천별 궁합 이유 캐시 (#94) | dev 머지 완료 |
@@ -70,15 +71,15 @@
 | V12 | ~~미정~~ | ~~`thread_ledger`~~ | **폐기 (2026-09-26).** V13~V18 이 이 번호보다 먼저 머지돼 dev 에 이미 적용됨 — 이제 와서 V12 를 쓰면 기존 환경에서 out-of-order 오류가 난다. thread_ledger 는 V19 로 다시 받았다 |
 | V11 | 곽도윤 | `member`(`kakao_id` 만) + `result.member_id`(계정당 1개, 부분 unique). 로그인 마감 09/22 | 로컬 적용·검증 완료(2026-09-23), **커밋 전** |
 | V10 | 곽도윤 | signup 에 `photo_key` 추가 (#54). `V9__add_signup_photo_key.sql` 을 개명 (dev 의 V9 와 중복이었다) | 개명 완료 (2026-09-21), PR 대기 |
-| V9 | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
-| V8 | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
-| V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
-| V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
-| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
-| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | 완료 |
-| V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
-| V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
-| V1 | 곽도윤 | init schema (5개 테이블) | 완료 |
+| V9  | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
+| V8  | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
+| V7  | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
+| V6  | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
+| V5  | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
+| V4  | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | 완료 |
+| V3  | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
+| V2  | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
+| V1  | 곽도윤 | init schema (5개 테이블) | 완료 |
 
 > V13 이상은 소개팅·궁합 이유 캐시 등이 예약한다. 사주 리팩토링(차은호)도 번호를 이 표에 먼저 적는다.
 
@@ -115,6 +116,8 @@
 |---|---|---|
 | 2026-09-26 | `POST /api/results` 를 **`credentials: 'include'`** 로 호출하면, 로그인 상태이고 계정에 결과가 없을 때 새 결과가 계정에 연결된다(로그인 후 사주를 본 사람이 소개팅 등록에서 `RESULT_NOT_FOUND` 나던 문제). 요청·응답 형식 변경 없음, 비로그인 동작 그대로. `api-spec.md` §2 | ❌ |
 | 2026-09-26 | **[소개팅 학교메일 인증 방식 변경, 프론트 대응 필수]** 매직링크 → **프로필 등록 전 6자리 코드.** `POST /api/dating/email-codes`(인증 버튼 → 발송)·`POST /api/dating/email-codes/verify`(코드 입력) 신규. `POST /api/dating/profile` 은 코드 인증 안 한 이메일이면 `DATING_NOT_VERIFIED` 403 (요청 필드 변경 없음, 응답 `emailVerified` 는 항상 `true`). 에러코드 3개 추가(`INVALID_EMAIL_CODE` 400·`EMAIL_CODE_RATE_LIMITED` 429·`MAIL_UNAVAILABLE` 503). **`/dating/verify` 페이지는 만들 필요 없어짐.** 재신청(`reapplyToken`)은 그대로 인증 생략. `api-spec.md` §10 머리말·§10.7 | ❌ |
+| 2026-09-27 | #102 `GET /api/dating/requests` 목록에 `counterpart` 추가. 받은 목록은 발신자 이름·학과·원본 사진 임시 URL 무료 제공, 보낸 목록은 기존 해금 상태 유지. 연락처는 수락 후 공개 | ❌ |
+| 2026-09-27 | #100 `POST /api/dating/requests/{id}/cancel` 추가. 보낸 사람만 PENDING 요청 취소, sent 목록에 CANCELLED 이력 표시, received 목록에서 제외. 취소 후 현재 추천 카드에 있으면 재요청 가능 | ❌ |
 | 2026-09-26 | **[사용 제약, API 변경 아님]** 개발 서버 `https://api-dev.threadoffate.site` 오픈(프론트 `dev.threadoffate.site`·`localhost:3000` 허용). **로그인은 `*.threadoffate.site` 프론트에서만 된다** — `localhost`·`netlify.app` 에서는 로그인 뒤 401. `api-spec.md` §9 인증 규칙 표 | ❌ |
 | 2026-09-26 | **[기존 사전신청자 재신청, 프론트 페이지 필요]** `GET /api/signups/reapply?token=` 추가 — 초대 메일 링크(`/dating/reapply?token=`)로 들어온 사람의 사전신청 입력값 + `resultId` 반환. 프론트가 ① 이 값으로 폼 프리필 → ② `POST /api/auth/kakao` 에 그 `resultId` 를 실어 로그인(사주 결과 계정 연결) → ③ 사진 업로드 → ④ `POST /api/dating/profile` 에 `reapplyToken` 실어 등록. 4단계 흐름은 `api-spec.md` §5. **기존 필드 변경·삭제 없음** | ❌ |
 | 2026-09-26 | `POST /api/dating/profile` 성공 시 학교메일 인증 메일이 자동 발송된다. `GET /api/dating/profile/verify?token=` 클릭 → 302 로 `DATING_VERIFY_REDIRECT_URL`(기본 `/dating/verify`) 이동 → `emailVerified: true`. **프론트에 `/dating/verify` 페이지 필요.** 재신청(`reapplyToken`)으로 등록하면 이 단계 없이 바로 인증 완료 | ❌ |
@@ -166,6 +169,52 @@
 
 ## 기록
 
+### 2026-09-27 (일) · 최선우 · dating/ 요청 목록 상대 프로필 (#102) · Codex
+
+**한 일**
+- `GET /api/dating/requests` 목록에 상대 프로필·궁합 점수 추가. 발신자 추천 이력의 점수를 재사용해 추천 카드가 비활성화돼도 표시
+- 받은 목록은 발신자의 사진·이름·학과를 무료 공개하고, 보낸 목록은 기존 해금 상태를 따른다. 연락처는 수락 후 공개
+- PostgreSQL 통합 테스트로 양쪽 목록·사진 URL·해금 상태·HTTP 응답 확인
+
+**건드린 파일/패키지**
+- `dating/`, `docs/plan.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 목록 응답만 `counterpart`가 추가된다. 요청 생성·수락·거절·취소 응답은 그대로다
+- 별도 마이그레이션은 없다. 추천 이력은 요청 시 반드시 존재하며, 목록 조회에서 비활성 추천도 점수·해금 상태에 사용한다
+
+**막힌 것 / 넘기는 것**
+- PR 리뷰·dev 머지 전
+
+**문서 변경**
+- 기획 §8.6, API 명세 §11.1, 요구사항 FR-DT-11
+
+**프론트에 알려야 할 것**
+- 요청 목록 항목에 `counterpart.score`·`mbti`·`bio`·`blurredPhotoUrl`·`fields` 추가. 받은 목록의 `fields.photo/name/department`는 무료로 값 제공, 보낸 목록은 해금 상태 반영
+
+### 2026-09-27 (일) · 최선우 · dating/ 보낸 요청 취소와 재요청 (#100) · Codex
+
+**한 일**
+- 보낸 사람의 PENDING 요청 취소 API 추가. 취소 이력은 sent 목록에 남고 received 목록에서 제외
+- V23 에 CANCELLED 상태를 추가하고, 취소된 행을 제외한 양방향 부분 UNIQUE 인덱스로 재요청 허용
+- PostgreSQL 통합 테스트로 취소 후 재요청·권한·상태 충돌·HTTP 경로 검증
+
+**건드린 파일/패키지**
+- `dating/`, `db/migration/V23__allow_cancelled_dating_request_retry.sql`, `docs/plan.md`, `docs/api-spec.md`, `docs/architecture.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 취소 후 재요청도 현재 추천 카드에 상대가 있을 때만 가능하다. REJECTED·ACCEPTED 는 중복 제약에 계속 포함돼 재요청 불가
+- 수락·거절·취소는 동일한 회원 잠금 순서로 처리하며, 후행 동작은 409 로 거절한다
+
+**막힌 것 / 넘기는 것**
+- PR 리뷰·dev 머지 전. V23 은 V22 뒤에 적용해야 한다
+
+**문서 변경**
+- API 명세 §11, 기획 §8.6, 아키텍처 스키마 메모, 요구사항 FR-DT-10
+
+**프론트에 알려야 할 것**
+- `POST /api/dating/requests/{id}/cancel` 신규. 성공 시 `CANCELLED`·`respondedAt` 반환, 받은 목록에서 제외, 보낸 목록에 유지
+
 ### 2026-09-26 (토) · 곽도윤 · result/·common/auth 로그인 후 만든 결과를 계정에 연결 (TBD-14 일부) · Claude Code
 
 **한 일**
@@ -205,7 +254,7 @@
 **한 일**
 - 프론트 요청: "인증 버튼 누르면 바로 메일 발송". 매직링크(V21)는 프로필이 있어야 발급되고 링크가 다른 탭에서
   열려서 폼이 완료를 알 수 없다 → **프로필 등록 전 6자리 코드**로 바꿨다(사용자 결정, 링크 대신 코드도 사용자 선택)
-- `dating_email_code` 테이블(V23) — 토큰이 아니라 **회원에 묶는다**(`member_id` PK, 회원당 최근 발송분 1행).
+- `dating_email_code` 테이블(V24) — 토큰이 아니라 **회원에 묶는다**(`member_id` PK, 회원당 최근 발송분 1행).
   코드는 SHA-256 해시만 저장
 - `POST /api/dating/email-codes`(발송)·`POST /api/dating/email-codes/verify`(확인) 신규. 둘 다 로그인 필요
 - `POST /api/dating/profile` — `reapplyToken` 이 없으면 그 이메일이 코드 인증돼 있어야 등록된다(아니면
@@ -219,7 +268,7 @@
 - `dating/` — `DatingEmailCodeService`·`DatingEmailCodeRepository`·`entity/DatingEmailCode`·
   `dto/DatingEmailCode{Request,Response,VerifyRequest,VerifyResponse}` 신규, `DatingProfileService`·`DatingController` 수정
 - `common/exception/ErrorCode.java` — `INVALID_EMAIL_CODE`(400)·`EMAIL_CODE_RATE_LIMITED`(429)·`MAIL_UNAVAILABLE`(503)
-- `db/migration/V23__add_dating_email_code.sql` (신규)
+- `db/migration/V24__add_dating_email_code.sql` (신규. 최선우 V23 과 번호가 겹쳐 V23 → V24 로 개명, 2026-09-27)
 - 테스트: `DatingEmailCodeServiceTest`(단위), **`DatingEmailCodeFlowTest`(Testcontainers, HTTP)** 신규,
   `DatingProfileServiceTest`·`SignupReapplyFlowTest` 갱신. `./gradlew test` 전체 통과
 
@@ -235,14 +284,14 @@
 - 메일 문구는 임시값(다른 메일과 같은 반말 톤)
 
 **막힌 것 / 넘기는 것**
-- `ErrorCode`·`db/migration/`(V23) 변경 **팀 채널 공지 필요**(아직 안 함)
+- `ErrorCode`·`db/migration/`(V24) 변경 **팀 채널 공지 필요**(아직 안 함)
 - SMTP 발송 한도 미확인은 그대로(위 "막혀 있는 것" 표)
 
 **문서 변경**
 - `docs/plan.md` — TBD-16 변경 기록(등록 전 코드 인증)
 - `docs/architecture.md` — 매직링크 표(V21 폐기 예정), "소개팅 학교메일 6자리 코드" 절 신설, §5 스키마 `dating_email_code`
 - `docs/api-spec.md` — §1 에러코드 3개, §10 머리말 신규 흐름, §10.2 등록 조건·응답 예시, §10.6 폐기 예정, §10.7 신설
-- `docs/handoff.md` — Flyway V23 예약(+ V21·V22 상태를 "dev 머지 완료"로 정정), ErrorCode 표, 프론트 공지 표
+- `docs/handoff.md` — Flyway V24 예약(+ V21·V22 상태를 "dev 머지 완료"로 정정), ErrorCode 표, 프론트 공지 표
 
 **프론트에 알려야 할 것**
 - 위 "프론트에 공지한 API 변경" 표 2026-09-26 첫 줄. **`/dating/verify` 페이지는 더 이상 필요 없다**

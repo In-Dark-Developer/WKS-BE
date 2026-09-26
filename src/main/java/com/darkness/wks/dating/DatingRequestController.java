@@ -4,6 +4,7 @@ import com.darkness.wks.common.auth.CurrentMember;
 import com.darkness.wks.common.response.ApiResponse;
 import com.darkness.wks.common.response.ErrorResponse;
 import com.darkness.wks.dating.dto.CreateDatingRequest;
+import com.darkness.wks.dating.dto.DatingRequestListResponse;
 import com.darkness.wks.dating.dto.DatingRequestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -40,7 +41,7 @@ public class DatingRequestController {
 
     @Operation(summary = "소개팅 요청 보내기", description = """
             **현재 내 추천 카드(Top 3)에 있는 상대에게만** 보낼 수 있다. 양쪽 모두 학교메일 인증이 끝나 있어야
-            하고, 두 사람 사이에 이미 요청이 있으면(방향 무관) 보낼 수 없다. 실 차감은 없다.
+            하고, 두 사람 사이에 취소되지 않은 요청이 있으면(방향 무관) 보낼 수 없다. 실 차감은 없다.
             상대 연락처는 수락 전까지 응답에 없다(contactValue가 null).
             """)
     @ApiResponses({
@@ -65,7 +66,9 @@ public class DatingRequestController {
 
     @Operation(summary = "요청 보관함", description = """
             box=sent 면 내가 보낸 요청, box=received 면 내가 받은 요청. 수락(ACCEPTED)된 건에만 상대
-            연락처(contactValue)가 채워지고, PENDING·REJECTED 는 null 이다.
+            연락처(contactValue)가 채워지고, PENDING·REJECTED·CANCELLED 는 null 이다.
+            받은 요청에는 상대 이름·학과·원본 사진을 무료로 표시한다. 보낸 요청은 기존 해금 상태를 지킨다.
+            취소 이력은 보낸 목록에 남고 받은 목록에서는 제외한다.
             """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
@@ -77,7 +80,7 @@ public class DatingRequestController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping
-    public ApiResponse<List<DatingRequestResponse>> list(@CurrentMember Long memberId,
+    public ApiResponse<List<DatingRequestListResponse>> list(@CurrentMember Long memberId,
             @Parameter(description = "sent | received", example = "received") @RequestParam String box) {
         return ApiResponse.success(requestService.list(memberId, box));
     }
@@ -113,5 +116,23 @@ public class DatingRequestController {
     @PostMapping("/{id}/reject")
     public ApiResponse<DatingRequestResponse> reject(@CurrentMember Long memberId, @PathVariable UUID id) {
         return ApiResponse.success(requestService.reject(memberId, id));
+    }
+
+    @Operation(summary = "보낸 요청 취소", description = """
+            보낸 사람만 PENDING 요청을 취소할 수 있다. 취소된 요청은 상대의 받은 목록에서 사라지고,
+            같은 상대에게 다시 요청할 수 있다. 재요청은 현재 추천 카드에 있을 때 가능하다.
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "취소 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHENTICATED — 로그인 쿠키 없음·만료·위조",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "DATING_REQUEST_NOT_FOUND — 요청 없음, 또는 보낸 사람 본인이 아님",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "DATING_REQUEST_CONFLICT — 이미 처리되거나 취소된 요청",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping("/{id}/cancel")
+    public ApiResponse<DatingRequestResponse> cancel(@CurrentMember Long memberId, @PathVariable UUID id) {
+        return ApiResponse.success(requestService.cancel(memberId, id));
     }
 }
