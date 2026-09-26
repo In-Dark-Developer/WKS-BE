@@ -9,7 +9,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
  * {@code /api/me/**} 등 인증이 필요한 경로에만 건다(등록은 {@link AuthWebConfig}). 그 외 API(사주·궁합·
- * 사전등록)는 이 인터셉터를 거치지 않고 쿠키를 읽지도 않는다.
+ * 사전등록)는 이 인터셉터를 거치지 않는다 — 로그인 여부만 참고하는 곳은 {@link OptionalMember} 로
+ * 쿠키를 읽되 실패해도 막지 않는다.
  */
 @Component
 public class JwtAuthInterceptor implements HandlerInterceptor {

@@ -244,7 +244,7 @@ class ResultServiceTest {
         when(resultRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(readingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ResultResponse response = resultService.createResult(request("민수"));
+        ResultResponse response = resultService.createResult(request("민수"), null);
 
         verify(resultAnalysisPort, never()).analyze(any(), any(), any());
         assertThat(response.nickname()).isEqualTo("민수"); // 닉네임은 새 result 것, 문장·점수는 복사
@@ -265,7 +265,7 @@ class ResultServiceTest {
         when(resultRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(readingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        resultService.createResult(request("도윤"));
+        resultService.createResult(request("도윤"), null);
 
         ArgumentCaptor<Reading> saved = ArgumentCaptor.forClass(Reading.class);
         verify(readingRepository).save(saved.capture());
@@ -275,5 +275,55 @@ class ResultServiceTest {
         assertThat(savedResult.getValue().getCalendarType()).isEqualTo(CalendarType.SOLAR);
         assertThat(savedResult.getValue().getBirthDateInput()).isEqualTo("2002-03-14");
         verify(resultAnalysisPort).analyze(any(), any(), any());
+        assertThat(savedResult.getValue().getMemberId()).isNull(); // 익명 생성은 연결하지 않는다
+        verify(resultRepository, never()).lockMember(any());
+    }
+
+    @Test
+    void linksNewResultToLoggedInMemberWithoutResult() {
+        stubReusableCreate();
+        when(resultRepository.lockMember(1L)).thenReturn(Optional.of(1L));
+        when(resultRepository.existsByMemberId(1L)).thenReturn(false);
+
+        resultService.createResult(request("도윤"), 1L);
+
+        assertThat(savedResult().getMemberId()).isEqualTo(1L);
+    }
+
+    @Test
+    void keepsAccountResultWhenMemberAlreadyHasOne() {
+        stubReusableCreate();
+        when(resultRepository.lockMember(1L)).thenReturn(Optional.of(1L));
+        when(resultRepository.existsByMemberId(1L)).thenReturn(true);
+
+        resultService.createResult(request("도윤"), 1L);
+
+        assertThat(savedResult().getMemberId()).isNull();
+    }
+
+    @Test
+    void skipsLinkWhenTokenMemberNoLongerExists() {
+        // 유효한 토큰이어도 회원 행이 없으면(개발 DB 초기화 등) FK 위반으로 결과 생성이 깨지지 않게 익명으로 만든다
+        stubReusableCreate();
+        when(resultRepository.lockMember(1L)).thenReturn(Optional.empty());
+
+        resultService.createResult(request("도윤"), 1L);
+
+        assertThat(savedResult().getMemberId()).isNull();
+        verify(resultRepository, never()).existsByMemberId(any());
+    }
+
+    private void stubReusableCreate() {
+        when(resultAnalysisPort.analysisVersion()).thenReturn(7);
+        when(readingRepository.findReusable(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(Optional.of(reading(result(UUID.randomUUID()))));
+        when(resultRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(readingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private Result savedResult() {
+        ArgumentCaptor<Result> captor = ArgumentCaptor.forClass(Result.class);
+        verify(resultRepository).save(captor.capture());
+        return captor.getValue();
     }
 }

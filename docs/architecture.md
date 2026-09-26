@@ -194,12 +194,28 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 | 용도 | 테이블 | TTL | 소비 시점 | 완료 시 기록 |
 |---|---|---|---|---|
 | 사전등록 이메일 인증 (파일럿) | `email_verification` | 30분 | 클릭 | `signup.verified_at` |
-| 소개팅 학교메일 재학 인증 (V21) | `dating_email_verification` | 30분 | 클릭 | `dating_profile.verified_at` |
+| ~~소개팅 학교메일 재학 인증 (V21)~~ **폐기 예정** — 새 발급 없음, V24 코드 인증이 대체 | `dating_email_verification` | 30분 | 클릭 | `dating_profile.verified_at` |
 | 기존 사전신청자 재신청 초대 (V22, 1회성) | `signup_reapply_invite` | 48시간 | **프로필 등록 완료 시** | `dating_profile.verified_at` (즉시 인증) |
 
 재신청 초대만 클릭 시점에 소비되지 않는다. 링크를 누른 뒤 카카오 로그인·사진 업로드를 거쳐야 하므로 그 흐름이
 끝날 때까지 살아 있어야 한다. 초대 메일을 받은 사람만 그 토큰을 가질 수 있으므로 완료 시점에 학교메일 인증을
 이미 끝난 것으로 본다(인증 메일을 한 번 더 보내지 않는다).
+
+### 소개팅 학교메일 6자리 코드 (V24, 2026-09-26)
+
+```
+로그인 → POST /api/dating/email-codes {email}  → 이메일 검사(도메인·중복) → 코드 생성·해시 저장(TTL 10분) → 메일
+      → POST /api/dating/email-codes/verify    → 행 잠금 → 이메일·만료·실패 횟수 검사 → verified_at 기록
+      → POST /api/dating/profile               → dating_email_code 가 그 이메일로 인증돼 있어야 등록(즉시 verified)
+```
+
+매직링크(V21)는 프로필이 있어야 발급돼서 "등록 전에 인증" 흐름에 못 쓰고, 링크가 다른 탭에서 열려 작성 중인
+폼이 완료를 알 수 없다. 그래서 신규 신청은 코드로 바꿨다. 토큰이 아니라 **회원(`member_id`)에 묶는다** —
+로그인한 상태에서만 발송·확인하므로 코드를 가로채도 남의 계정에는 못 쓴다.
+
+6자리는 추측 공간이 작아 **코드당 5회 실패 + 재발송 60초 쿨다운 + 24시간 10회 발송 한도**를 같이 건다.
+하나만 있으면 "재발송 → 5번 시도" 반복으로 남의 학교메일을 인증할 수 있다. 틀린 입력의 실패 횟수는 예외가
+나도 커밋돼야 해서(`noRollbackFor`) 확인 API 는 바깥 트랜잭션 없이 호출한다.
 
 ### 카카오 로그인 (2026-09-21 확정 · 구현 전)
 
@@ -342,6 +358,20 @@ CREATE TABLE dating_email_verification (
     dating_profile_id UUID         NOT NULL REFERENCES dating_profile(id) ON DELETE CASCADE,
     expires_at        TIMESTAMPTZ  NOT NULL,
     used_at           TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- 소개팅 학교메일 6자리 코드 (V24). 프로필 등록 전에 인증하므로 회원에 묶고, 회원당 최근 발송분 한 행만 둔다
+CREATE TABLE dating_email_code (
+    member_id         BIGINT       PRIMARY KEY REFERENCES member(id) ON DELETE CASCADE,
+    email             VARCHAR(255) NOT NULL,
+    code_hash         VARCHAR(64)  NOT NULL,      -- SHA-256 hex. 평문 코드는 저장하지 않는다
+    expires_at        TIMESTAMPTZ  NOT NULL,
+    failed_attempts   INT          NOT NULL DEFAULT 0,
+    last_sent_at      TIMESTAMPTZ  NOT NULL,
+    send_window_start TIMESTAMPTZ  NOT NULL,      -- 24시간 발송 한도 창
+    send_count        INT          NOT NULL,
+    verified_at       TIMESTAMPTZ,
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 

@@ -43,11 +43,13 @@ class DatingProfileServiceTest {
     @Mock
     private DatingEmailVerificationService emailVerificationService;
     @Mock
+    private DatingEmailCodeService emailCodeService;
+    @Mock
     private SignupReapplyService reapplyService;
 
     private DatingProfileService service() {
         DatingProfileService service = new DatingProfileService(profileRepository, resultRepository, photoService,
-                emailVerificationService, reapplyService);
+                emailVerificationService, emailCodeService, reapplyService);
         ReflectionTestUtils.setField(service, "allowedDomainsRaw", "dgu.ac.kr");
         return service;
     }
@@ -72,27 +74,70 @@ class DatingProfileServiceTest {
     }
 
     @Test
-    void createIssuesAndSendsVerificationMailAfterSavingProfile() {
+    void createWithCodeVerifiedEmailIsVerifiedWithoutSendingMail() {
         stubProfileCreation();
-        when(emailVerificationService.issueToken(any()))
-                .thenReturn(new DatingEmailVerification("token", null, Instant.now().plusSeconds(1800)));
+        when(emailCodeService.isVerified(MEMBER_ID, "student@dgu.ac.kr")).thenReturn(true);
 
         DatingProfileResponse response = service().create(MEMBER_ID, request());
 
-        assertThat(response.emailVerified()).isFalse();
-        verify(emailVerificationService).sendVerificationEmail("student@dgu.ac.kr", "token");
-        verifyNoInteractions(reapplyService);
+        assertThat(response.emailVerified()).isTrue();
+        verifyNoInteractions(emailVerificationService, reapplyService);
     }
 
     @Test
-    void createStillSucceedsWhenVerificationMailFailsToSend() {
-        stubProfileCreation();
-        when(emailVerificationService.issueToken(any()))
-                .thenReturn(new DatingEmailVerification("token", null, Instant.now().plusSeconds(1800)));
-        doThrow(new DatingEmailVerificationService.MailSendFailedException(new RuntimeException("smtp down")))
-                .when(emailVerificationService).sendVerificationEmail(any(), any());
+    void createWithoutCodeVerificationIsRejectedBeforeTouchingPhoto() {
+        when(resultRepository.existsByMemberId(MEMBER_ID)).thenReturn(true);
+        when(emailCodeService.isVerified(MEMBER_ID, "student@dgu.ac.kr")).thenReturn(false);
 
-        assertThat(service().create(MEMBER_ID, request())).isNotNull();
+        assertThatThrownBy(() -> service().create(MEMBER_ID, request()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DATING_NOT_VERIFIED));
+
+        verifyNoInteractions(photoService);
+        verify(profileRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void sendEmailCodeIssuesAndMailsCode() {
+        Instant expiresAt = Instant.now().plusSeconds(600);
+        when(emailCodeService.issue(MEMBER_ID, "student@dgu.ac.kr"))
+                .thenReturn(new DatingEmailCodeService.IssuedCode("123456", expiresAt, Instant.now()));
+
+        var response = service().sendEmailCode(MEMBER_ID, " Student@DGU.ac.kr ");
+
+        assertThat(response.expiresAt()).isEqualTo(expiresAt);
+        verify(emailCodeService).sendCodeEmail("student@dgu.ac.kr", "123456");
+    }
+
+    @Test
+    void sendEmailCodeDiscardsCodeAndReports503WhenMailFails() {
+        when(emailCodeService.issue(MEMBER_ID, "student@dgu.ac.kr"))
+                .thenReturn(new DatingEmailCodeService.IssuedCode("123456", Instant.now(), Instant.now()));
+        doThrow(new DatingEmailCodeService.MailSendFailedException(new RuntimeException("smtp down")))
+                .when(emailCodeService).sendCodeEmail(any(), any());
+
+        assertThatThrownBy(() -> service().sendEmailCode(MEMBER_ID, "student@dgu.ac.kr"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.MAIL_UNAVAILABLE));
+        verify(emailCodeService).discard(MEMBER_ID);
+    }
+
+    @Test
+    void sendEmailCodeRejectsNonSchoolEmailWithoutSending() {
+        assertThatThrownBy(() -> service().sendEmailCode(MEMBER_ID, "someone@gmail.com"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_EMAIL_DOMAIN));
+        verifyNoInteractions(emailCodeService);
+    }
+
+    @Test
+    void sendEmailCodeRejectsMemberWhoAlreadyHasProfile() {
+        when(profileRepository.existsByMemberId(MEMBER_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service().sendEmailCode(MEMBER_ID, "student@dgu.ac.kr"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DATING_PROFILE_CONFLICT));
+        verifyNoInteractions(emailCodeService);
     }
 
     @Test
@@ -103,7 +148,7 @@ class DatingProfileServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESULT_NOT_FOUND));
 
-        verifyNoInteractions(emailVerificationService, reapplyService);
+        verifyNoInteractions(emailVerificationService, emailCodeService, reapplyService);
     }
 
     @Test
@@ -115,7 +160,7 @@ class DatingProfileServiceTest {
 
         assertThat(response.emailVerified()).isTrue();
         verify(reapplyService).consumeInvite("invite");
-        verifyNoInteractions(emailVerificationService);
+        verifyNoInteractions(emailVerificationService, emailCodeService);
     }
 
     @Test

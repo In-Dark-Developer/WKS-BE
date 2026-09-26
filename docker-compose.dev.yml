@@ -8,7 +8,8 @@ services:
     image: ${APP_IMAGE:-ghcr.io/in-dark-developer/wks-be:dev}
     container_name: wks-app-dev
     restart: unless-stopped
-    mem_limit: 450m
+    # 힙 256m + Metaspace(~150m 사용, 상한 200m) + 코드캐시·스레드 스택. 450m 에서는 Metaspace 를 늘릴 여유가 없었다
+    mem_limit: 600m
     # DB_PASSWORD·GOOGLE_API_KEY·KAKAO_*·JWT_SECRET 등 앱 시크릿은 전부 여기서 온다.
     # 운영과 동일 패턴(git-workflow.md "GitHub Secrets") — GitHub Actions 는 이 파일을 만들거나 건드리지 않는다.
     env_file: .env
@@ -18,7 +19,9 @@ services:
       # 공유 postgres 컨테이너 이름 고정. .env 에서 실수로 바꿀 수 없게 여기 둔다
       DB_HOST: wks-postgres
       DB_PORT: 5432
-      JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=128m"
+      # Metaspace 128m 은 부족했다 — 프로필 등록에서 이미지 처리·S3 다운로드 클래스가 처음 로딩되며
+      # OutOfMemoryError: Metaspace 로 요청 스레드가 죽고 nginx 504 가 났다 (2026-09-26)
+      JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=200m"
     logging:
       driver: json-file
       options:
