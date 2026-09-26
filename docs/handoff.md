@@ -22,7 +22,7 @@
 | 배포 상태 | ✅ 2026-09-26: `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버, 둘 다 EC2 에서 동작. `dev` 의 로그인·소개팅 커밋은 아직 `main` 미릴리즈 — **릴리즈 전에 아래 "막혀 있는 것"의 운영 `.env` 항목부터** |
 | 개발 서버 (`api-dev.threadoffate.site`) | ✅ 2026-09-26 기동(`wks_dev` DB, Flyway V18). **단 `SPRING_PROFILES_ACTIVE: dev` 수정이 `dev` 에 머지되기 전에 누가 `dev` 에 push 하면 다시 죽는다** — 아래 2026-09-26 인프라 기록 |
 | `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
-| Flyway 최신 버전 | V18 (`dev` 기준). V19(실 원장)·V20(소개팅 해금 컬럼)은 `feat/wallet` 브랜치에서 구현 완료, PR 대기 — V12는 폐기(아래 예약 표) |
+| Flyway 최신 버전 | V22 (`dev` 기준, 2026-09-27 로컬 확인). #100 작업 브랜치에서 V23 추가, 미머지. V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
 | 실(재화) | 🔧 **2026-09-26, 원장·자동지급 3종·소개팅 해금 API 구현 완료**(`feat/wallet`, PR 대기). 제휴처 보상(`PARTNER`)·리롤은 미구현 — 아래 2026-09-26 기록 |
 | api-spec 프론트 전달 | ❌ 미전달 |
@@ -56,6 +56,7 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
+| V23 | 최선우 | #100 소개팅 요청 `CANCELLED` 상태 및 취소 후 재요청 허용을 위한 부분 UNIQUE 인덱스 | 구현·PostgreSQL 검증 완료, 미머지 (`feat/100-dating-request-cancel`) |
 | V22 | 곽도윤 | `signup_reapply_invite` (기존 사전신청자 재신청 초대 토큰, TTL 48시간). **축제 후 버려도 되는 1회성 캠페인 테이블** | 구현 완료, 커밋 전 |
 | V21 | 곽도윤 | `dating_email_verification` (소개팅 학교메일 인증 매직링크, TBD-16 해결). 기존 사전신청자 백필 캠페인의 전제 작업 | 구현 완료, 커밋 전 |
 | V20 | 곽도윤 | `dating_recommendation` 에 `photo_unlocked`·`name_unlocked`·`department_unlocked`·`reason_unlocked` 추가 (실 해금 상태) | `feat/wallet` 구현 완료, PR 대기 |
@@ -109,6 +110,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-27 | #100 `POST /api/dating/requests/{id}/cancel` 추가. 보낸 사람만 PENDING 요청 취소, sent 목록에 CANCELLED 이력 표시, received 목록에서 제외. 취소 후 현재 추천 카드에 있으면 재요청 가능 | ❌ |
 | 2026-09-26 | **[사용 제약, API 변경 아님]** 개발 서버 `https://api-dev.threadoffate.site` 오픈(프론트 `dev.threadoffate.site`·`localhost:3000` 허용). **로그인은 `*.threadoffate.site` 프론트에서만 된다** — `localhost`·`netlify.app` 에서는 로그인 뒤 401. `api-spec.md` §9 인증 규칙 표 | ❌ |
 | 2026-09-26 | **[기존 사전신청자 재신청, 프론트 페이지 필요]** `GET /api/signups/reapply?token=` 추가 — 초대 메일 링크(`/dating/reapply?token=`)로 들어온 사람의 사전신청 입력값 + `resultId` 반환. 프론트가 ① 이 값으로 폼 프리필 → ② `POST /api/auth/kakao` 에 그 `resultId` 를 실어 로그인(사주 결과 계정 연결) → ③ 사진 업로드 → ④ `POST /api/dating/profile` 에 `reapplyToken` 실어 등록. 4단계 흐름은 `api-spec.md` §5. **기존 필드 변경·삭제 없음** | ❌ |
 | 2026-09-26 | `POST /api/dating/profile` 성공 시 학교메일 인증 메일이 자동 발송된다. `GET /api/dating/profile/verify?token=` 클릭 → 302 로 `DATING_VERIFY_REDIRECT_URL`(기본 `/dating/verify`) 이동 → `emailVerified: true`. **프론트에 `/dating/verify` 페이지 필요.** 재신청(`reapplyToken`)으로 등록하면 이 단계 없이 바로 인증 완료 | ❌ |
@@ -159,6 +161,29 @@
 ---
 
 ## 기록
+
+### 2026-09-27 (일) · 최선우 · dating/ 보낸 요청 취소와 재요청 (#100) · Codex
+
+**한 일**
+- 보낸 사람의 PENDING 요청 취소 API 추가. 취소 이력은 sent 목록에 남고 received 목록에서 제외
+- V23 에 CANCELLED 상태를 추가하고, 취소된 행을 제외한 양방향 부분 UNIQUE 인덱스로 재요청 허용
+- PostgreSQL 통합 테스트로 취소 후 재요청·권한·상태 충돌·HTTP 경로 검증
+
+**건드린 파일/패키지**
+- `dating/`, `db/migration/V23__allow_cancelled_dating_request_retry.sql`, `docs/plan.md`, `docs/api-spec.md`, `docs/architecture.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 취소 후 재요청도 현재 추천 카드에 상대가 있을 때만 가능하다. REJECTED·ACCEPTED 는 중복 제약에 계속 포함돼 재요청 불가
+- 수락·거절·취소는 동일한 회원 잠금 순서로 처리하며, 후행 동작은 409 로 거절한다
+
+**막힌 것 / 넘기는 것**
+- PR 리뷰·dev 머지 전. V23 은 V22 뒤에 적용해야 한다
+
+**문서 변경**
+- API 명세 §11, 기획 §8.6, 아키텍처 스키마 메모, 요구사항 FR-DT-10
+
+**프론트에 알려야 할 것**
+- `POST /api/dating/requests/{id}/cancel` 신규. 성공 시 `CANCELLED`·`respondedAt` 반환, 받은 목록에서 제외, 보낸 목록에 유지
 
 ### 2026-09-26 (토) · 곽도윤 · Swagger 문서 누락 점검 + dating 8개 엔드포인트 문서화 · Claude Code
 

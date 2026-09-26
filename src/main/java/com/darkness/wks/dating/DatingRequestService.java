@@ -66,7 +66,7 @@ public class DatingRequestService {
         ownProfile(memberId);
         List<DatingRequest> requests = switch (box) {
             case "sent" -> requestRepository.findSent(memberId);
-            case "received" -> requestRepository.findReceived(memberId);
+            case "received" -> requestRepository.findReceived(memberId, DatingRequestStatus.CANCELLED);
             default -> throw new BusinessException(ErrorCode.INVALID_INPUT);
         };
         return requests.stream().map(request -> DatingRequestResponse.from(request, memberId)).toList();
@@ -100,6 +100,22 @@ public class DatingRequestService {
             throw new BusinessException(ErrorCode.DATING_REQUEST_CONFLICT);
         }
         request.reject(Instant.now());
+        return DatingRequestResponse.from(request, memberId);
+    }
+
+    @Transactional
+    public DatingRequestResponse cancel(Long memberId, UUID requestId) {
+        DatingRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DATING_REQUEST_NOT_FOUND));
+        if (!request.getSender().getMemberId().equals(memberId)) {
+            throw new BusinessException(ErrorCode.DATING_REQUEST_NOT_FOUND);
+        }
+        lockMembers(memberId, request.getRecipient().getMemberId());
+        entityManager.refresh(request);
+        if (request.getStatus() != DatingRequestStatus.PENDING) {
+            throw new BusinessException(ErrorCode.DATING_REQUEST_CONFLICT);
+        }
+        request.cancel(Instant.now());
         return DatingRequestResponse.from(request, memberId);
     }
 

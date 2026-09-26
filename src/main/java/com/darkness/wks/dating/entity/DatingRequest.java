@@ -62,4 +62,9 @@ public class DatingRequest {
         status = DatingRequestStatus.REJECTED;
         respondedAt = time;
     }
+
+    public void cancel(Instant time) {
+        status = DatingRequestStatus.CANCELLED;
+        respondedAt = time;
+    }
 }
