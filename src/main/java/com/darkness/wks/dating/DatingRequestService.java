@@ -2,8 +2,10 @@ package com.darkness.wks.dating;
 
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
+import com.darkness.wks.dating.dto.DatingRequestListResponse;
 import com.darkness.wks.dating.dto.DatingRequestResponse;
 import com.darkness.wks.dating.entity.DatingProfile;
+import com.darkness.wks.dating.entity.DatingRecommendation;
 import com.darkness.wks.dating.entity.DatingRequest;
 import com.darkness.wks.dating.entity.DatingRequestStatus;
 import com.darkness.wks.member.entity.Member;
@@ -16,7 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -26,14 +31,16 @@ public class DatingRequestService {
     private final DatingProfileRepository profileRepository;
     private final DatingRecommendationRepository recommendationRepository;
     private final DatingRequestRepository requestRepository;
+    private final DatingPhotoService photoService;
 
     public DatingRequestService(EntityManager entityManager, DatingProfileRepository profileRepository,
                                 DatingRecommendationRepository recommendationRepository,
-                                DatingRequestRepository requestRepository) {
+                                DatingRequestRepository requestRepository, DatingPhotoService photoService) {
         this.entityManager = entityManager;
         this.profileRepository = profileRepository;
         this.recommendationRepository = recommendationRepository;
         this.requestRepository = requestRepository;
+        this.photoService = photoService;
     }
 
     @Transactional
@@ -62,14 +69,38 @@ public class DatingRequestService {
         }
     }
 
-    public List<DatingRequestResponse> list(Long memberId, String box) {
+    public List<DatingRequestListResponse> list(Long memberId, String box) {
         ownProfile(memberId);
         List<DatingRequest> requests = switch (box) {
             case "sent" -> requestRepository.findSent(memberId);
             case "received" -> requestRepository.findReceived(memberId, DatingRequestStatus.CANCELLED);
             default -> throw new BusinessException(ErrorCode.INVALID_INPUT);
         };
-        return requests.stream().map(request -> DatingRequestResponse.from(request, memberId)).toList();
+        if (requests.isEmpty()) {
+            return List.of();
+        }
+        List<Long> senderIds = requests.stream().map(request -> request.getSender().getMemberId())
+                .distinct().toList();
+        List<UUID> recipientIds = requests.stream().map(request -> request.getRecipient().getId())
+                .distinct().toList();
+        Map<RequestPair, DatingRecommendation> recommendations = recommendationRepository
+                .findForRequestPairs(senderIds, recipientIds).stream()
+                .collect(Collectors.toMap(
+                        item -> new RequestPair(item.getViewerMemberId(), item.getCandidate().getId()),
+                        Function.identity()));
+        return requests.stream().map(request -> {
+            DatingRecommendation recommendation = recommendations.get(new RequestPair(
+                    request.getSender().getMemberId(), request.getRecipient().getId()));
+            if (recommendation == null) {
+                throw new IllegalStateException("Missing recommendation for dating request " + request.getId());
+            }
+            boolean received = request.getRecipient().getMemberId().equals(memberId);
+            DatingProfile other = received ? request.getSender() : request.getRecipient();
+            String originalPhotoUrl = received || recommendation.isPhotoUnlocked()
+                    ? photoService.originalUrl(other.getPhoto()) : null;
+            return DatingRequestListResponse.from(request, memberId, recommendation,
+                    photoService.thumbnailUrl(other.getPhoto()), originalPhotoUrl);
+        }).toList();
     }
 
     @Transactional
@@ -140,5 +171,8 @@ public class DatingRequestService {
                 throw new BusinessException(ErrorCode.UNAUTHENTICATED);
             }
         });
+    }
+
+    private record RequestPair(Long senderMemberId, UUID recipientId) {
     }
 }

@@ -18,11 +18,13 @@ public interface DatingRequestRepository extends JpaRepository<DatingRequest, UU
             """)
     boolean existsBetween(UUID first, UUID second);
 
-    @Query("SELECT r FROM DatingRequest r JOIN FETCH r.sender JOIN FETCH r.recipient "
-            + "WHERE r.sender.memberId = :memberId ORDER BY r.createdAt DESC")
+    @Query("SELECT r FROM DatingRequest r JOIN FETCH r.sender s JOIN FETCH s.photo "
+            + "JOIN FETCH r.recipient p JOIN FETCH p.photo "
+            + "WHERE s.memberId = :memberId ORDER BY r.createdAt DESC")
     List<DatingRequest> findSent(Long memberId);
 
-    @Query("SELECT r FROM DatingRequest r JOIN FETCH r.sender JOIN FETCH r.recipient "
-            + "WHERE r.recipient.memberId = :memberId AND r.status <> :cancelled ORDER BY r.createdAt DESC")
+    @Query("SELECT r FROM DatingRequest r JOIN FETCH r.sender s JOIN FETCH s.photo "
+            + "JOIN FETCH r.recipient p JOIN FETCH p.photo "
+            + "WHERE p.memberId = :memberId AND r.status <> :cancelled ORDER BY r.createdAt DESC")
     List<DatingRequest> findReceived(Long memberId, DatingRequestStatus cancelled);
 }

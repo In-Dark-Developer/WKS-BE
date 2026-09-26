@@ -8,6 +8,7 @@ import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
+import com.darkness.wks.dating.entity.DatingRecommendation;
 import com.darkness.wks.dating.entity.DatingRequestStatus;
 import com.darkness.wks.member.MemberRepository;
 import com.darkness.wks.member.entity.Member;
@@ -38,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -289,6 +291,81 @@ class DatingSchemaTest {
         assertThat(requestService.accept(anotherRecipient.getMemberId(), second.requestId()).status())
                 .isEqualTo(DatingRequestStatus.ACCEPTED);
         assertThat(requestRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    @Transactional
+    void requestListsShowReceivedProfileButKeepSentFieldsLockedAfterRecommendationEnds() throws Exception {
+        DatingProfile sender = profile(1020001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(1020002L, Gender.FEMALE, "계해", "임술", "신유");
+        DatingRecommendation recommendation = recommendationRepository.saveAndFlush(
+                new DatingRecommendation(sender.getMemberId(), recipient, 83));
+        var request = requestService.send(sender.getMemberId(), recipient.getId());
+        recommendation.deactivate();
+        when(photoService.thumbnailUrl(any())).thenReturn("https://example.com/blurred.png");
+        when(photoService.originalUrl(any())).thenReturn("https://example.com/original.jpg");
+
+        var sent = requestService.list(sender.getMemberId(), "sent").get(0);
+        assertThat(sent.requestId()).isEqualTo(request.requestId());
+        assertThat(sent.counterpart().score()).isEqualTo(83);
+        assertThat(sent.counterpart().mbti()).isEqualTo(recipient.getMbti());
+        assertThat(sent.counterpart().bio()).isEqualTo(recipient.getBio());
+        assertThat(sent.counterpart().blurredPhotoUrl()).isEqualTo("https://example.com/blurred.png");
+        assertThat(sent.counterpart().fields().photo().locked()).isTrue();
+        assertThat(sent.counterpart().fields().photo().cost()).isEqualTo(10);
+        assertThat(sent.counterpart().fields().photo().value()).isNull();
+        assertThat(sent.counterpart().fields().name().value()).isNull();
+        assertThat(sent.counterpart().fields().department().value()).isNull();
+        assertThat(sent.contactValue()).isNull();
+        verify(photoService, never()).originalUrl(any());
+
+        var received = requestService.list(recipient.getMemberId(), "received").get(0);
+        assertThat(received.candidateId()).isEqualTo(sender.getId());
+        assertThat(received.counterpart().score()).isEqualTo(83);
+        assertThat(received.counterpart().fields().photo().locked()).isFalse();
+        assertThat(received.counterpart().fields().photo().cost()).isNull();
+        assertThat(received.counterpart().fields().photo().value())
+                .isEqualTo("https://example.com/original.jpg");
+        assertThat(received.counterpart().fields().name().value()).isEqualTo(sender.getName());
+        assertThat(received.counterpart().fields().department().value())
+                .isEqualTo(sender.getDepartment());
+        assertThat(received.contactValue()).isNull();
+
+        var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
+        mvc.perform(get("/api/dating/requests?box=received")
+                        .cookie(new Cookie("wks_token", jwtProvider.issue(recipient.getMemberId()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].counterpart.score").value(83))
+                .andExpect(jsonPath("$.data[0].counterpart.fields.photo.value")
+                        .value("https://example.com/original.jpg"))
+                .andExpect(jsonPath("$.data[0].counterpart.fields.photo.objectKey").doesNotExist());
+    }
+
+    @Test
+    @Transactional
+    void sentRequestListReflectsPreviouslyUnlockedFieldsWithoutExposingOthers() {
+        DatingProfile sender = profile(1020003L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(1020004L, Gender.FEMALE, "계해", "임술", "신유");
+        DatingRecommendation recommendation = recommendationRepository.saveAndFlush(
+                new DatingRecommendation(sender.getMemberId(), recipient, 72));
+        requestService.send(sender.getMemberId(), recipient.getId());
+        recommendation.unlock(DatingUnlockField.NAME);
+        when(photoService.thumbnailUrl(any())).thenReturn("https://example.com/blurred.png");
+
+        var sent = requestService.list(sender.getMemberId(), "sent").get(0);
+        assertThat(sent.counterpart().fields().name().value()).isEqualTo(recipient.getName());
+        assertThat(sent.counterpart().fields().department().value()).isNull();
+        assertThat(sent.counterpart().fields().photo().value()).isNull();
+        verify(photoService, never()).originalUrl(any());
+
+        recommendation.unlock(DatingUnlockField.PHOTO);
+        recommendation.unlock(DatingUnlockField.DEPARTMENT);
+        when(photoService.originalUrl(any())).thenReturn("https://example.com/original.jpg");
+        var unlocked = requestService.list(sender.getMemberId(), "sent").get(0);
+        assertThat(unlocked.counterpart().fields().photo().value())
+                .isEqualTo("https://example.com/original.jpg");
+        assertThat(unlocked.counterpart().fields().department().value())
+                .isEqualTo(recipient.getDepartment());
     }
 
     @Test

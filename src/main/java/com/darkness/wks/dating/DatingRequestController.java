@@ -4,6 +4,7 @@ import com.darkness.wks.common.auth.CurrentMember;
 import com.darkness.wks.common.response.ApiResponse;
 import com.darkness.wks.common.response.ErrorResponse;
 import com.darkness.wks.dating.dto.CreateDatingRequest;
+import com.darkness.wks.dating.dto.DatingRequestListResponse;
 import com.darkness.wks.dating.dto.DatingRequestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -66,6 +67,7 @@ public class DatingRequestController {
     @Operation(summary = "요청 보관함", description = """
             box=sent 면 내가 보낸 요청, box=received 면 내가 받은 요청. 수락(ACCEPTED)된 건에만 상대
             연락처(contactValue)가 채워지고, PENDING·REJECTED·CANCELLED 는 null 이다.
+            받은 요청에는 상대 이름·학과·원본 사진을 무료로 표시한다. 보낸 요청은 기존 해금 상태를 지킨다.
             취소 이력은 보낸 목록에 남고 받은 목록에서는 제외한다.
             """)
     @ApiResponses({
@@ -78,7 +80,7 @@ public class DatingRequestController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping
-    public ApiResponse<List<DatingRequestResponse>> list(@CurrentMember Long memberId,
+    public ApiResponse<List<DatingRequestListResponse>> list(@CurrentMember Long memberId,
             @Parameter(description = "sent | received", example = "received") @RequestParam String box) {
         return ApiResponse.success(requestService.list(memberId, box));
     }
