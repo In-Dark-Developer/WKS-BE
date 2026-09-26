@@ -36,8 +36,8 @@ import java.util.List;
 public class SignupReapplyService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    // 문구는 기획 확정 전 임시값 — EmailVerificationService 와 같은 처리
-    private static final String SUBJECT = "[동국대 소개팅] 사전신청 고맙다 — 사주 결과 이어서 소개팅 신청하러 와라";
+    // 개인 지메일로 발송해 학교 메일에서 스팸으로 분류되기 쉽다 — 반말·명령조 문구를 피하고 서비스명을 앞에 둔다
+    private static final String SUBJECT = "[운명도 꿰어야 사랑이다] 사전신청하신 사주 결과로 소개팅 신청을 마무리해 주세요";
 
     private final SignupRepository signupRepository;
     private final SignupReapplyInviteRepository inviteRepository;
@@ -86,14 +86,21 @@ public class SignupReapplyService {
             helper.setTo(toEmail);
             helper.setSubject(SUBJECT);
             helper.setText("""
-                    사전신청 고맙다. 정식 소개팅 신청이 열렸다.
+                    안녕하세요, 동국대 축제 '운명도 꿰어야 사랑이다'입니다.
+                    사전신청해 주셔서 감사합니다. 이제 정식 소개팅 신청이 열렸어요.
 
-                    아래 링크에서 카카오 로그인하면 사전신청 때 본 사주 결과가 계정에 그대로 이어진다.
-                    그다음 학교메일(@dgu.ac.kr) 인증과 사진 등록을 하면 소개팅 신청이 끝난다.
-                    사전신청 때 적은 내용은 신청서에 미리 채워져 있다. 링크는 %d시간 동안 유효하다.
+                    아래 링크에서 세 단계만 거치면 신청이 끝나요.
+                    1. 카카오 로그인 — 사전신청 때 본 사주 결과가 계정에 그대로 이어져요.
+                    2. 학교 메일(@dgu.ac.kr) 인증과 사진 등록
+                    3. 사전신청 때 적어 주신 내용 확인 (미리 채워 두었어요)
 
                     %s
-                    """.formatted(ttlHours, link));
+
+                    링크는 %d시간 동안 쓸 수 있어요.
+                    학교 메일로 가는 인증번호가 보이지 않으면 스팸함을 확인해 주세요.
+
+                    사전신청하신 적이 없다면 이 메일은 무시하셔도 됩니다.
+                    """.formatted(link, ttlHours));
             mailSender.send(message);
         } catch (Exception exception) {
             throw new InviteMailFailedException(exception);
