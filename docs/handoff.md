@@ -56,8 +56,9 @@
 
 | 번호 | 예약자 | 내용 | 상태 |
 |---|---|---|---|
-| V22 | 곽도윤 | `signup_reapply_invite` (기존 사전신청자 재신청 초대 토큰, TTL 48시간). **축제 후 버려도 되는 1회성 캠페인 테이블** | 구현 완료, 커밋 전 |
-| V21 | 곽도윤 | `dating_email_verification` (소개팅 학교메일 인증 매직링크, TBD-16 해결). 기존 사전신청자 백필 캠페인의 전제 작업 | 구현 완료, 커밋 전 |
+| V23 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
+| V22 | 곽도윤 | `signup_reapply_invite` (기존 사전신청자 재신청 초대 토큰, TTL 48시간). **축제 후 버려도 되는 1회성 캠페인 테이블** | dev 머지 완료 (#97) |
+| V21 | 곽도윤 | `dating_email_verification` (소개팅 학교메일 인증 매직링크, TBD-16 해결). 기존 사전신청자 백필 캠페인의 전제 작업. **V23 이후 새 발급 없음** | dev 머지 완료 (#97) |
 | V20 | 곽도윤 | `dating_recommendation` 에 `photo_unlocked`·`name_unlocked`·`department_unlocked`·`reason_unlocked` 추가 (실 해금 상태) | `feat/wallet` 구현 완료, PR 대기 |
 | V19 | 곽도윤 | `thread_ledger` (실 원장, `ref_id NOT NULL`). **V12 예약을 대체한다** — V13~V18 이 먼저 머지돼 V12 를 쓰면 out-of-order 오류가 난다 (2026-09-26 발견) | `feat/wallet` 구현 완료, PR 대기 |
 | V18 | 최선우 | 소개팅 추천별 궁합 이유 캐시 (#94) | dev 머지 완료 |
@@ -102,6 +103,9 @@
 | `DATING_REQUEST_NOT_FOUND` (404) | 최선우 (#86) | ✅ §1·§11 |
 | `DATING_REQUEST_CONFLICT` (409) | 최선우 (#86) | ✅ §1·§11 |
 | `METHOD_NOT_ALLOWED` (405) | 최선우 (#89, 사용자 직접 요청) | ✅ §1·§10.3 |
+| `INVALID_EMAIL_CODE` (400) | 곽도윤 (2026-09-26, 학교메일 코드 인증) | ✅ §1·§10.7 |
+| `EMAIL_CODE_RATE_LIMITED` (429) | 곽도윤 (2026-09-26, 코드 재발송 쿨다운·일일 한도) | ✅ §1·§10.7 |
+| `MAIL_UNAVAILABLE` (503) | 곽도윤 (2026-09-26, 코드 메일 발송 실패) | ✅ §1·§10.7 |
 
 ---
 
@@ -109,6 +113,8 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-26 | `POST /api/results` 를 **`credentials: 'include'`** 로 호출하면, 로그인 상태이고 계정에 결과가 없을 때 새 결과가 계정에 연결된다(로그인 후 사주를 본 사람이 소개팅 등록에서 `RESULT_NOT_FOUND` 나던 문제). 요청·응답 형식 변경 없음, 비로그인 동작 그대로. `api-spec.md` §2 | ❌ |
+| 2026-09-26 | **[소개팅 학교메일 인증 방식 변경, 프론트 대응 필수]** 매직링크 → **프로필 등록 전 6자리 코드.** `POST /api/dating/email-codes`(인증 버튼 → 발송)·`POST /api/dating/email-codes/verify`(코드 입력) 신규. `POST /api/dating/profile` 은 코드 인증 안 한 이메일이면 `DATING_NOT_VERIFIED` 403 (요청 필드 변경 없음, 응답 `emailVerified` 는 항상 `true`). 에러코드 3개 추가(`INVALID_EMAIL_CODE` 400·`EMAIL_CODE_RATE_LIMITED` 429·`MAIL_UNAVAILABLE` 503). **`/dating/verify` 페이지는 만들 필요 없어짐.** 재신청(`reapplyToken`)은 그대로 인증 생략. `api-spec.md` §10 머리말·§10.7 | ❌ |
 | 2026-09-26 | **[사용 제약, API 변경 아님]** 개발 서버 `https://api-dev.threadoffate.site` 오픈(프론트 `dev.threadoffate.site`·`localhost:3000` 허용). **로그인은 `*.threadoffate.site` 프론트에서만 된다** — `localhost`·`netlify.app` 에서는 로그인 뒤 401. `api-spec.md` §9 인증 규칙 표 | ❌ |
 | 2026-09-26 | **[기존 사전신청자 재신청, 프론트 페이지 필요]** `GET /api/signups/reapply?token=` 추가 — 초대 메일 링크(`/dating/reapply?token=`)로 들어온 사람의 사전신청 입력값 + `resultId` 반환. 프론트가 ① 이 값으로 폼 프리필 → ② `POST /api/auth/kakao` 에 그 `resultId` 를 실어 로그인(사주 결과 계정 연결) → ③ 사진 업로드 → ④ `POST /api/dating/profile` 에 `reapplyToken` 실어 등록. 4단계 흐름은 `api-spec.md` §5. **기존 필드 변경·삭제 없음** | ❌ |
 | 2026-09-26 | `POST /api/dating/profile` 성공 시 학교메일 인증 메일이 자동 발송된다. `GET /api/dating/profile/verify?token=` 클릭 → 302 로 `DATING_VERIFY_REDIRECT_URL`(기본 `/dating/verify`) 이동 → `emailVerified: true`. **프론트에 `/dating/verify` 페이지 필요.** 재신청(`reapplyToken`)으로 등록하면 이 단계 없이 바로 인증 완료 | ❌ |
@@ -159,6 +165,89 @@
 ---
 
 ## 기록
+
+### 2026-09-26 (토) · 곽도윤 · result/·common/auth 로그인 후 만든 결과를 계정에 연결 (TBD-14 일부) · Claude Code
+
+**한 일**
+- dev 에서 "로그인 → 사주 결과 생성" 순서로 쓴 계정이 `POST /api/dating/profile` 에서 `RESULT_NOT_FOUND` 404.
+  결과 연결이 카카오 로그인(`resultId` 동봉) 때만 일어나서, 로그인 후에 만든 결과는 영영 계정에 안 붙었다
+- `POST /api/results` 가 로그인 쿠키를 **선택적으로** 읽는다. 유효하고 계정에 결과가 없으면 새 결과에
+  `member_id` 를 채운다. 이미 있으면 계정 결과 유지(새 결과는 익명) — plan §1.1 "계정 우선"과 같은 방향(사용자 결정)
+- 쿠키 없음·만료·위조는 에러 없이 익명 처리 — 사주 API 는 로그인 없이 동작해야 한다
+
+**건드린 파일/패키지**
+- `common/auth/` — `OptionalMember`·`OptionalMemberArgumentResolver` 신규, `AuthWebConfig`(리졸버 등록)·`JwtAuthInterceptor`(주석)
+- `result/` — `ResultController`·`ResultService`(`createResult(request, memberId)`)·`ResultRepository`(`lockMember`)
+- 테스트: `ResultServiceTest` 3건 추가. `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- 같은 회원의 동시 생성(버튼 연타)은 `member` 행 `FOR UPDATE` 로 직렬화한다. 안 그러면 둘 다 연결을 시도해
+  부분 UNIQUE(`uq_result_member`)에 걸려 500. 잠금은 해석(LLM) **뒤에** 잡는다
+- 토큰의 회원이 DB 에 없으면(개발 DB 초기화 등) 연결 없이 익명으로 만든다 — FK 위반 500 방지
+- 이미 "로그인 후 결과를 만든" 기존 계정은 자동으로 고쳐지지 않는다. 결과를 한 번 더 만들면 그때 연결된다
+- `lockMember` 네이티브 쿼리는 단위 테스트(목)만 거쳤다 — 실제 DB 로는 dev 배포 후 확인 필요
+
+**막힌 것 / 넘기는 것**
+- `result/`(최선우 담당)·`common/` 수정 **팀 채널 공지 필요**(아직 안 함)
+- TBD-14 의 나머지(5.8 로그인 유저 중복 등록 방지)는 그대로 TBD
+
+**문서 변경**
+- `docs/plan.md` — TBD-14 일부 결정 기록
+- `docs/api-spec.md` — `POST /api/results` 로그인 시 계정 연결 설명 추가
+
+**프론트에 알려야 할 것**
+- `POST /api/results` 를 `credentials: 'include'` 로 호출해야 로그인 계정에 연결된다. 요청·응답 형식 변경 없음
+
+---
+
+### 2026-09-26 (토) · 곽도윤 · dating/ 학교메일 인증을 등록 전 6자리 코드로 전환 (TBD-16 변경) · Claude Code
+
+**한 일**
+- 프론트 요청: "인증 버튼 누르면 바로 메일 발송". 매직링크(V21)는 프로필이 있어야 발급되고 링크가 다른 탭에서
+  열려서 폼이 완료를 알 수 없다 → **프로필 등록 전 6자리 코드**로 바꿨다(사용자 결정, 링크 대신 코드도 사용자 선택)
+- `dating_email_code` 테이블(V23) — 토큰이 아니라 **회원에 묶는다**(`member_id` PK, 회원당 최근 발송분 1행).
+  코드는 SHA-256 해시만 저장
+- `POST /api/dating/email-codes`(발송)·`POST /api/dating/email-codes/verify`(확인) 신규. 둘 다 로그인 필요
+- `POST /api/dating/profile` — `reapplyToken` 이 없으면 그 이메일이 코드 인증돼 있어야 등록된다(아니면
+  `DATING_NOT_VERIFIED`). 등록 즉시 `markVerified`. **등록 후 매직링크 자동 발송은 제거**
+- 남용 방지: 코드당 5회 실패, 재발송 60초 쿨다운, 24시간 10회 발송 한도(메일 폭탄·Gmail 한도 소진·
+  "재발송→5회 시도" 반복 추측을 같이 막는다). 발송·확인은 행 잠금(`findForUpdate`)으로 연타 경합을 막는다
+- SMTP 실패는 `MAIL_UNAVAILABLE` 503 으로 돌려주고 코드를 지운다(쿨다운에 안 걸려 바로 재시도 가능).
+  **이번에 "재발송 API 없음" 문제도 같이 해결됨** — 발송 API 자체가 재발송이다
+
+**건드린 파일/패키지**
+- `dating/` — `DatingEmailCodeService`·`DatingEmailCodeRepository`·`entity/DatingEmailCode`·
+  `dto/DatingEmailCode{Request,Response,VerifyRequest,VerifyResponse}` 신규, `DatingProfileService`·`DatingController` 수정
+- `common/exception/ErrorCode.java` — `INVALID_EMAIL_CODE`(400)·`EMAIL_CODE_RATE_LIMITED`(429)·`MAIL_UNAVAILABLE`(503)
+- `db/migration/V23__add_dating_email_code.sql` (신규)
+- 테스트: `DatingEmailCodeServiceTest`(단위), **`DatingEmailCodeFlowTest`(Testcontainers, HTTP)** 신규,
+  `DatingProfileServiceTest`·`SignupReapplyFlowTest` 갱신. `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- **코드 확인은 바깥 트랜잭션 없이 불려야 한다.** 틀린 입력의 실패 횟수가 예외와 함께 커밋돼야 해서
+  `DatingEmailCodeService.verify` 가 `noRollbackFor = BusinessException.class` 인데, `DatingProfileService`
+  (클래스 레벨 readOnly 트랜잭션)에 합류하면 read-only 오류가 나고 실패 횟수도 롤백된다. 그래서
+  `verifyEmailCode`·`sendEmailCode` 는 `Propagation.NOT_SUPPORTED` 다 — Flow 테스트가 실제로 이걸 잡았다
+- 매직링크 `GET /api/dating/profile/verify` 와 `DatingEmailVerificationService` 는 **이미 나간 링크용으로 남겨 뒀다**
+  (새 발급 없음, Swagger 에 deprecated). 엔드포인트 삭제는 api-spec 계약 삭제라 팀 확인 후 지울 것.
+  dev 에 이 방식으로 만든 미인증 프로필이 있으면 그 링크로만 인증된다
+- 수치(10분·5회·60초·10회)는 `DatingEmailCodeService` 상수다. `application.yml` 을 안 건드리려고 설정으로 빼지 않았다
+- 메일 문구는 임시값(다른 메일과 같은 반말 톤)
+
+**막힌 것 / 넘기는 것**
+- `ErrorCode`·`db/migration/`(V23) 변경 **팀 채널 공지 필요**(아직 안 함)
+- SMTP 발송 한도 미확인은 그대로(위 "막혀 있는 것" 표)
+
+**문서 변경**
+- `docs/plan.md` — TBD-16 변경 기록(등록 전 코드 인증)
+- `docs/architecture.md` — 매직링크 표(V21 폐기 예정), "소개팅 학교메일 6자리 코드" 절 신설, §5 스키마 `dating_email_code`
+- `docs/api-spec.md` — §1 에러코드 3개, §10 머리말 신규 흐름, §10.2 등록 조건·응답 예시, §10.6 폐기 예정, §10.7 신설
+- `docs/handoff.md` — Flyway V23 예약(+ V21·V22 상태를 "dev 머지 완료"로 정정), ErrorCode 표, 프론트 공지 표
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-26 첫 줄. **`/dating/verify` 페이지는 더 이상 필요 없다**
+
+---
 
 ### 2026-09-26 (토) · 곽도윤 · Swagger 문서 누락 점검 + dating 8개 엔드포인트 문서화 · Claude Code
 

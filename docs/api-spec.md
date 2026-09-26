@@ -48,7 +48,10 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃 |
 | `DATING_PROFILE_NOT_FOUND` | 404 | 내 소개팅 프로필 없음 |
 | `DATING_PROFILE_CONFLICT` | 409 | 프로필 또는 학교 이메일 중복 |
-| `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회 |
+| `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회, 코드 인증 안 한 이메일로 프로필 등록 |
+| `INVALID_EMAIL_CODE` | 400 | 학교 이메일 인증 코드 불일치·만료·5회 실패 초과·발송받은 이메일과 다름 |
+| `EMAIL_CODE_RATE_LIMITED` | 429 | 인증 코드 재발송 60초 쿨다운 중, 또는 24시간 10회 한도 초과 |
+| `MAIL_UNAVAILABLE` | 503 | 인증 코드 메일 발송 실패. 바로 다시 시도할 수 있다 |
 | `DATING_REQUEST_NOT_FOUND` | 404 | 요청 없음 또는 받은 사람 본인이 아님 |
 | `DATING_REQUEST_CONFLICT` | 409 | 중복 요청, 대상 미노출, 이미 처리된 요청 |
 | `INSUFFICIENT_THREAD` | 402 | 실 잔액 부족 (해금 시) |
@@ -63,6 +66,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ### `POST /api/results`
 
 계산 + 해석 생성. **3~10초 걸릴 수 있다.** 프론트는 로딩 UX 필수.
+
+로그인 없이 동작한다. 로그인 쿠키(`wks_token`)가 유효하고 **계정에 아직 결과가 없으면** 새 결과를 계정에 연결한다(2026-09-26). 계정에 이미 결과가 있으면 연결하지 않는다(계정 결과 유지, 새 결과는 익명). 쿠키가 만료·위조여도 에러 없이 익명으로 처리한다. 응답 형식은 같다 — 프론트는 `credentials: 'include'` 로 보내기만 하면 된다.
 
 **Request**
 
@@ -639,7 +644,17 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 
 ## 10. 소개팅 프로필·후보 추천
 
-모든 `/api/dating/**` 요청에 로그인 쿠키(`wks_token`)가 필요하다 (§9 참고, `credentials: 'include'` 필수) — **단 10.6(학교 이메일 인증)은 매직링크 토큰 자체가 신원 증명이라 예외다.** 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
+모든 `/api/dating/**` 요청에 로그인 쿠키(`wks_token`)가 필요하다 (§9 참고, `credentials: 'include'` 필수) — **단 10.6(학교 이메일 인증 매직링크, 폐기 예정)은 토큰 자체가 신원 증명이라 예외다.**
+
+**신규 신청 흐름 (2026-09-26 변경)**: 학교 이메일 인증을 프로필 등록 **전에** 6자리 코드로 끝낸다(§10.7).
+
+```
+로그인 → POST /api/dating/email-codes {email}             (인증 버튼 → 코드 메일 발송)
+      → POST /api/dating/email-codes/verify {email, code}  (같은 화면에서 코드 입력)
+      → POST /api/dating/profile/photo → S3 PUT            (§10.1)
+      → POST /api/dating/profile (같은 email)              (§10.2, 등록 즉시 emailVerified: true)
+```
+ 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
 
 ### 10.1 사진 업로드 준비 — `POST /api/dating/profile/photo`
 
@@ -685,9 +700,9 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 }
 ```
 
-모든 필드가 필수다. `contactValue`는 문자열이며 `PHONE`이면 전화번호, `INSTAGRAM`이면 인스타그램 아이디(예: `my_insta_id`)를 넣는다. `photoId`는 **로그인한 회원에게 발급됐고 S3에 파일 업로드가 완료된 사진**이어야 한다. 계정에 연결된 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
+모든 필드가 필수다. **`email`은 이 계정으로 코드 인증(§10.7)을 마친 학교 이메일이어야 한다** — 아니면 `DATING_NOT_VERIFIED` 403(2026-09-26 변경. 그래서 등록된 프로필은 항상 `emailVerified: true`이고 인증 메일은 더 이상 발송되지 않는다). `contactValue`는 문자열이며 `PHONE`이면 전화번호, `INSTAGRAM`이면 인스타그램 아이디(예: `my_insta_id`)를 넣는다. `photoId`는 **로그인한 회원에게 발급됐고 S3에 파일 업로드가 완료된 사진**이어야 한다. 계정에 연결된 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
 
-**`reapplyToken`(선택, 2026-09-26 추가)**: 기존 사전신청자 재신청(§5 `GET /api/signups/reapply`)에서만 넣는다. 값이 있으면 `email`이 **초대받은 주소와 같아야 하고**(다르면 `INVALID_INPUT` 400), 학교메일 인증을 이미 끝난 것으로 처리한다(`emailVerified: true`, 인증 메일 발송 없음). 만료·위조·이미 쓴 토큰은 `INVALID_TOKEN` 400. 일반 신청에서는 넣지 않는다 — 넣지 않으면 등록 후 인증 메일이 발송된다(§10.6).
+**`reapplyToken`(선택, 2026-09-26 추가)**: 기존 사전신청자 재신청(§5 `GET /api/signups/reapply`)에서만 넣는다. 값이 있으면 `email`이 **초대받은 주소와 같아야 하고**(다르면 `INVALID_INPUT` 400), 학교메일 인증을 이미 끝난 것으로 처리한다(`emailVerified: true`, **코드 인증 불필요**). 만료·위조·이미 쓴 토큰은 `INVALID_TOKEN` 400. 일반 신청에서는 넣지 않는다 — 넣지 않으면 코드 인증(§10.7)이 필요하다.
 
 **응답 201 예시**
 
@@ -697,7 +712,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
   "data": {
     "candidateId": "3f2a9c1e-0000-4000-8000-000000000001",
     "email": "student@dgu.ac.kr",
-    "emailVerified": false,
+    "emailVerified": true,
     "name": "홍길동",
     "contactMethod": "PHONE",
     "contactValue": "010-3333-3333",
@@ -709,7 +724,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 }
 ```
 
-`candidateId`는 소개팅 프로필 ID이며 다른 사람의 추천 카드에서도 이 값으로 표시된다. `photoId`는 사진 ID라 서로 다른 값이다. `emailVerified`는 학교 메일 인증 전에는 `false`다.
+`candidateId`는 소개팅 프로필 ID이며 다른 사람의 추천 카드에서도 이 값으로 표시된다. `photoId`는 사진 ID라 서로 다른 값이다. `emailVerified`는 새로 등록한 프로필이면 항상 `true`다(등록 전에 인증하므로). 2026-09-26 이전에 매직링크 방식으로 등록된 미인증 프로필만 `false`일 수 있다.
 
 ### 10.3 내 프로필 조회 — `GET /api/dating/profile/me`
 
@@ -777,19 +792,65 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 - `candidateId`가 내 현재 추천 목록(Top 3)에 없으면 `DATING_PROFILE_NOT_FOUND` 404
 - `REASON`은 첫 해금 성공 시점에 LLM으로 생성해 캐싱한다(7.3) — 생성이 실패하면 `LLM_UNAVAILABLE` 503이지만 **차감은 이미 끝난 뒤**이므로 다시 호출하면 차감 없이 생성만 재시도한다
 
-### 10.6 학교 이메일 인증 — `GET /api/dating/profile/verify?token={token}`
+### 10.6 학교 이메일 인증 (매직링크, **폐기 예정**) — `GET /api/dating/profile/verify?token={token}`
 
-프로필 등록(10.2) 성공 직후 서버가 `email`로 인증 메일을 자동 발송한다(`signup/`의 매직링크와 같은 구조, TBD-16 해결). 메일의 링크를 누르면 이 API가 호출된다.
+> **2026-09-26 폐기 예정.** 인증이 프로필 등록 전 6자리 코드(§10.7)로 바뀌어 **새 링크는 더 이상 발급하지 않는다.** 이미 발송된 링크만 처리하려고 남겨 뒀다. 프론트는 이 흐름(`/dating/verify` 페이지)을 새로 만들 필요 없다.
+
+(이전 동작) 프로필 등록(10.2) 성공 직후 서버가 `email`로 인증 메일을 자동 발송했고, 메일의 링크를 누르면 이 API가 호출됐다.
 
 - 성공: `302` — 프론트 완료 페이지로 리다이렉트. 이후 `emailVerified`가 `true`로 바뀌고 `GET /api/dating/recommendations`가 더 이상 `DATING_NOT_VERIFIED`를 던지지 않는다
 - 실패(만료·위조·재사용 토큰): `400 INVALID_TOKEN`
-- 메일 발송 자체가 실패해도(SMTP 오류) 프로필 등록은 그대로 성공한다 — **현재 재발송 API는 없다.**
 - 재신청 초대(`reapplyToken`)로 등록한 경우에는 이 단계가 없다. 초대 메일 수신이 곧 주소 소유 증명이라 등록 즉시 `emailVerified: true`다
+
+### 10.7 학교 이메일 코드 인증 — `POST /api/dating/email-codes`, `POST /api/dating/email-codes/verify`
+
+2026-09-26 추가. 폼의 "인증" 버튼을 누르면 바로 코드 메일이 나가고, 같은 화면에서 코드를 입력한다. 로그인 필요.
+
+**① 발송 — `POST /api/dating/email-codes`**
+
+```json
+{ "email": "student@dgu.ac.kr" }
+```
+
+**응답 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "expiresAt": "2026-09-26T12:10:00Z",
+    "resendAvailableAt": "2026-09-26T12:01:00Z"
+  }
+}
+```
+
+- 코드는 **6자리 숫자, 10분 유효.** 다시 보내면 이전 코드는 즉시 무효가 되고, 이미 인증된 상태도 초기화된다
+- 재발송은 **60초 뒤부터**(`resendAvailableAt` 으로 버튼 타이머), **24시간에 10번까지.** 넘으면 `EMAIL_CODE_RATE_LIMITED` 429
+- 발송 전에 프로필 등록과 같은 이메일 검사를 한다: 학교 메일 아님 `INVALID_EMAIL_DOMAIN` 400, 다른 계정이 이미 쓴 이메일·이미 프로필이 있는 계정 `DATING_PROFILE_CONFLICT` 409
+- 메일 발송 실패는 `MAIL_UNAVAILABLE` 503. 이때는 쿨다운에 걸리지 않으니 바로 재시도해도 된다
+
+**② 확인 — `POST /api/dating/email-codes/verify`**
+
+```json
+{ "email": "student@dgu.ac.kr", "code": "123456" }
+```
+
+**응답 200**
+
+```json
+{ "success": true, "data": { "email": "student@dgu.ac.kr", "verified": true } }
+```
+
+- `email`은 ①에서 보낸 주소와 같아야 한다. 코드 불일치·만료·발송받은 이메일과 다름은 전부 `INVALID_EMAIL_CODE` 400(어느 조건인지 구분하지 않는다)
+- **코드 하나당 5번 틀리면 맞는 코드도 받지 않는다** — 새로 발송받아야 한다
+- 이미 인증된 상태에서 다시 부르면 그대로 200 (중복 클릭 안전)
+- `code`가 6자리 숫자가 아니면 `INVALID_INPUT` 400
+- 인증 뒤 프로필 등록(§10.2)은 **같은 `email`** 로 한다. 인증에 유효기간은 없지만, 다른 이메일로 다시 발송하면 이전 인증은 사라진다
 
 ### #84 구현 상태와 남은 연동
 
 - 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
-- 학교 메일 인증 완료를 소개팅 프로필에 반영하는 연동은 **구현됐다(2026-09-26, 10.6 참고).**
+- 학교 메일 인증은 **등록 전 6자리 코드(10.7)** 로 구현됐다(2026-09-26). 10.6 매직링크는 폐기 예정.
 - 정보 해금(§10.5)은 구현됐다(2026-09-26). **리롤 API는 아직 없다**(plan.md TBD-6, 비용 미정). 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 매칭 요청은 §11을 본다.
 
 ---

@@ -33,8 +33,13 @@ public class ResultService {
 
     private static final LocalDate MIN_BIRTH_DATE = LocalDate.of(1950, 1, 1);
 
+    /**
+     * @param memberId 로그인했으면 회원 id, 아니면 {@code null}. 계정에 결과가 없을 때만 새 결과를 계정에
+     *                 연결한다 — 이미 있으면 계정 결과를 그대로 두고 새 결과는 익명으로 남긴다(plan.md §1.1 과
+     *                 같은 "계정 우선", TBD-14 중 로그인 후 결과 생성 부분, 2026-09-26)
+     */
     @Transactional
-    public ResultResponse createResult(CreateResultRequest request) {
+    public ResultResponse createResult(CreateResultRequest request, Long memberId) {
         LocalDate birthDate = toSolar(request);
         int version = resultAnalysisPort.analysisVersion();
         // 같은 입력·같은 버전이면 저장된 해석을 복사한다. Gemini 호출 없음 (#62)
@@ -43,7 +48,7 @@ public class ResultService {
                 .map(ResultService::toAnalysis)
                 .orElseGet(() -> resultAnalysisPort.analyze(birthDate, request.birthTime(), request.gender()));
 
-        Result result = resultRepository.save(new Result(
+        Result result = new Result(
                 request.nickname(),
                 birthDate,
                 request.birthTime(),
@@ -56,7 +61,13 @@ public class ResultService {
                 request.calendarType(),
                 request.birthDate(), // 입력 원본. 폼 자동 채움용 (#66)
                 request.leapMonth()
-        ));
+        );
+        // 잠금은 해석(LLM 호출 가능) 뒤에 잡는다 — 잠근 채로 최대 수십 초를 기다리지 않게
+        if (memberId != null && resultRepository.lockMember(memberId).isPresent()
+                && !resultRepository.existsByMemberId(memberId)) {
+            result.linkMember(memberId);
+        }
+        result = resultRepository.save(result);
 
         ResultAnalysisPort.Fortune marriage = analysis.fortune(FortuneCategory.MARRIAGE);
         ResultAnalysisPort.Fortune children = analysis.fortune(FortuneCategory.CHILDREN);

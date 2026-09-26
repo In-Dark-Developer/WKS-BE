@@ -5,7 +5,7 @@ import com.darkness.wks.common.Gender;
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.common.auth.JwtProvider;
-import com.darkness.wks.dating.DatingEmailVerificationRepository;
+import com.darkness.wks.dating.DatingEmailVerificationService;
 import com.darkness.wks.dating.DatingPhotoRepository;
 import com.darkness.wks.dating.DatingPhotoService;
 import com.darkness.wks.dating.DatingProfileRepository;
@@ -13,6 +13,7 @@ import com.darkness.wks.dating.DatingProfileService;
 import com.darkness.wks.dating.dto.DatingProfileRequest;
 import com.darkness.wks.dating.dto.DatingProfileResponse;
 import com.darkness.wks.dating.entity.DatingPhoto;
+import com.darkness.wks.dating.entity.DatingProfile;
 import com.darkness.wks.member.MemberRepository;
 import com.darkness.wks.member.entity.Member;
 import com.darkness.wks.result.ResultRepository;
@@ -102,7 +103,7 @@ class SignupReapplyFlowTest {
     DatingProfileService profileService;
 
     @Autowired
-    DatingEmailVerificationRepository datingVerificationRepository;
+    DatingEmailVerificationService datingVerificationService;
 
     @Autowired
     SignupReapplyCampaignRunner campaignRunner;
@@ -269,18 +270,14 @@ class SignupReapplyFlowTest {
     /** 매직링크는 메일 앱에서 열려서 로그인 쿠키가 없다 — 인터셉터 제외가 실제로 먹는지 확인한다 */
     @Test
     void datingVerifyLinkWorksWithoutLoginCookie() throws Exception {
-        stubMimeMessage();
+        // V23 이후 새 링크는 발급하지 않지만, 그 전에 나간 링크는 계속 눌려야 한다 — 미인증 프로필을 직접 만든다
         Member member = memberRepository.saveAndFlush(new Member(780002L));
         String email = "verify-" + UUID.randomUUID() + "@dgu.ac.kr";
-        result(member.getId());
         DatingPhoto photo = photoRepository.saveAndFlush(
                 new DatingPhoto(member.getId(), "dating-photos/" + member.getId() + "/" + UUID.randomUUID()));
-        when(photoService.verifyOwnedPhoto(any(), any())).thenReturn(photo);
-        var profile = profileService.create(member.getId(), request(email, photo.getId(), null));
-        assertThat(profile.emailVerified()).isFalse();
-        String token = datingVerificationRepository.findAll().stream()
-                .filter(verification -> verification.getProfile().getId().equals(profile.candidateId()))
-                .findFirst().orElseThrow().getToken();
+        DatingProfile profile = profileRepository.saveAndFlush(new DatingProfile(member.getId(), email, "김동국",
+                ContactMethod.INSTAGRAM, "my_ig", "컴퓨터공학과", "INFP", "자기소개", photo));
+        String token = datingVerificationService.issueToken(profile).getToken();
 
         mvc().perform(get("/api/dating/profile/verify").param("token", token))
                 .andExpect(status().isFound())

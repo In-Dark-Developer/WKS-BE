@@ -19,11 +19,14 @@ public class AuthWebConfig implements WebMvcConfigurer {
 
     private final JwtAuthInterceptor jwtAuthInterceptor;
     private final CurrentMemberArgumentResolver currentMemberArgumentResolver;
+    private final OptionalMemberArgumentResolver optionalMemberArgumentResolver;
 
     public AuthWebConfig(JwtAuthInterceptor jwtAuthInterceptor,
-                          CurrentMemberArgumentResolver currentMemberArgumentResolver) {
+                          CurrentMemberArgumentResolver currentMemberArgumentResolver,
+                          OptionalMemberArgumentResolver optionalMemberArgumentResolver) {
         this.jwtAuthInterceptor = jwtAuthInterceptor;
         this.currentMemberArgumentResolver = currentMemberArgumentResolver;
+        this.optionalMemberArgumentResolver = optionalMemberArgumentResolver;
     }
 
     @Override
@@ -34,5 +37,6 @@ public class AuthWebConfig implements WebMvcConfigurer {
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(currentMemberArgumentResolver);
+        resolvers.add(optionalMemberArgumentResolver);
     }
 }
