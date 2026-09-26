@@ -106,7 +106,7 @@ com.darkness.wks
 │   └── JwtInterceptor           인증 경로 검증 + @CurrentMember 인자 주입
 │
 ├── member/                      곽도윤   ← 구현 전
-│   ├── MeController             GET /api/me, GET /api/me/result (결과 조회는 ResultService 에 위임)
+│   ├── MeController             GET /api/me, GET·POST /api/me/result (결과 조회는 ResultService 에 위임)
 │   ├── MemberRepository
 │   ├── entity/  Member
 │   └── dto/
@@ -142,7 +142,7 @@ saju    →  result       금지
 saju    →  (스프링 컨텍스트)  금지
 auth    →  member       허용
 auth    →  result       허용 (로그인 시 결과 연결·복원)
-member  →  result       허용 (내 결과 조회, `GET /api/me/result`)
+member  →  result       허용 (내 결과 조회·연결, `GET·POST /api/me/result`)
 result  →  member       금지 (`Result` 는 `Long memberId` 컬럼만 가진다. 엔티티·패키지 참조 없음)
 member  →  auth         금지
 dating  →  result·compatibility·member·wallet   허용
@@ -222,7 +222,7 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 **설계 원칙**
 
 1. **사주는 로그인을 요구하지 않는다.** JWT 검증은 인증 경로에만 건다. 사주·궁합·공유 API 는 쿠키를 읽지 않는다. 익명 API 가 회원을 알아야 하는 경우(plan §5.8 중복 등록 방지)는 `TBD-14` 결정 전까지 구현하지 않는다.
-2. **결과와 계정은 `result.member_id` 로 연결한다.** nullable, 계정당 결과 1개(부분 unique). 연결 규칙은 plan §1.1(계정 결과 우선, 브라우저 결과는 삭제·병합하지 않음)이고, 로그인 요청에 `resultId` 가 실렸을 때만 연결한다. `Result` 는 `Long memberId` 만 가지며 `member` 패키지를 참조하지 않는다. 로그인한 클라이언트는 `resultId` 를 저장해 두지 않아도 `GET /api/me/result` 로 내 결과를 받는다.
+2. **결과와 계정은 `result.member_id` 로 연결한다.** nullable, 계정당 결과 1개(부분 unique). 연결 규칙은 plan §1.1(계정 결과 우선, 브라우저 결과는 삭제·병합하지 않음)이고, 로그인 요청의 `resultId` 또는 로그인 뒤 `POST /api/me/result` 로 명시적으로 연결한다. `Result` 는 `Long memberId` 만 가지며 `member` 패키지를 참조하지 않는다. 로그인한 클라이언트는 `resultId` 를 저장해 두지 않아도 `GET /api/me/result` 로 내 결과를 받는다.
 3. **카카오 프로필을 저장하지 않는다.** 동의항목 없이 `id` 만 쓰고 `member` 는 `kakao_id` 만 가진다. `kakao_id` UNIQUE 가 중복 계정·중복 신청을 막는다.
 4. **JWT.** HS256, 서명키는 환경변수, 알고리즘을 고정하고(헤더의 `alg` 를 믿지 않는다), 클레임은 `sub`(memberId)·`iat`·`exp` 만 담는다. 만료 15일·갱신 없음(2026-09-21 결정, 2026-09-23 30일→15일로 조정)이고 만료되면 재로그인한다. **서버 쪽 토큰 폐기·기기 관리는 하지 않는다(2026-09-21 결정 유지).** 로그아웃은 `POST /api/auth/logout` 이 쿠키를 지운다(2026-09-25, 이전엔 프론트가 로컬 토큰을 지우는 방식뿐이었다) — 그 전에 탈취된 사본은 만료까지 그대로 유효하다. 서명키를 바꾸면 전원이 로그아웃된다. **토큰은 HttpOnly 쿠키로 내려가 JS 가 값을 읽을 수 없다(2026-09-25, XSS 노출 완화) — CSRF 는 `SameSite=Lax` + 상태변경 API 는 전부 POST/PATCH 로 막는다(별도 CSRF 토큰 없음).**
 5. **카카오 access token 은 저장하지 않는다.** 로그인 이후 카카오를 다시 호출하지 않는다. 카카오 외부 호출은 타임아웃을 명시한다 (NFR-P-04).
@@ -237,6 +237,7 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 | `POST /api/auth/logout` | 로그인 쿠키를 지운다 (익명, 2026-09-25 추가) |
 | `GET /api/me` | 인증 필요. 로그인 상태, 결과·프로필 보유 여부, 실 잔액 |
 | `GET /api/me/result` | 인증 필요. 계정에 연결된 내 결과를 `GET /api/results/{resultId}` 와 같은 구조로 반환, 없으면 404. 클라이언트가 `resultId` 를 잃어도 복원할 수 있다 |
+| `POST /api/me/result` | 인증 필요. 익명 결과를 계정에 연결한다. 계정에 이미 결과가 있으면 그 ID를 반환한다. 회원 행과 결과 행을 잠가 동시 연결을 직렬화한다 |
 
 소개팅·실 API(`/api/dating/**`, `/api/wallet/**`)는 명세가 확정되면 이 표에 옮긴다.
 
