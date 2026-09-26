@@ -323,6 +323,10 @@ V1에서는 소개팅 프로필 수정·사진 교체 API를 제공하지 않는
 | `GET` | `/api/dating/requests?box=sent` | 내가 보낸 사람 |
 | `POST` | `/api/dating/requests/{id}/accept` | 수락 → 연락처 공개 |
 | `POST` | `/api/dating/requests/{id}/reject` | 거절 |
+| `POST` | `/api/dating/requests/{id}/cancel` | 보낸 사람이 PENDING 요청 취소 |
+
+- 취소 이력은 보낸 목록에 남고 받은 목록에서는 제외한다. 취소 후 같은 상대가 현재 추천 카드에 있으면 재요청할 수 있다
+- 수락·거절된 요청은 취소할 수 없고, 거절 후 재요청 제한은 유지한다
 
 ### 8.7 실
 

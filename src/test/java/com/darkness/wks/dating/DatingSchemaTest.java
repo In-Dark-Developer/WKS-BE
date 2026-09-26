@@ -13,6 +13,7 @@ import com.darkness.wks.member.MemberRepository;
 import com.darkness.wks.member.entity.Member;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,7 @@ import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import java.time.Instant;
@@ -71,6 +73,9 @@ class DatingSchemaTest {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    EntityManager entityManager;
 
     @Autowired
     MemberRepository memberRepository;
@@ -312,6 +317,81 @@ class DatingSchemaTest {
         assertThatThrownBy(() -> requestService.send(sender.getMemberId(), recipient.getId()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.DATING_REQUEST_CONFLICT);
+    }
+
+    @Test
+    @Transactional
+    void senderCanCancelAndSendAgainWhileRecipientNoLongerSeesCancelledRequest() {
+        DatingProfile sender = profile(990001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(990002L, Gender.FEMALE, "갑자", "을축", "병인");
+        recommendationService.getCurrent(sender.getMemberId());
+
+        var first = requestService.send(sender.getMemberId(), recipient.getId());
+        var cancelled = requestService.cancel(sender.getMemberId(), first.requestId());
+        entityManager.flush();
+        assertThat(cancelled.status()).isEqualTo(DatingRequestStatus.CANCELLED);
+        assertThat(cancelled.respondedAt()).isNotNull();
+        assertThat(cancelled.contactValue()).isNull();
+        assertThat(requestService.list(sender.getMemberId(), "sent"))
+                .extracting(response -> response.status()).containsExactly(DatingRequestStatus.CANCELLED);
+        assertThat(requestService.list(recipient.getMemberId(), "received")).isEmpty();
+
+        var second = requestService.send(sender.getMemberId(), recipient.getId());
+        assertThat(second.requestId()).isNotEqualTo(first.requestId());
+        assertThat(requestService.list(recipient.getMemberId(), "received"))
+                .extracting(response -> response.requestId()).containsExactly(second.requestId());
+        assertThat(requestRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    @Transactional
+    void onlySenderCanCancelPendingRequestOnce() {
+        DatingProfile sender = profile(960001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(960002L, Gender.FEMALE, "갑자", "을축", "병인");
+        recommendationService.getCurrent(sender.getMemberId());
+        var sent = requestService.send(sender.getMemberId(), recipient.getId());
+
+        assertThatThrownBy(() -> requestService.cancel(recipient.getMemberId(), sent.requestId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.DATING_REQUEST_NOT_FOUND);
+        requestService.cancel(sender.getMemberId(), sent.requestId());
+        entityManager.flush();
+        assertThatThrownBy(() -> requestService.cancel(sender.getMemberId(), sent.requestId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.DATING_REQUEST_CONFLICT);
+    }
+
+    @Test
+    @Transactional
+    void acceptedRequestCannotBeCancelled() {
+        DatingProfile sender = profile(970001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(970002L, Gender.FEMALE, "갑자", "을축", "병인");
+        recommendationService.getCurrent(sender.getMemberId());
+        var sent = requestService.send(sender.getMemberId(), recipient.getId());
+        requestService.accept(recipient.getMemberId(), sent.requestId());
+        entityManager.flush();
+
+        assertThatThrownBy(() -> requestService.cancel(sender.getMemberId(), sent.requestId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.DATING_REQUEST_CONFLICT);
+    }
+
+    @Test
+    @Transactional
+    void cancelRouteRequiresSenderCookie() throws Exception {
+        DatingProfile sender = profile(980001L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(980002L, Gender.FEMALE, "갑자", "을축", "병인");
+        recommendationService.getCurrent(sender.getMemberId());
+        var sent = requestService.send(sender.getMemberId(), recipient.getId());
+        var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
+        String path = "/api/dating/requests/" + sent.requestId() + "/cancel";
+
+        mvc.perform(post(path)).andExpect(status().isUnauthorized());
+        mvc.perform(post(path).cookie(new Cookie("wks_token", jwtProvider.issue(recipient.getMemberId()))))
+                .andExpect(status().isNotFound());
+        mvc.perform(post(path).cookie(new Cookie("wks_token", jwtProvider.issue(sender.getMemberId()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
     }
 
     @Test

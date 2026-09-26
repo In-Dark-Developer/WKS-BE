@@ -356,6 +356,9 @@ CREATE TABLE signup_reapply_invite (
 );
 
 -- 소개팅 프로필·추천·요청은 V15~V17, 소개팅 궁합 이유 캐시는 V18에 추가한다. 해금·실 원장은 후속 작업이다 (plan.md §7)
+
+-- V23: dating_request 에 CANCELLED 상태를 추가하고, 두 프로필 간 UNIQUE 인덱스를
+-- status <> 'CANCELLED' 인 요청에만 적용한다. 취소 이력은 남기고 재요청을 허용한다.
 ```
 
 ### 스키마 규칙
