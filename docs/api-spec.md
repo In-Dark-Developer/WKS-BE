@@ -846,7 +846,18 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
     "createdAt": "2026-09-24T12:00:00Z",
     "respondedAt": null,
     "contactMethod": null,
-    "contactValue": null
+    "contactValue": null,
+    "counterpart": {
+      "score": 83,
+      "mbti": "INFP",
+      "bio": "안녕하세요",
+      "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
+      "fields": {
+        "photo": { "locked": true, "cost": 10, "value": null },
+        "name": { "locked": true, "cost": 7, "value": null },
+        "department": { "locked": true, "cost": 5, "value": null }
+      }
+    }
   }]
 }
 ```
@@ -859,16 +870,29 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
   "data": [{
     "requestId": "312f3185-f114-4db0-a2fb-54d0669b7e33",
     "candidateId": "84722660-622a-4d30-a5a5-0d6c736e8530",
-    "status": "ACCEPTED",
+    "status": "PENDING",
     "createdAt": "2026-09-24T12:00:00Z",
-    "respondedAt": "2026-09-24T12:05:00Z",
-    "contactMethod": "PHONE",
-    "contactValue": "010-3333-3333"
+    "respondedAt": null,
+    "contactMethod": null,
+    "contactValue": null,
+    "counterpart": {
+      "score": 83,
+      "mbti": "ESTP",
+      "bio": "축제를 좋아해요",
+      "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
+      "fields": {
+        "photo": { "locked": false, "cost": null, "value": "https://s3.example.com/temporary-original-photo-url" },
+        "name": { "locked": false, "cost": null, "value": "홍길동" },
+        "department": { "locked": false, "cost": null, "value": "컴퓨터공학과" }
+      }
+    }
   }]
 }
 ```
 
-두 목록은 같은 요청 구조를 쓴다. `candidateId`는 **조회한 사람 기준 상대의 프로필 ID**여서, 같은 요청도 보낸 사람의 목록과 받은 사람의 목록에서 값이 다르다. `status`는 `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED` 중 하나다. `ACCEPTED`에서만 **해당 요청의 상대 연락처**를 반환하며, 나머지 상태에서는 `contactMethod`·`contactValue`가 `null`이다. 취소 내역은 보낸 목록에 남지만 받은 목록에서는 제외한다. 수락·거절·취소 응답도 같은 객체이며 `respondedAt`이 채워진다. 요청 수에 상한은 없다.
+두 목록은 같은 구조를 쓴다. `candidateId`는 **조회한 사람 기준 상대의 프로필 ID**여서, 같은 요청도 보낸 사람의 목록과 받은 사람의 목록에서 값이 다르다. 목록에만 `counterpart`가 추가되고 요청 생성·수락·거절·취소 응답 구조는 유지된다. `counterpart.score`는 발신자 추천 때 저장한 점수이며, 추천 카드가 비활성화돼도 목록에서 조회할 수 있다. `counterpart.fields.*`는 추천 카드와 같이 잠긴 값은 `null`로 두고 `cost`만 제공한다. 받은 목록에서는 발신자의 사진·이름·학과를 실 차감 없이 볼 수 있다. 원본 사진은 만료되는 S3 조회 URL이며 S3 키는 응답에 없다.
+
+`status`는 `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED` 중 하나다. `ACCEPTED`에서만 **해당 요청의 상대 연락처**를 반환하며, 나머지 상태에서는 `contactMethod`·`contactValue`가 `null`이다. 취소 내역은 보낸 목록에 남지만 받은 목록에서는 제외한다. 수락·거절·취소 응답도 기존 요청 객체이며 `respondedAt`이 채워진다. 요청 수에 상한은 없다.
 
 본인 요청, 이미 유효한 요청이 있는 두 사람의 재요청, 현재 추천 카드에 없는 상대는 거절한다. 한 쌍은 방향을 바꿔도 동시에 유효한 요청을 하나만 가질 수 있다. 취소 후에는 같은 상대가 현재 추천 카드에 있다면 재요청할 수 있고, 거절 후 재요청은 허용하지 않는다. 요청을 보내려면 내 학교 메일 인증이 완료돼 있어야 한다. 수락 후에도 양쪽은 계속 소개팅을 이용하고 다른 사람의 추천 후보에 남는다. 수락이 다른 요청의 상태를 바꾸지는 않는다. 실 기능과는 별개다.
 

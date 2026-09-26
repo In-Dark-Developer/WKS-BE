@@ -115,8 +115,9 @@ public class DatingPhotoService {
     }
 
     /**
-     * 원본 사진의 서명된 임시 URL. 사진 해금(plan.md §8.5) 이후에만 호출한다 — 잠긴 상태에서는
-     * 절대 이 URL을 내려주지 않는다(FR-DT-04). 썸네일과 같은 만료 시간을 쓴다.
+     * 원본 사진의 서명된 임시 URL. 추천 카드·보낸 요청 목록에서는 사진 해금 후에만,
+     * 받은 요청 목록에서는 요청을 보낸 사람에 한해 무료로 내려준다(plan.md §8.6).
+     * 썸네일과 같은 만료 시간을 쓴다.
      */
     public String originalUrl(DatingPhoto photo) {
         return presignedUrl(photo.getObjectKey());
