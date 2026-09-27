@@ -117,6 +117,7 @@
 |---|---|---|
 | 2026-09-27 | `POST /api/signups`·`POST /api/signups/resend` — `resultId` 가 있고 계정에 연결 안 된 신청이면 **인증 메일 대신 재신청 매직링크**를 보낸다. 요청·응답 필드 변경 없음, `message` 문구만 바뀜. 결과 없는 신청은 기존 인증 메일. `api-spec.md` §5 | ❌ |
 | 2026-09-27 | `GET /api/me` 의 `hasDatingProfile` 이 이제 실제 값이다(그동안 항상 `false`). 소개팅 프로필 등록(=학교메일 인증 완료 신청자)이면 `true`. 형식 변경 없음. `api-spec.md` §9 | ❌ |
+| 2026-09-28 | #121 `POST /api/dating/candidates/{candidateId}/unlock` 에 `REASON` 포함 시 503 `LLM_UNAVAILABLE` 이면 **고른 필드 전부 차감·해금되지 않는다**(이유를 먼저 만들고 차감). "잠시 후 다시 시도" 안내. 요청·응답 형식 변경 없음. `api-spec.md` §10.5 | ❌ |
 | 2026-09-27 | **[해금 요청·응답 형식 변경, 프론트 대응 필수]** `POST /api/dating/candidates/{candidateId}/unlock` 요청 `{"field":"PHOTO"}` → `{"fields":["PHOTO","NAME"]}`(하나만 열어도 배열), 응답 `field`·`value` → `values: {"PHOTO": "...", "NAME": "..."}` + `balance`. 네 개 전부 = 전체 해금(25, 이미 연 필드는 빠짐). 잔액 부족 402면 **아무 필드도 안 열린다.** `api-spec.md` §10.5 | ❌ |
 | 2026-09-27 | **[리롤 신규]** `POST /api/dating/recommendations/reroll` — 현재 카드 3장을 전부 새 후보로 교체. 하루(KST) 1회 무료, 이후 5실. 응답 `candidates`·`rerollCost`·`threadBalance`. 새 후보 없으면 409 `DATING_NO_MORE_CANDIDATES`(차감 없음), 잔액 부족 402. `GET /api/dating/recommendations` 에 `rerollCost` 필드 추가. **연타 방지는 프론트 몫.** `api-spec.md` §10.4·§10.4.1 | ❌ |
 | 2026-09-27 | **[재신청 흐름 변경, 프론트 대응 필수]** 재신청 초대 링크는 **학교메일 인증을 대신하지 않는다.** `/dating/reapply` 흐름: `GET /api/signups/reapply`(폼 채움·`resultId`) → `POST /api/auth/kakao` 에 `resultId`(결과 연결) → **코드 인증(§10.7)** → 사진 → `POST /api/dating/profile`. 즉 로그인 뒤는 일반 신청과 동일. `reapplyToken` 은 서버가 무시(폐기 예정, 안 보내도 됨). 응답의 `email` 은 사전신청 주소라 학교메일이 아닐 수 있음 — 학교 이메일 칸에 그대로 채우지 말 것. 카카오 로그인 왕복 동안 `resultId` 보관 필수. `api-spec.md` §5 | ❌ |
@@ -174,6 +175,31 @@
 ---
 
 ## 기록
+
+### 2026-09-28 (월) · 차은호 · dating/ REASON 해금 순서 변경 (이유 생성 → 차감) · Claude Code
+
+**한 일**
+- `DatingUnlockService.unlock` 에서 `REASON` 을 고르면 **궁합 이유를 먼저 생성하고 성공한 뒤 차감**하도록 순서를 바꿨다(#121).
+  전에는 차감 커밋 뒤 LLM 을 불러서, 실패하면 실만 빠지고 값은 못 받는 것으로 보였다
+- 테스트 추가: 생성 실패(`LLM_UNAVAILABLE`)면 `chargeService`·`walletService` 를 건드리지 않는다
+
+**건드린 파일/패키지**
+- `dating/` — `DatingUnlockService` (곽도윤 패키지, 순서 변경만. 사전 공유 없이 진행했으니 리뷰 부탁)
+- 테스트: `DatingUnlockServiceTest`
+
+**다음 사람이 알아야 할 것**
+- 차감 안 하고 이유만 만들어지는 경우(생성 성공 → 잔액 부족 402)가 생긴다. 이유는 추천행마다 한 번 캐시라 LLM 호출은 추천행당 최대 1회. 다음 해금 때 캐시 그대로 씀
+- 트랜잭션 구조는 그대로. LLM 호출은 여전히 차감 트랜잭션 밖(#94 이유)
+- `CallBudget`(분 60·일 1,600)은 사주·친구 궁합·소개팅이 공유한다. 축제 트래픽으로 소진되면 소개팅 이유도 503. 여유 있는지 `gemini.max-per-day` 확인 필요
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §10.5 REASON 실패 시 동작
+
+**프론트에 알려야 할 것**
+- `unlock` 에서 503 `LLM_UNAVAILABLE` 이면 **아무것도 차감·해금되지 않는다.** "잠시 후 다시 시도" 안내만 하면 된다 (전에는 재요청 시 무료라는 설명이었음)
 
 ### 2026-09-27 (일) · 곽도윤 · dating/ 추천 카드·요청 목록에 나이(age) 기본 공개 · Claude Code
 

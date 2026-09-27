@@ -1,6 +1,8 @@
 package com.darkness.wks.dating;
 
 import com.darkness.wks.common.ContactMethod;
+import com.darkness.wks.common.exception.BusinessException;
+import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.dating.dto.DatingUnlockResponse;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -85,6 +88,18 @@ class DatingUnlockServiceTest {
                 List.of(DatingUnlockField.REASON));
 
         assertThat(response.values().get("REASON")).isEqualTo("두 분은 나무와 불의 기운이라...");
+    }
+
+    @Test
+    void REASON_생성이_실패하면_차감하지_않는다() {
+        when(reasonService.getOrCreate(VIEWER_ID, CANDIDATE_ID))
+                .thenThrow(new BusinessException(ErrorCode.LLM_UNAVAILABLE));
+
+        assertThatThrownBy(() -> unlockService().unlock(VIEWER_ID, CANDIDATE_ID,
+                List.of(DatingUnlockField.REASON, DatingUnlockField.NAME)))
+                .isInstanceOf(BusinessException.class);
+
+        verifyNoInteractions(chargeService, walletService);
     }
 
     @Test
