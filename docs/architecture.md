@@ -1,6 +1,7 @@
 # architecture.md
 
 백엔드 구조와 설계 결정. **이 문서가 코드보다 우선한다.**
+기능·정책(무엇을)의 원본은 `docs/plan.md`, 구조·기술 선택(어떻게)의 원본은 이 문서다. 어긋나면 이 문서를 고친다. 단 plan.md 의 `TBD` 는 구현하지 않는다.
 
 ---
 
@@ -16,7 +17,8 @@
         │
         ├─▶ PostgreSQL 16
         ├─▶ Gemini API (해석 각색)
-        └─▶ SMTP (인증 메일)
+        ├─▶ SMTP (인증 메일)
+        └─▶ Kakao OAuth (로그인 code 교환)
 ```
 
 프론트는 별도 레포·별도 팀이다. **우리가 보장하는 건 `docs/api-spec.md` 뿐이다.**
@@ -34,6 +36,7 @@
 | ORM | Spring Data JPA |
 | Migration | Flyway (`ddl-auto: validate`) |
 | Mail | Spring Mail (SMTP) |
+| Auth | **JWT** (HS256) + 카카오 OAuth 2.0 code 교환(RestClient). Spring Security·세션은 쓰지 않는다. 2026-09-21 확정, §4 |
 | LLM | **Gemini Flash** via `com.google.genai:google-genai` (무료 티어) |
 | 만세력 | `cn.6tail:lunar` (MIT) + 한국 음력표 `saju/KoreanLunarCalendar` |
 | API Docs | **springdoc-openapi 3.1.1** |
@@ -45,9 +48,9 @@
 
 | 항목 | 이유 | 넣을 시점 |
 |---|---|---|
-| Spring Security | 인증 체인이 없다. 매직링크는 토큰 조회 후 리다이렉트가 전부 | 2차 세션 도입 시 |
+| Spring Security | 로그인은 JWT 인터셉터로 충분하다. 인증 경로가 `/api/me`·`/api/dating/**`·`/api/wallet/**` 뿐이고 세션·CSRF·폼 로그인이 없다 | 역할(권한) 체계나 관리자 API 가 필요해질 때 |
 | Redis | 토큰 TTL은 `expires_at` 컬럼으로 충분. 컨테이너를 늘리지 않는다 | 조회 1초 초과 또는 풀 고갈 시 |
-| JWT | 서버 상태 없이 검증하려는 것인데, 어차피 "사용 후 삭제"라 상태를 든다. 무효화만 까다로워짐 | 2차 |
+| ~~JWT~~ | **2026-09-21 V1 도입.** 예전 사유(무효화가 까다롭다)는 로그아웃·기기 관리·토큰 폐기를 하지 않기로 하면서 사라졌다. §4 | 도입 결정 (라이브러리는 팀 승인 대기, §9) |
 | QueryDSL | 설정 비용이 1주 일정에 안 맞는다 | 복잡 쿼리 발생 시 |
 | H2 | PostgreSQL과 문법이 달라 로컬 통과/배포 실패가 난다 | 없음 |
 
@@ -58,6 +61,7 @@
 - Boot 3에서 deprecated였던 API는 **제거**됐다
 - **springdoc은 반드시 3.x.** 2.x는 기동에 실패한다
 - AI 도구의 학습 데이터 대부분이 Boot 3 기준이다. 생성 결과를 검증할 것
+- JWT 라이브러리가 Jackson 2 에 의존하면 Boot 4(Jackson 3)와 공존하는지 확인한다. 후보는 Nimbus JOSE+JWT, jjwt
 
 ---
 
@@ -94,6 +98,22 @@ com.darkness.wks
 │   ├── CompatibilityTier.java
 │   └── dto/
 │
+├── auth/                        곽도윤   ← 카카오 로그인 (2026-09-21, 구현 전)
+│   ├── AuthController           POST /api/auth/kakao
+│   ├── AuthService              code 교환 → member upsert → 결과 연결·복원(§4) → JWT 발급
+│   ├── KakaoClient              토큰·유저 정보 조회 (RestClient, 타임아웃 명시)
+│   ├── JwtProvider              발급·검증 (HS256, 알고리즘 고정)
+│   └── JwtInterceptor           인증 경로 검증 + @CurrentMember 인자 주입
+│
+├── member/                      곽도윤   ← 구현 전
+│   ├── MeController             GET /api/me, GET /api/me/result (결과 조회는 ResultService 에 위임)
+│   ├── MemberRepository
+│   ├── entity/  Member
+│   └── dto/
+│
+├── wallet/                      담당 미정 ← plan §1.4·§9.4 실·원장·출석 (소개팅 BE 와 함께)
+├── dating/                      담당 미정 ← plan §7 프로필·추천·해금·요청 (명세 확정 후). signup/ 을 대체한다
+│
 └── signup/                      AGENTS.md ○   곽도윤
     ├── SignupController/Service/Repository
     ├── EmailVerificationService
@@ -107,7 +127,7 @@ com.darkness.wks
 |---|---|---|
 | **차은호** | `saju/` | 만세력 라이브러리 선정·연동, 등급 로직, 프롬프트 |
 | **최선우** | `result/`, `compatibility/` | FE 연동 API, 궁합, 캐싱 |
-| **곽도윤** | `signup/`, `common/`, 인프라 | 메일·인증, Docker·CI·EC2·보안 |
+| **곽도윤** | `signup/`, `common/`, `auth/`, `member/`, 인프라 | 메일·인증, Docker·CI·EC2·보안, 카카오 로그인·JWT (`auth/`·`member/` 담당은 제안, §9) |
 
 **Day 1에 곽도윤이 배포 파이프라인을 먼저 뚫는다.** 빈 화면이라도 실제 도메인에 떠 있어야
 마지막 날이 배포 삽질로 사라지지 않는다.
@@ -120,6 +140,17 @@ result  →  saju         허용
 result  →  signup       금지
 saju    →  result       금지
 saju    →  (스프링 컨텍스트)  금지
+auth    →  member       허용
+auth    →  result       허용 (로그인 시 결과 연결·복원)
+member  →  result       허용 (내 결과 조회, `GET /api/me/result`)
+result  →  member       금지 (`Result` 는 `Long memberId` 컬럼만 가진다. 엔티티·패키지 참조 없음)
+member  →  auth         금지
+member  →  dating       허용 (`GET /api/me` 의 `hasDatingProfile` 존재 조회만. `dating → member` 와 순환이지만 조회 한 곳이라 감수, 2026-09-27)
+dating  →  result·compatibility·member·wallet   허용
+dating  →  signup    금지 (2026-09-26 에 초대 토큰 검증용으로 열었다가 2026-09-27 초대가 학교메일 인증을 대신하지 않게 바뀌며 다시 닫았다)
+signup  →  dating    금지 (캠페인 대상 조회도 signup·result 쪽만 본다)
+compatibility  →  wallet   허용 (친구 궁합 등록 시 공유자에게 실 +3)
+wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 ```
 
 `saju/` 는 순수 계산 모듈로 유지한다. DB 없이 단위 테스트가 가능해야 한다.
@@ -130,8 +161,10 @@ saju    →  (스프링 컨텍스트)  금지
 
 | 파트 | 방식 |
 |---|---|
-| 사주·궁합 | **인증 없음.** 본인용 `resultId`, 공개 링크용 `shareId` 사용 |
-| 사전등록 | 학교 이메일 **매직링크**. 비밀번호·세션 없음 |
+| 사주·궁합 | **인증 없음.** 로그인 여부와 무관하게 전 기능 사용 가능. 본인용 `resultId`, 공개 링크용 `shareId` 사용 |
+| 로그인 후 내 사주 복원 (선택) | 카카오 로그인 시 브라우저의 `resultId` 를 계정에 연결하고, 계정에 이미 결과가 있으면 계정 결과를 복원한다 (plan §1.1). **브라우저 저장소를 잃어도 내 결과와 궁합 지도를 다시 찾기 위한 것.** 로그인하지 않아도 사주 기능은 그대로 동작 |
+| 소개팅 | **카카오 로그인 필수 + 학교 메일 재학 인증.** JWT 로 인증 |
+| 사전등록 (파일럿 API) | 학교 이메일 **매직링크**. V1 에서 소개팅 프로필(`dating/`)이 대체할 때까지 익명 유지 |
 
 ### UUID 링크 키를 쓰는 이유
 
@@ -142,6 +175,9 @@ saju    →  (스프링 컨텍스트)  금지
 **보안 요구사항**: `resultId`와 `shareId`는 반드시 **UUIDv4**.
 순번이면 남의 사주 결과를 전부 긁을 수 있다.
 
+**예외 (2026-09-21 수용)**: `compatibility.id` 는 순번(BIGSERIAL)이고 `GET /api/compatibilities/{id}/reason` 에 그대로 노출된다.
+열거하면 남의 궁합 이유를 읽거나 LLM 생성을 유발할 수 있다. 호출 총량은 `CallBudget` 이 막는다(초과 시 `LLM_UNAVAILABLE`).
+
 ### 매직링크
 
 ```
@@ -150,8 +186,78 @@ saju    →  (스프링 컨텍스트)  금지
      → verified_at 기록 + used_at 기록 → 프론트 완료 페이지로 302
 ```
 
-Spring Security가 필요 없는 이유가 여기 있다. **인증 체인도 세션도 없다.**
-토큰 조회 후 리다이렉트가 전부다.
+매직링크는 토큰 조회 후 리다이렉트가 전부다.
+메일 링크는 다른 브라우저·메일 앱에서 열리므로 로그인 쿠키가 없다. 토큰이 곧 자격이라 `verify` 는 인증 없이 열려 있다 —
+`/api/dating/**` 는 전부 로그인이 필요하지만 `GET /api/dating/profile/verify` 만 인터셉터에서 제외한 이유다.
+
+**V1 에서 같은 방식을 쓰는 링크가 셋이다. 테이블도 셋이다** — 수명과 소비 시점이 달라서 한 테이블에 섞지 않았다.
+
+| 용도 | 테이블 | TTL | 소비 시점 | 완료 시 기록 |
+|---|---|---|---|---|
+| 사전등록 이메일 인증 (파일럿) | `email_verification` | 30분 | 클릭 | `signup.verified_at` |
+| ~~소개팅 학교메일 재학 인증 (V21)~~ **폐기 예정** — 새 발급 없음, V24 코드 인증이 대체 | `dating_email_verification` | 30분 | 클릭 | `dating_profile.verified_at` |
+| 기존 사전신청자 재신청 초대 (V22, 1회성) | `signup_reapply_invite` | 48시간 | **소비 안 함** (만료로만 끝남) | 없음 — 카카오 로그인 때 `result.member_id` 가 채워지면 완료 |
+
+**재신청 초대는 인증이 아니라 "사주 결과 → 계정 연결" 링크다 (2026-09-27 변경).** 사전신청은 로그인·이메일 인증 없이
+받았고 이메일도 gmail 등이 많아서, 초대 메일을 받았다는 사실이 학교메일 소유를 증명하지 못한다. 그래서 초대는
+① 사전신청 입력값 + `resultId` 를 돌려주고(`GET /api/signups/reapply`) ② 프론트가 그 `resultId` 를 카카오 로그인에
+실어 결과를 계정에 잇는 데만 쓴다. 학교메일 인증·사진·프로필 등록은 일반 신청과 똑같다(코드 인증).
+캠페인 대상은 **결과가 있고 아직 계정에 연결되지 않은** 사전신청자라, 로그인까지 마친 사람은 재실행해도 다시 받지 않는다.
+
+### 소개팅 학교메일 6자리 코드 (V24, 2026-09-26)
+
+```
+로그인 → POST /api/dating/email-codes {email}  → 이메일 검사(도메인·중복) → 코드 생성·해시 저장(TTL 10분) → 메일
+      → POST /api/dating/email-codes/verify    → 행 잠금 → 이메일·만료·실패 횟수 검사 → verified_at 기록
+      → POST /api/dating/profile               → dating_email_code 가 그 이메일로 인증돼 있어야 등록(즉시 verified)
+```
+
+매직링크(V21)는 프로필이 있어야 발급돼서 "등록 전에 인증" 흐름에 못 쓰고, 링크가 다른 탭에서 열려 작성 중인
+폼이 완료를 알 수 없다. 그래서 신규 신청은 코드로 바꿨다. 토큰이 아니라 **회원(`member_id`)에 묶는다** —
+로그인한 상태에서만 발송·확인하므로 코드를 가로채도 남의 계정에는 못 쓴다.
+
+6자리는 추측 공간이 작아 **코드당 5회 실패 + 재발송 60초 쿨다운 + 24시간 10회 발송 한도**를 같이 건다.
+하나만 있으면 "재발송 → 5번 시도" 반복으로 남의 학교메일을 인증할 수 있다. 틀린 입력의 실패 횟수는 예외가
+나도 커밋돼야 해서(`noRollbackFor`) 확인 API 는 바깥 트랜잭션 없이 호출한다.
+
+### 카카오 로그인 (2026-09-21 확정 · 구현 전)
+
+기획 원본은 `docs/plan.md` §1.1·§1.3·§8.1. **프론트가 카카오 인가를 진행하고**, 받은 `code` 를 백엔드로 넘긴다.
+
+```
+프론트: 카카오 인가 → redirectUri(프론트 콜백)로 code 수신
+  → POST /api/auth/kakao {code, redirectUri, resultId?, ref?}
+백엔드: redirectUri 화이트리스트 검증 → 카카오 토큰 교환(client secret) → 유저 정보(id 만)
+  → member upsert(kakao_id) → 결과 연결·복원(plan §1.1) → JWT 발급
+응답:   Set-Cookie: wks_token(HttpOnly·Secure·SameSite=Lax) + body {isNewUser, restoredResultId, rewardGranted}
+이후:   브라우저가 쿠키를 자동으로 실어 보낸다 (credentials: 'include' 필요) — /api/me, /api/dating/**, /api/wallet/**
+```
+
+**2026-09-25, 토큰 전달 방식을 `Authorization: Bearer` 헤더에서 HttpOnly 쿠키로 전환했다** (의도적 결정,
+`docs/handoff.md` 참고). 서버 쪽 세션 저장소나 Spring Security 를 들이는 건 아니다 — JWT 를 담는
+그릇만 바뀌었다. 로그아웃도 이제 `POST /api/auth/logout` 이 쿠키를 지운다(과거엔 프론트가 로컬 토큰을
+지우는 방식뿐이었다).
+
+**설계 원칙**
+
+1. **사주는 로그인을 요구하지 않는다.** JWT 검증은 인증 경로에만 건다. 사주·궁합·공유 API 는 쿠키를 읽지 않는다. 익명 API 가 회원을 알아야 하는 경우(plan §5.8 중복 등록 방지)는 `TBD-14` 결정 전까지 구현하지 않는다.
+2. **결과와 계정은 `result.member_id` 로 연결한다.** nullable, 계정당 결과 1개(부분 unique). 연결 규칙은 plan §1.1(계정 결과 우선, 브라우저 결과는 삭제·병합하지 않음)이고, 로그인 요청에 `resultId` 가 실렸을 때만 연결한다. `Result` 는 `Long memberId` 만 가지며 `member` 패키지를 참조하지 않는다. 로그인한 클라이언트는 `resultId` 를 저장해 두지 않아도 `GET /api/me/result` 로 내 결과를 받는다.
+3. **카카오 프로필을 저장하지 않는다.** 동의항목 없이 `id` 만 쓰고 `member` 는 `kakao_id` 만 가진다. `kakao_id` UNIQUE 가 중복 계정·중복 신청을 막는다.
+4. **JWT.** HS256, 서명키는 환경변수, 알고리즘을 고정하고(헤더의 `alg` 를 믿지 않는다), 클레임은 `sub`(memberId)·`iat`·`exp` 만 담는다. 만료 15일·갱신 없음(2026-09-21 결정, 2026-09-23 30일→15일로 조정)이고 만료되면 재로그인한다. **서버 쪽 토큰 폐기·기기 관리는 하지 않는다(2026-09-21 결정 유지).** 로그아웃은 `POST /api/auth/logout` 이 쿠키를 지운다(2026-09-25, 이전엔 프론트가 로컬 토큰을 지우는 방식뿐이었다) — 그 전에 탈취된 사본은 만료까지 그대로 유효하다. 서명키를 바꾸면 전원이 로그아웃된다. **토큰은 HttpOnly 쿠키로 내려가 JS 가 값을 읽을 수 없다(2026-09-25, XSS 노출 완화) — CSRF 는 `SameSite=Lax` + 상태변경 API 는 전부 POST/PATCH 로 막는다(별도 CSRF 토큰 없음).**
+5. **카카오 access token 은 저장하지 않는다.** 로그인 이후 카카오를 다시 호출하지 않는다. 카카오 외부 호출은 타임아웃을 명시한다 (NFR-P-04).
+6. **`redirectUri` 는 화이트리스트 값만 허용한다.** 클라이언트가 보낸 값을 그대로 카카오에 넘기지 않는다.
+7. **잘못된 `ref`(제휴 코드)는 조용히 무시하고 로그인은 성공한다** (plan §8.1).
+8. **쿠키는 host-only 로 발급한다 (`Domain` 속성을 안 준다, 2026-09-25).** 운영(`api.threadoffate.site`)·개발(`api-dev.threadoffate.site`) 쿠키가 서로 안 섞인다. CORS 는 `WebConfig` 에 `allowCredentials(true)` 가 있어야 브라우저가 쿠키를 실어 보낸다 — `allowedOrigins` 와일드카드는 credentials 모드에서 애초에 금지돼 있다.
+9. **탈퇴는 V1 범위 밖이다 (2026-09-21 결정).** 개인정보 삭제 요청은 기능이 아니라 운영자가 직접 처리한다. 요청 창구를 처리방침에 명시해야 한다 (§9). **로그아웃은 있다 (2026-09-25, `POST /api/auth/logout`)** — 쿠키만 지우고 서버 쪽 토큰 무효화는 여전히 없다.
+
+| API (구현 전, 초안은 `docs/api-spec.md` §9) | 동작 |
+|---|---|
+| `POST /api/auth/kakao` | code 교환 → member upsert → 결과 연결·복원 → JWT 발급, 쿠키로 내려줌 (익명) |
+| `POST /api/auth/logout` | 로그인 쿠키를 지운다 (익명, 2026-09-25 추가) |
+| `GET /api/me` | 인증 필요. 로그인 상태, 결과·프로필 보유 여부, 실 잔액 |
+| `GET /api/me/result` | 인증 필요. 계정에 연결된 내 결과를 `GET /api/results/{resultId}` 와 같은 구조로 반환, 없으면 404. 클라이언트가 `resultId` 를 잃어도 복원할 수 있다 |
+
+소개팅·실 API(`/api/dating/**`, `/api/wallet/**`)는 명세가 확정되면 이 표에 옮긴다.
 
 ---
 
@@ -224,6 +330,68 @@ CREATE TABLE email_verification (
 );
 
 CREATE INDEX idx_verification_signup ON email_verification(signup_id);
+
+-- 카카오 로그인 (2026-09-21 확정, 구현 전 — V11). 카카오 프로필(닉네임·이메일 등)은 저장하지 않는다
+CREATE TABLE member (
+    id              BIGSERIAL PRIMARY KEY,           -- 외부 노출 안 함. resultId 와 달리 UUID 불필요
+    kakao_id        BIGINT       NOT NULL UNIQUE,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    last_login_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- 계정과 결과 연결 (plan §1.1). 계정당 결과 1개. 회원이 없어지면 결과는 익명으로 남는다
+ALTER TABLE result ADD COLUMN member_id BIGINT REFERENCES member(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX uq_result_member ON result(member_id) WHERE member_id IS NOT NULL;
+
+-- 실 원장 (plan §1.4·§9.4, V12 예약 — 소개팅 BE 와 함께). 모든 증감을 기록하고 잔액은 합계로 계산한다
+CREATE TABLE thread_ledger (
+    id              BIGSERIAL PRIMARY KEY,
+    member_id       BIGINT       NOT NULL REFERENCES member(id),
+    amount          INTEGER      NOT NULL,           -- 획득 +, 소모 -
+    reason          VARCHAR(20)  NOT NULL,           -- SIGNUP_BONUS | CHECK_IN | MAP_FRIEND | PARTNER | UNLOCK | REQUEST | REROLL
+    ref_id          VARCHAR(64)  NOT NULL,           -- NULL 금지: NULL 이면 unique 가 중복을 못 막는다 (Postgres 는 NULL 끼리 다르다고 본다)
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    UNIQUE (member_id, reason, ref_id)
+);
+
+-- 소개팅 학교메일 재학 인증 (V21, TBD-16 종료). email_verification 과 구조가 같지만 signup 이 아니라
+-- 프로필을 참조한다 — signup 은 로그인 개념이 생기기 전 스키마라 재사용하지 않았다
+CREATE TABLE dating_email_verification (
+    token             VARCHAR(64)  PRIMARY KEY,
+    dating_profile_id UUID         NOT NULL REFERENCES dating_profile(id) ON DELETE CASCADE,
+    expires_at        TIMESTAMPTZ  NOT NULL,
+    used_at           TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- 소개팅 학교메일 6자리 코드 (V24). 프로필 등록 전에 인증하므로 회원에 묶고, 회원당 최근 발송분 한 행만 둔다
+CREATE TABLE dating_email_code (
+    member_id         BIGINT       PRIMARY KEY REFERENCES member(id) ON DELETE CASCADE,
+    email             VARCHAR(255) NOT NULL,
+    code_hash         VARCHAR(64)  NOT NULL,      -- SHA-256 hex. 평문 코드는 저장하지 않는다
+    expires_at        TIMESTAMPTZ  NOT NULL,
+    failed_attempts   INT          NOT NULL DEFAULT 0,
+    last_sent_at      TIMESTAMPTZ  NOT NULL,
+    send_window_start TIMESTAMPTZ  NOT NULL,      -- 24시간 발송 한도 창
+    send_count        INT          NOT NULL,
+    verified_at       TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- 기존 사전신청자 재신청 초대 (V22). TTL 48시간, 소비하지 않는다(used_at 은 2026-09-27 이전 방식의 흔적).
+-- 축제(2026-10-01) 뒤에는 이 테이블과 signup/ 재신청 코드를 통째로 버려도 된다
+CREATE TABLE signup_reapply_invite (
+    token           VARCHAR(64)  PRIMARY KEY,
+    signup_id       BIGINT       NOT NULL REFERENCES signup(id) ON DELETE CASCADE,
+    expires_at      TIMESTAMPTZ  NOT NULL,
+    used_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- 소개팅 프로필·추천·요청은 V15~V17, 소개팅 궁합 이유 캐시는 V18에 추가한다. 해금·실 원장은 후속 작업이다 (plan.md §7)
+
+-- V23: dating_request 에 CANCELLED 상태를 추가하고, 두 프로필 간 UNIQUE 인덱스를
+-- status <> 'CANCELLED' 인 요청에만 적용한다. 취소 이력은 남기고 재요청을 허용한다.
 ```
 
 ### 스키마 규칙
@@ -231,6 +399,9 @@ CREATE INDEX idx_verification_signup ON email_verification(signup_id);
 - 시각은 전부 `TIMESTAMPTZ`. `TIMESTAMP` 금지 (배포 환경 타임존 사고 방지)
 - enum은 DB에 `VARCHAR`, 애플리케이션에서 Java enum (`@Enumerated(EnumType.STRING)`)
 - **`name`·`phone` 컬럼은 없다. 추가하지 마라**
+- **`member` 에 프로필 컬럼(닉네임·이메일·이름·프로필 사진)을 추가하지 마라.** 로그인 식별자는 `kakao_id` 하나다
+- **한 계정에 결과를 둘 이상 연결하지 마라.** `result.member_id` 는 계정당 1개(부분 unique)다. 병합은 V2 (plan §1.1)
+- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = compatibility id, `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
 
 ---
 
@@ -242,11 +413,12 @@ CreateResultRequest
   → KoreanLunarCalendar 음력 입력이면 양력으로 변환 (KASI 표)
   → SajuCalculator      절기·진태양시 보정 → 팔자 4주 (lunar-java)
   → ReadingScorer       결혼·자녀·연애 점수 산출 (성별로 배우자성·자녀성 결정)   ← 결정적
-  → ReadingGenerator    등급+팔자+성별 → 보살 톤 문장   ← LLM (운명 설명·결혼·자녀·연애 문장만)
+  → ReadingGenerator    등급+팔자+성별+잘 맞는 오행 → 보살 톤 문장   ← LLM (운명 설명·결혼·자녀·연애·잘 맞는 오행 이유 문장만, 한 번에)
   → DestinyTitle        조회 시: 점수 상/하 조합 → 운명 제목 8종   ← 코드 표
   → ReadingRepository   저장
   → DailyLucky          조회 시: 오행별 (궁합 40% + 오늘 일진 활성도 60%) → 행운 오행 → 아이템   ← 코드, 매일 변경
   → LuckyPlace          조회 시: 원국 오행 세력·신강/신약 → 보완 오행(고정) → 풀에서 날짜별 장소   ← 코드, 매일 변경
+  → ElementMatch        조회 시: 같은 보완 오행 = "나와 잘 맞는 오행" (기능명세 3.5). 이유 문장은 reading.element_match_content   ← 오행은 코드, 문장은 LLM
 ```
 
 **등급은 코드가, 문장은 AI가.** 이 경계가 흐려지면:
@@ -256,6 +428,18 @@ CreateResultRequest
 
 `reading.result_id`가 PK이므로 Result당 해석은 한 행만 저장한다.
 값이 있으면 **LLM을 호출하지 않는다.** 예외 없음.
+
+### 궁합 이유 (plan §1.2 · #79 #80)
+
+- **등록 시가 아니라 처음 열어볼 때 생성**한다 (`GET /api/compatibilities/{id}/reason`, `CompatibilityReasonService`). 공유가 몰릴 때 등록 즉시 생성하면 429 로 죽는다
+- 생성 결과는 `compatibility.reason_*` 세 컬럼(V13)에 캐싱하고, 재조회는 LLM 호출 0회다. 조합은 A↔B 무순서로 한 행이라 **두 사람이 같은 글을 본다**
+- 세 질문("왜 귀인인가"·"둘이 만나게 된다면"·"둘이 싸움이 난다면")을 **한 번의 호출**로 생성한다 (FR-GM-02). `saju/CompatibilityReasonGenerator` + `prompts/compatibility-reason-system.txt`
+- 실패하면 `LLM_UNAVAILABLE` 503. 프론트는 해당 영역만 미노출하고 재시도할 수 있다. 화면 전체를 에러로 만들지 않는다
+- 프롬프트에는 팔자·점수·관계유형과 코드가 정한 오행 사실(두 기운·상생/상극)만 넣는다. **성별은 넣지 않는다** — 성별을 고려한 글은 소개팅 쪽이 따로 만든다. 호출은 `saju/GeminiJson` 의 `CallBudget` 하나에 사주 해석과 함께 집계된다
+- 동시에 처음 열면 LLM 을 두 번 부를 수 있지만 저장은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 되고, 진 쪽은 저장된 글을 다시 읽는다. 잠금은 LLM 30초 동안 DB 연결을 잡아 두므로 쓰지 않는다
+- 서비스 메서드에 트랜잭션을 걸지 않는다. 같은 이유
+- 프롬프트를 바꾸면 기존 캐시는 옛 글로 남는다. 다시 만들려면 `UPDATE compatibility SET reason_why = NULL, reason_together = NULL, reason_conflict = NULL` (버전 컬럼은 두지 않았다)
+- 소개팅 "궁합 까닭"은 친구 궁합과 다른 문구다. 첫 REASON 해금 성공 시 생성하고 `dating_recommendation.reason_content`(V18)에 캐싱한다. 추천 조회에서는 LLM을 호출하지 않는다
 
 ### 시간·지역 모름
 
@@ -342,6 +526,7 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 - `open-in-view: false` — 기본값 true라 뷰 렌더링까지 커넥션을 잡고 있어 풀이 먼저 마른다
 - LLM 호출은 캐시로 최소화 (비용·지연 양쪽)
 - `GET /api/results/{id}` 가 공유 링크 주 진입점이라 가장 많이 호출된다
+- 사주·궁합 익명 엔드포인트는 인증 처리를 거치지 않는다 (§4). 궁합 이유는 최초 열람 때 LLM 을 부르므로 공유가 몰리면 429 위험이 있다 — 그래서 열람 시 생성하고 캐시한다
 - 축제 기간만 EC2 스펙 업
 
 부하 테스트는 이 엔드포인트 집중 호출만 검증하면 된다.
@@ -360,7 +545,13 @@ API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
 | SMTP 발송 계정 (한도 확인) | Day 3 | 곽도윤 |
 | 없는 `resultId` 로 신청 시 처리 방침 | Day 3 | 곽도윤 |
 | 데이터 파기 스크립트 | Day 5 | 곽도윤 |
-| 축제 D-day / 선릴리즈 일자 | 즉시 | 곽도윤 |
+| JWT 라이브러리 도입 팀 승인 (convention: 새 라이브러리는 팀 합의). Nimbus JOSE+JWT / jjwt, Boot 4 의 Jackson 3 과 공존 여부 확인 | 로그인 구현 전 | 곽도윤 + 팀 |
+| 카카오 디벨로퍼스 앱 설정: 운영·개발 앱, redirect URI(**프론트 콜백 주소**), client secret, 동의항목 없이 진행 가능한지 | 로그인 구현 전 | 곽도윤 |
+| 파일럿 `signup/`·`/api/signups` 제거 시점과 기존 신청 데이터 처리 (소개팅 프로필이 대체) | 소개팅 BE 1차 이후 | 곽도윤 |
+| `auth/`·`member/`·`wallet/`·`dating/` 담당 확정 | 로그인 구현 전 | 팀 |
+| 학교 메일 인증의 위치·저장 위치·게이트, 소개팅 프로필 성별·선호성별 (plan.md TBD-14~16) | 소개팅 BE 착수 전 (09/22) | 기획 + 곽도윤 |
+| 데이터 파기 범위: 회원·소개팅 프로필·사진·실 원장 (NFR-S-07, 축제 종료 10/1 + 2주 = 10/15) | 소개팅 BE 전 | 곽도윤 + 기획 |
+| 개인정보 처리방침·동의 문구 개정: 카카오 ID 수집, 결과-계정 연결 고지, 소개팅 프로필·사진, **탈퇴 기능이 없으므로 삭제 요청 창구** | 배포 전 | 기획 + 곽도윤 |
 
 **결정되면 표에서 지우고 본문에 반영한다.** 미결정으로 남겨두지 않는다.
 

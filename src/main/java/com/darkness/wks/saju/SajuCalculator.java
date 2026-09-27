@@ -86,7 +86,11 @@ public class SajuCalculator {
         return SEOUL_LONGITUDE;
     }
 
+    /** lunar-java 간지(한자 2글자) → 한글. 라이브러리 출력이 바뀌면 charAt(-1) 대신 값이 담긴 예외로 드러나게 한다 */
     static String toKorean(String ganZhi) {
-        return "" + GAN_KO.charAt(GAN.indexOf(ganZhi.charAt(0))) + ZHI_KO.charAt(ZHI.indexOf(ganZhi.charAt(1)));
+        int gan = GAN.indexOf(ganZhi.charAt(0));
+        int zhi = ZHI.indexOf(ganZhi.charAt(1));
+        if (gan < 0 || zhi < 0) throw new IllegalArgumentException("간지가 아니다: " + ganZhi);
+        return "" + GAN_KO.charAt(gan) + ZHI_KO.charAt(zhi);
     }
 }

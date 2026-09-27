@@ -9,8 +9,13 @@ public enum Zodiac {
 
     private static final String BRANCHES = "자축인묘진사오미신유술해";
 
-    /** @param yearPillar 연주 2글자 (예: "계미") */
+    /**
+     * @param yearPillar 연주 2글자 (예: "계미")
+     * @throws IllegalArgumentException 둘째 글자가 지지가 아님
+     */
     public static Zodiac fromYearPillar(String yearPillar) {
-        return values()[BRANCHES.indexOf(yearPillar.charAt(1))];
+        int i = BRANCHES.indexOf(yearPillar.charAt(1));
+        if (i < 0) throw new IllegalArgumentException("연주의 지지가 아니다: " + yearPillar);
+        return values()[i];
     }
 }

@@ -17,11 +17,14 @@
 
 | 항목 | 상태 |
 |---|---|
-| 릴리즈 D-day | (미정) |
+| 릴리즈 D-day | 축제 2026-09-29 ~ 10-01 (2026-09-21 확정) |
 | `main`·`dev` 브랜치 생성 + 보호 설정 | ✅ 생성. 보호 설정은 private 저장소 무료 플랜이라 불가 (PR 리뷰로 대체) |
-| 배포 상태 | ✅ `dev` push → GitHub Actions → EC2 (https://api.threadoffate.site, nginx + certbot). `main` 배포는 미정 |
-| `/api/health` (배포 도메인) | ✅ 200 (2026-09-15 확인) |
-| Flyway 최신 버전 | V9 |
+| 배포 상태 | ✅ 2026-09-26: `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버, 둘 다 EC2 에서 동작. `dev` 의 로그인·소개팅 커밋은 아직 `main` 미릴리즈 — **릴리즈 전에 아래 "막혀 있는 것"의 운영 `.env` 항목부터** |
+| 개발 서버 (`api-dev.threadoffate.site`) | ✅ 2026-09-26 기동(`wks_dev` DB, Flyway V18). **단 `SPRING_PROFILES_ACTIVE: dev` 수정이 `dev` 에 머지되기 전에 누가 `dev` 에 push 하면 다시 죽는다** — 아래 2026-09-26 인프라 기록 |
+| `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
+| Flyway 최신 버전 | V23 (`dev` 기준, 2026-09-27 로컬 확인). V12는 폐기(아래 예약 표) |
+| 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
+| 실(재화) | ✅ 원장·자동지급 3종·소개팅 해금 `dev` 머지 완료(#97). 🔧 2026-09-27 리롤 구현(TBD-6 종료, 미커밋). 🔧 2026-09-27 해금을 여러 필드 묶음 요청으로 변경(전체 해금 포함, 미커밋). 제휴처 보상(`PARTNER`)은 미구현 |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -30,9 +33,20 @@
 | 내용 | 담당 | 필요한 것 |
 |---|---|---|
 | 프론트 배포 도메인 (CORS용) | 곽도윤 | 프론트 팀 확인 |
-| 축제 D-day 확정 | 곽도윤 | 학생처 확인 |
-| 개발 서버 별도 운영 여부 | 곽도윤 | Day 1 결정 |
+| 개발 서버 별도 운영 여부 | 곽도윤 | ✅ 2026-09-26 EC2 에 띄워 동작 확인. 남은 것은 아래 세 줄 |
+| 운영 릴리즈 직후 CORS credentials 확인 | 곽도윤 | 운영 preflight 응답에 `access-control-allow-credentials: true` 가 생겼는지 (명령은 아래 2026-09-26 인프라 기록). 없으면 운영 쿠키 로그인이 CORS 에서 막힌다 |
+| **운영 릴리즈(`dev`→`main`) 전 `/opt/wks/.env` 채우기** | 곽도윤 | `docker-compose.prod.yml` 이 이제 `KAKAO_*`·`JWT_SECRET`·`DATING_VERIFY_REDIRECT_URL` 을 넘긴다(2026-09-26). EC2 의 운영 `.env` 에 `KAKAO_ALLOWED_REDIRECT_URIS`·`JWT_SECRET`(32바이트 이상, 개발과 다른 값)·`DATING_VERIFY_REDIRECT_URL`·`REAPPLY_URL`·`BACKEND_BASE_URL`·`AWS_*` 가 없으면(운영 compose 는 `${VAR}` 로 넘겨서 없으면 빈 값이 앱 기본값을 덮는다) 로그인·메일 링크·사진 업로드가 조용히 꺼진다. compose 명령마다 뜨던 `BACKEND_BASE_URL`·`AWS_*` "not set" 경고가 이것 |
+| 개발 서버 Gemini 키가 운영과 같다 | 곽도윤 | `/opt/wks-dev/.env` 의 `GOOGLE_API_KEY` 가 `.env.prod.example` 값과 같다. 운영도 그 키면 dev 호출이 운영 하루 한도(1600)를 깎는다. 축제 전에 dev 용 키 발급 후 교체 |
+| `nginx/api-dev.conf` resolver 변경 EC2 반영 | 곽도윤 | `main` 릴리즈 후 `docs/runbook-dev-server.md` 11단계. 반영 전까지는 **dev 앱이 꺼진 채로 운영 배포(`restart nginx`)·재부팅이 일어나면 운영 nginx 도 못 뜬다** — dev 를 내릴 일이 있으면 운영 배포와 겹치지 않게 |
 | SMTP 발송 계정 | 곽도윤 | 발송 한도 확인 필요 |
+| **`.env.prod.example` 에 실제 비밀값이 들어가 있다** (DB 비번·Gemini 키·카카오 client-id/secret) | 곽도윤 | **2026-09-23, 본인 확인 후 "private 저장소라 상관없다"며 정리 보류 결정.** AGENTS.md·#72 재발 사고와 같은 패턴이라 다음 사람은 참고할 것 — 저장소 public 전환 얘기 나오면 반드시 재검토 |
+| 카카오 디벨로퍼스 앱 설정 | 곽도윤 | ✅ 완료(2026-09-23). REST API 키·Client Secret 발급, Redirect URI `localhost:3000/dev/kakao-callback` 등록(주의: 5173 아님, 아래 기록 참고), 카카오 로그인 활성화 |
+| JWT 라이브러리 도입 승인 | 곽도윤 | `nimbus-jose-jwt` 로컬에 이미 추가돼 동작 확인함(2026-09-23). **팀 채널 공지는 아직 안 함** — convention 규칙상 커밋 전에 알릴 것 |
+| plan.md 미결정 항목 (TBD-13~16 등) | 기획 | 소개팅 BE 1차(09/25)에 영향. 명세가 09/22 전에 확정돼야 함 |
+| 배포 단계에 테스트 없음 | 곽도윤 | PR CI(`ci.yml`, `./gradlew build`)는 생겼다(2026-09-26 확인). 남은 건 배포 이미지가 `bootJar -x test` 이고 브랜치 보호가 없어 CI 빨간불이어도 머지·배포가 된다는 점 — PR 에서 CI 초록을 사람이 확인 |
+| PR #81(궁합 상세 이유)·#83(잘 맞는 오행) 리뷰·머지 | 최선우·곽도윤 | **#81 → #83 순서.** #83 은 #81 위에 쌓은 PR(base `feat/79-compatibility-reason`)이라 #81 머지 후 `gh pr edit 83 --base dev`. Flyway V13 → V14. `ErrorCode`·`db/migration/`·`compatibility/`·`result/` 변경 **팀 채널 공지는 아직 안 함**(차은호) |
+| "나와 잘 맞는 오행" 선정 규칙 | 기획 | #83 은 보완 오행(`LuckyPlace.luckyElement`, 행운의 장소와 동일)으로 잡았다. 기획 규칙이 다르면 함수 하나만 교체 |
+| 사주 해설 문장 길이 | 기획 | 피그마(`8:741`) 연애·결혼·자녀운 본문은 6문장 안팎, 현재 프롬프트는 8~10문장. 줄일지 결정 |
 
 ---
 
@@ -40,17 +54,36 @@
 
 **파일 만들기 전에 여기 먼저 적는다.** 번호 충돌은 가장 자주 나는 사고다.
 
-| 번호 | 예약자 | 내용 | 상태 |
-|---|---|---|---|
-| V9 | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
-| V8 | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
-| V7 | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
-| V6 | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
-| V5 | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
-| V4 | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | 완료 |
-| V3 | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
-| V2 | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
-| V1 | 곽도윤 | init schema (5개 테이블) | 완료 |
+| 번호  | 예약자 | 내용 | 상태 |
+|-----|---|---|---|
+| V24 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
+| V23 | 최선우 | #100 소개팅 요청 `CANCELLED` 상태 및 취소 후 재요청 허용을 위한 부분 UNIQUE 인덱스 | dev 머지 완료 (PR #101) |
+| V22 | 곽도윤 | `signup_reapply_invite` (기존 사전신청자 재신청 초대 토큰, TTL 48시간). **축제 후 버려도 되는 1회성 캠페인 테이블** | dev 머지 완료 (#97) |
+| V21 | 곽도윤 | `dating_email_verification` (소개팅 학교메일 인증 매직링크, TBD-16 해결). 기존 사전신청자 백필 캠페인의 전제 작업. **V24 이후 새 발급 없음** | dev 머지 완료 (#97) |
+| V20 | 곽도윤 | `dating_recommendation` 에 `photo_unlocked`·`name_unlocked`·`department_unlocked`·`reason_unlocked` 추가 (실 해금 상태) | `feat/wallet` 구현 완료, PR 대기 |
+| V19 | 곽도윤 | `thread_ledger` (실 원장, `ref_id NOT NULL`). **V12 예약을 대체한다** — V13~V18 이 먼저 머지돼 V12 를 쓰면 out-of-order 오류가 난다 (2026-09-26 발견) | `feat/wallet` 구현 완료, PR 대기 |
+| V18 | 최선우 | 소개팅 추천별 궁합 이유 캐시 (#94) | dev 머지 완료 |
+| V17 | 최선우 | 소개팅 요청·수락/거절 상태 및 양방향 중복 방지 (#86) | dev 머지 완료 |
+| V16 | 최선우 | `dating_profile.result_id` 직접 FK 제거. V15 뒤에 머지 | #84 로컬 기동 검증·미머지 |
+| V15 | 최선우 | 소개팅 사진·프로필·추천 노출 이력. V12~V14 뒤에 머지 | #84 `feat/84-dating-profile-recommendations`, 검증 완료·미머지 |
+| V14 | 차은호 | `reading` 에 `element_match_content` (잘 맞는 오행 이유, #82). **V13(#81) 뒤에 머지** | PR |
+| V13 | 차은호 | `compatibility` 에 `reason_why`·`reason_together`·`reason_conflict` (궁합 상세 이유 캐시, #80) | PR |
+| V12 | ~~미정~~ | ~~`thread_ledger`~~ | **폐기 (2026-09-26).** V13~V18 이 이 번호보다 먼저 머지돼 dev 에 이미 적용됨 — 이제 와서 V12 를 쓰면 기존 환경에서 out-of-order 오류가 난다. thread_ledger 는 V19 로 다시 받았다 |
+| V11 | 곽도윤 | `member`(`kakao_id` 만) + `result.member_id`(계정당 1개, 부분 unique). 로그인 마감 09/22 | 로컬 적용·검증 완료(2026-09-23), **커밋 전** |
+| V10 | 곽도윤 | signup 에 `photo_key` 추가 (#54). `V9__add_signup_photo_key.sql` 을 개명 (dev 의 V9 와 중복이었다) | 개명 완료 (2026-09-21), PR 대기 |
+| V9  | 차은호 | result 에 `calendar_type`·`birth_date_input`·`is_leap_month` 추가. 입력 폼 자동 채움 | PR |
+| V8  | 차은호 | reading 에 `version` 컬럼 + result (birth_date, birth_time, gender) 인덱스. 같은 입력 해석 재사용 | PR |
+| V7  | 곽도윤 | signup에 `name`·`contact_method`·`contact_value`·`department`·`mbti`·`bio` 컬럼 추가 | 구현 완료 |
+| V6  | 최선우 | result `share_id` + 궁합 A↔B 무순서 유니크 인덱스 + guest 조회 인덱스 | 구현 완료 |
+| V5  | 차은호 | reading 의 `destiny_title` 삭제 (조회 시 계산) | 완료 |
+| V4  | 차은호 | reading 의 `lucky_item`·`lucky_place` 삭제 (조회 시 계산) | 완료 |
+| V3  | 차은호 | reading 의 등급 컬럼을 0~100 점수 컬럼으로 교체 (`*_grade` → `*_score`) | 완료 |
+| V2  | 최선우 | 운명·등급·행운 콘텐츠 저장을 위한 reading 확장 | 완료 |
+| V1  | 곽도윤 | init schema (5개 테이블) | 완료 |
+
+> V13 이상은 소개팅·궁합 이유 캐시 등이 예약한다. 사주 리팩토링(차은호)도 번호를 이 표에 먼저 적는다.
+
+> **머지 순서 = 번호 순서.** Flyway 의 `outOfOrder` 가 꺼져 있어(기본값) V11 이 운영에 적용된 뒤 V10 이 들어오면 앱이 기동하지 못한다. `dev` push 가 곧 운영 배포이므로 **#54(V10)를 로그인(V11)보다 먼저 머지**한다. 순서가 바뀌면 나중 PR 의 번호를 바꾼다.
 
 ---
 
@@ -61,6 +94,20 @@
 | code | 추가자 | api-spec 반영 |
 |---|---|---|
 | (문서 기준 8종) | - | ✅ |
+| `UNAUTHENTICATED` (401) | 곽도윤 (예정, 로그인 PR) | 📄 `api-spec.md` §9 "추가 예정 에러 코드"에 기재. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 (1:1 유지) |
+| `KAKAO_UNAVAILABLE` (503) | 곽도윤 (확정 2026-09-21, 로그인 PR) | 📄 `api-spec.md` §9 에 기재. 카카오 서버 오류·타임아웃. **§1 표에는 구현 PR 에서 `ErrorCode` 와 함께** 옮긴다 |
+| `COMPATIBILITY_NOT_FOUND` (404) | 차은호 (#80) | ✅ §1 표·§4 `GET /api/compatibilities/{id}/reason` |
+| `INSUFFICIENT_THREAD` (402) | 곽도윤 (2026-09-26, `feat/wallet`) | ✅ §1·§9(§12 신설) — TBD-11 종료(402 확정) |
+| `DATING_PROFILE_NOT_FOUND` (404) | 최선우 (소개팅 프로필) | ✅ §1·§10 |
+| `DATING_PROFILE_CONFLICT` (409) | 최선우 (중복 프로필·이메일) | ✅ §1·§10 |
+| `DATING_NOT_VERIFIED` (403) | 최선우 (학교 메일 미인증) | ✅ §1·§10 |
+| `DATING_REQUEST_NOT_FOUND` (404) | 최선우 (#86) | ✅ §1·§11 |
+| `DATING_REQUEST_CONFLICT` (409) | 최선우 (#86) | ✅ §1·§11 |
+| `METHOD_NOT_ALLOWED` (405) | 최선우 (#89, 사용자 직접 요청) | ✅ §1·§10.3 |
+| `INVALID_EMAIL_CODE` (400) | 곽도윤 (2026-09-26, 학교메일 코드 인증) | ✅ §1·§10.7 |
+| `EMAIL_CODE_RATE_LIMITED` (429) | 곽도윤 (2026-09-26, 코드 재발송 쿨다운·일일 한도) | ✅ §1·§10.7 |
+| `MAIL_UNAVAILABLE` (503) | 곽도윤 (2026-09-26, 코드 메일 발송 실패) | ✅ §1·§10.7 |
+| `DATING_NO_MORE_CANDIDATES` (409) | 곽도윤 (2026-09-27, 리롤할 새 후보 없음) | ✅ §1·§10.4.1 |
 
 ---
 
@@ -68,6 +115,21 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-27 | `GET /api/me` 의 `hasDatingProfile` 이 이제 실제 값이다(그동안 항상 `false`). 소개팅 프로필 등록(=학교메일 인증 완료 신청자)이면 `true`. 형식 변경 없음. `api-spec.md` §9 | ❌ |
+| 2026-09-27 | **[해금 요청·응답 형식 변경, 프론트 대응 필수]** `POST /api/dating/candidates/{candidateId}/unlock` 요청 `{"field":"PHOTO"}` → `{"fields":["PHOTO","NAME"]}`(하나만 열어도 배열), 응답 `field`·`value` → `values: {"PHOTO": "...", "NAME": "..."}` + `balance`. 네 개 전부 = 전체 해금(25, 이미 연 필드는 빠짐). 잔액 부족 402면 **아무 필드도 안 열린다.** `api-spec.md` §10.5 | ❌ |
+| 2026-09-27 | **[리롤 신규]** `POST /api/dating/recommendations/reroll` — 현재 카드 3장을 전부 새 후보로 교체. 하루(KST) 1회 무료, 이후 5실. 응답 `candidates`·`rerollCost`·`threadBalance`. 새 후보 없으면 409 `DATING_NO_MORE_CANDIDATES`(차감 없음), 잔액 부족 402. `GET /api/dating/recommendations` 에 `rerollCost` 필드 추가. **연타 방지는 프론트 몫.** `api-spec.md` §10.4·§10.4.1 | ❌ |
+| 2026-09-27 | **[재신청 흐름 변경, 프론트 대응 필수]** 재신청 초대 링크는 **학교메일 인증을 대신하지 않는다.** `/dating/reapply` 흐름: `GET /api/signups/reapply`(폼 채움·`resultId`) → `POST /api/auth/kakao` 에 `resultId`(결과 연결) → **코드 인증(§10.7)** → 사진 → `POST /api/dating/profile`. 즉 로그인 뒤는 일반 신청과 동일. `reapplyToken` 은 서버가 무시(폐기 예정, 안 보내도 됨). 응답의 `email` 은 사전신청 주소라 학교메일이 아닐 수 있음 — 학교 이메일 칸에 그대로 채우지 말 것. 카카오 로그인 왕복 동안 `resultId` 보관 필수. `api-spec.md` §5 | ❌ |
+| 2026-09-26 | `POST /api/results` 를 **`credentials: 'include'`** 로 호출하면, 로그인 상태이고 계정에 결과가 없을 때 새 결과가 계정에 연결된다(로그인 후 사주를 본 사람이 소개팅 등록에서 `RESULT_NOT_FOUND` 나던 문제). 요청·응답 형식 변경 없음, 비로그인 동작 그대로. `api-spec.md` §2 | ❌ |
+| 2026-09-26 | **[소개팅 학교메일 인증 방식 변경, 프론트 대응 필수]** 매직링크 → **프로필 등록 전 6자리 코드.** `POST /api/dating/email-codes`(인증 버튼 → 발송)·`POST /api/dating/email-codes/verify`(코드 입력) 신규. `POST /api/dating/profile` 은 코드 인증 안 한 이메일이면 `DATING_NOT_VERIFIED` 403 (요청 필드 변경 없음, 응답 `emailVerified` 는 항상 `true`). 에러코드 3개 추가(`INVALID_EMAIL_CODE` 400·`EMAIL_CODE_RATE_LIMITED` 429·`MAIL_UNAVAILABLE` 503). **`/dating/verify` 페이지는 만들 필요 없어짐.** 재신청(`reapplyToken`)은 그대로 인증 생략. `api-spec.md` §10 머리말·§10.7 | ❌ |
+| 2026-09-27 | #102 `GET /api/dating/requests` 목록에 `counterpart` 추가. 받은 목록은 발신자 이름·학과·원본 사진 임시 URL 무료 제공, 보낸 목록은 기존 해금 상태 유지. 연락처는 수락 후 공개 | ❌ |
+| 2026-09-27 | #100 `POST /api/dating/requests/{id}/cancel` 추가. 보낸 사람만 PENDING 요청 취소, sent 목록에 CANCELLED 이력 표시, received 목록에서 제외. 취소 후 현재 추천 카드에 있으면 재요청 가능 | ❌ |
+| 2026-09-26 | **[사용 제약, API 변경 아님]** 개발 서버 `https://api-dev.threadoffate.site` 오픈(프론트 `dev.threadoffate.site`·`localhost:3000` 허용). **로그인은 `*.threadoffate.site` 프론트에서만 된다** — `localhost`·`netlify.app` 에서는 로그인 뒤 401. `api-spec.md` §9 인증 규칙 표 | ❌ |
+| 2026-09-26 | **[기존 사전신청자 재신청, 프론트 페이지 필요]** `GET /api/signups/reapply?token=` 추가 — 초대 메일 링크(`/dating/reapply?token=`)로 들어온 사람의 사전신청 입력값 + `resultId` 반환. 프론트가 ① 이 값으로 폼 프리필 → ② `POST /api/auth/kakao` 에 그 `resultId` 를 실어 로그인(사주 결과 계정 연결) → ③ 사진 업로드 → ④ `POST /api/dating/profile` 에 `reapplyToken` 실어 등록. 4단계 흐름은 `api-spec.md` §5. **기존 필드 변경·삭제 없음** | ❌ |
+| 2026-09-26 | `POST /api/dating/profile` 성공 시 학교메일 인증 메일이 자동 발송된다. `GET /api/dating/profile/verify?token=` 클릭 → 302 로 `DATING_VERIFY_REDIRECT_URL`(기본 `/dating/verify`) 이동 → `emailVerified: true`. **프론트에 `/dating/verify` 페이지 필요.** 재신청(`reapplyToken`)으로 등록하면 이 단계 없이 바로 인증 완료 | ❌ |
+| 2026-09-25 | **[필드 삭제, 프론트 대응 필수]** `POST /api/auth/kakao` 응답에서 `token` 필드 제거. 토큰은 이제 `Set-Cookie`(HttpOnly)로만 내려간다 — 인증 필요 API는 `credentials: 'include'` 로 호출. `POST /api/auth/logout` 신규 추가(로그아웃은 이제 이 호출로 처리, 클라이언트 로컬 삭제 방식 폐기). 상세는 `docs/api-spec.md` §9, 백엔드 `feat/cookie-based-auth` | ❌ |
+| 2026-09-23 | `POST /api/results`·`GET /api/results/{resultId}` 응답에 `elementMatch: { element, korean, reason }` 추가 (나와 잘 맞는 오행 + 이유, 기능명세 3.5). `null` 이면 영역 미노출. CTA "OO 기운의 사람 만나보기"는 `element` 사용 | ❌ |
+| 2026-09-23 | `GET /api/compatibilities/{id}/reason` 추가 (궁합 상세 이유 3답: `why`·`together`·`conflict`). 첫 호출만 LLM 생성이라 최대 30초, 실패는 `LLM_UNAVAILABLE` 503 → 해당 영역만 미노출·재시도. 두 사람이 같은 내용. **프론트가 `id` 를 받으려면 궁합 응답에 `id` 가 필요** — 아래 기록 참고 | ❌ |
+| 2026-09-21 | **(예정, 미구현)** `POST /api/auth/kakao`(프론트가 code 전달, 응답에 JWT)·`GET /api/me`·`GET /api/me/result`. **초안이 `api-spec.md` §9 / `api.md` §6 에 있음.** 사주·궁합·공유 API 는 **변경 없음**(비로그인 그대로). 인증 API 는 `Authorization: Bearer`. 프론트 콜백 주소(운영·로컬)를 백엔드에 받아야 한다. 구현 PR 에서 확정 후 재공지 | ❌ |
 | 2026-09-17 | `PATCH /api/results/{resultId}` 추가 (닉네임만 변경, 공유 링크·궁합 유지) | ❌ |
 | 2026-09-17 | `GET /api/results/{resultId}/input` 추가 (폼 자동 채움). `resultId` 는 URL 노출 금지 | ❌ |
 | 2026-09-13 | 본인용 `resultId`와 공개용 `shareId` 분리. `GET /api/shares/{shareId}`, 궁합 POST 추가 | ❌ |
@@ -111,6 +173,1035 @@
 ---
 
 ## 기록
+
+### 2026-09-27 (일) · 곽도윤 · member/ `GET /api/me` 의 `hasDatingProfile` 연결 · Claude Code
+
+**한 일**
+- `MeService.getMe` 가 `hasDatingProfile` 을 `false` 고정으로 넘기던 것을 `DatingProfileRepository.existsByMemberId` 로 바꿨다.
+  소개팅이 구현된 뒤에도 남아 있어서, 신청한 사람도 프론트에서 미신청으로 보였다
+- 판정 기준은 **프로필 행 존재**(사용자 결정). V24 부터 프로필은 코드 인증 뒤에만 만들어져 사실상 "인증된 신청자"와 같고,
+  `POST /api/dating/profile` 이 `DATING_PROFILE_CONFLICT` 를 내는 조건·`GET /api/dating/profile` 이 200 을 주는 조건과 일치한다
+- `member → dating` 의존을 허용했다(사용자 결정). `dating → member` 가 이미 있어 순환이지만 존재 조회 한 곳뿐이라 감수
+
+**건드린 파일/패키지**
+- `member/` — `MeService`, `dto/MeResponse`(주석)
+- 테스트: `MeServiceTest` 신규(프로필 유무 2건)
+
+**다음 사람이 알아야 할 것**
+- 폐기 예정 V21 매직링크로 만든 미인증 프로필이 남아 있으면 그 사람도 `true` 다(재등록하면 어차피 CONFLICT)
+- `member → dating` 으로 더 넓히지 않는다. 필요하면 `architecture.md` §3 표부터 고친다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §9 (`hasDatingProfile`·`threadBalance` "고정" 문구 삭제), `architecture.md` §3 의존 표에 `member → dating` 추가
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 `hasDatingProfile` 항목
+
+### 2026-09-27 (일) · 곽도윤 · dating/ 해금 묶음 요청 (전체 해금 포함) · Claude Code
+
+**한 일**
+- 해금을 필드 하나씩이 아니라 **사용자가 고른 필드를 한 요청에 묶어** 받게 바꿨다(사용자 결정, 계약 변경 A안 — 기존 필드 교체).
+  요청 `fields: [...]`, 응답 `values: {필드명: 값}` + `balance`
+- plan.md §1.4 "전체 해금 25"는 10+7+5+3 합과 같아 **별도 API 없이 네 개 전부 보내는 것**으로 처리. 이미 연 필드는 비용에서 빠진다
+- 차감은 한 트랜잭션에서 필드마다 `debit`(바깥 트랜잭션에 합류). 중간에 402가 나면 앞서 차감한 필드까지 롤백 — 반쪽 해금 없음.
+  `ref_id` 는 기존과 같은 `추천행ID:필드` 라 UNIQUE 중복 방지·기존 해금 데이터 그대로 유효. **Flyway 추가 없음**
+- REASON LLM 호출은 여전히 차감 트랜잭션 밖. 실패하면 503이지만 묶음 전체의 차감·해금은 커밋된 뒤라 재요청 시 무료
+
+**건드린 파일/패키지**
+- `dating/` — `DatingUnlockController`, `DatingUnlockService`, `DatingUnlockChargeService`, `dto/DatingUnlockRequest`, `dto/DatingUnlockResponse`
+- 테스트: `DatingUnlockServiceTest`(묶음·중복 1건 추가), `DatingSchemaTest`(이미 연 필드 제외 차감·전체 해금, 중간 잔액 부족 시 전부 롤백 2건 추가)
+
+**다음 사람이 알아야 할 것**
+- 응답 `values` 키 순서는 enum 순서(PHOTO·NAME·DEPARTMENT·REASON)다. 요청 순서가 아니다
+- 중복 필드는 `EnumSet` 으로 한 번으로 친다
+
+**막힌 것 / 넘기는 것**
+- `dating/` 담당이 아직 미정 — 이번 변경도 리뷰 필요
+
+**문서 변경**
+- `api-spec.md` §10.5·§12, `plan.md` §8.5, `backend-requirements.md` FR-DT-06
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 해금 항목. 단건 `field` 로 붙였다면 400 이 난다
+
+### 2026-09-27 (일) · 곽도윤 · dating/·wallet/ 소개팅 후보 리롤 (TBD-6 종료) · Claude Code
+
+**한 일**
+- TBD-6 사용자 결정: **KST 날짜 기준 하루 1회 무료, 이후 회당 5실 / 현재 카드 3장 전부 교체(해금·요청 중인 카드 포함) /
+  새 후보가 한 명도 없으면 차감 없이 거부**. 새 후보가 1~2명이면 그 수만큼만 교체하고 비용은 같다
+- `POST /api/dating/recommendations/reroll` 추가. 응답 `candidates`·`rerollCost`(다음 리롤 비용)·`threadBalance`
+- `GET /api/dating/recommendations` 응답에 `rerollCost` 추가(필드 추가만) — 버튼에 "무료"/"5실" 표시용
+- 원장: `reason = REROLL`, `ref_id = KST날짜#회차`(예 `2026-09-29#2`). **무료분도 `amount = 0` 행으로 남겨** 오늘 몇 번째인지
+  센다 — 별도 카운터 테이블이 필요 없어 **Flyway 추가 없음**
+- 선정·차감·카드 교체가 한 트랜잭션. 402(잔액 부족)·409(후보 없음)면 카드도 원장도 그대로
+- `DatingRecommendationService` 의 후보 선정 로직을 `getCurrent`·`reroll` 이 같이 쓰도록 메서드로 뽑았다(동작 변경 없음)
+
+**건드린 파일/패키지**
+- `dating/` — `DatingRecommendationService`, `DatingController`(엔드포인트·Swagger), `dto/DatingRecommendationResponse`(`rerollCost`),
+  신규 `dto/DatingRerollResponse`
+- `wallet/` — `WalletService.countEntries`, `ThreadLedgerRepository`(접두어 카운트), `LedgerReason`(주석)
+- `common/exception/ErrorCode` — `DATING_NO_MORE_CANDIDATES`(409) 추가
+- 테스트: `DatingSchemaTest` 3건(무료→유료·중복 없음·401, 잔액 부족 시 카드 유지, 후보 소진 시 차감 없이 409).
+  `./gradlew test` 전체 254건 통과
+
+**다음 사람이 알아야 할 것**
+- **연타를 서버가 막지 않는다.** 두 번 누르면 두 번 리롤되고 두 번째는 유료다(회차가 달라 UNIQUE 에 안 걸린다).
+  프론트가 요청 중 버튼을 막아야 한다
+- 리롤로 내린 카드의 후보는 다시 추천되지 않는다(plan §7.3). 해금에 쓴 실은 돌려주지 않는다 — 사용자 결정("전부 교체")
+- 후보 풀이 작아 몇 번 리롤하면 409 가 난다. 축제 초반엔 흔할 수 있다
+- 리롤 회차 잠금은 기존 `getCurrent` 와 같은 `member` 행 비관적 잠금을 쓴다(원장 advisory lock 은 그 안에서 한 번 더)
+
+**막힌 것 / 넘기는 것**
+- `ErrorCode.java` 변경 **팀 채널 공지 필요**
+- 전체 해금(25) 일괄 API 는 여전히 없다(프론트가 4번 호출) — 별도 결정 필요
+
+**문서 변경**
+- `docs/plan.md` — §1.4 리롤 비용 표, §8.4 설명, §9.4 `ref_id` 규칙, TBD-6 삭제·종료 메모
+- `docs/api-spec.md` — §1 에러표, §10.4 `rerollCost`, 신설 §10.4.1 리롤, §12 소모 표
+- `docs/architecture.md` — §5 `ref_id` 규칙(UNLOCK·REROLL)
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 리롤 줄
+
+---
+
+### 2026-09-27 (일) · 곽도윤 · signup/·dating/ 재신청 초대를 "결과 연결용"으로 변경 (인증 생략 제거) · Claude Code
+
+**한 일**
+- 사용자 정정: 사전신청은 이메일 인증 없이 받았고 gmail 등으로 신청한 사람이 많다. 그래서 **재신청 초대 링크는
+  학교메일 소유를 증명하지 못한다.** 초대의 목적은 "사전신청 때 만든 사주 결과를 카카오 계정에 잇는 것"이고,
+  학교메일 인증·사진·신청은 로그인 뒤 일반 신청과 똑같이 한다. 2026-09-26 구현(초대 = 인증 생략)을 이에 맞게 고쳤다
+- 캠페인 대상: `@dgu.ac.kr` 필터 제거 → **사주 결과가 있고 아직 어느 계정에도 연결되지 않은** 사전신청자 전원
+  (+ 아직 유효한 초대가 없는 사람). `REAPPLY_CAMPAIGN_EMAIL_DOMAIN` 설정 삭제
+- "완료" 판정: 프로필 등록 때 토큰 소비 → **카카오 로그인으로 `result.member_id` 가 채워지면 완료**(대상 쿼리에서 빠짐).
+  토큰은 더 이상 소비하지 않고 만료로만 끝난다
+- `POST /api/dating/profile`: `reapplyToken` 분기(초대 이메일 일치 검사·인증 생략·토큰 소비) 제거 → 모두 코드 인증 필수.
+  `reapplyToken` 필드는 계약 삭제라 **남겨 두고 무시**(Swagger deprecated)
+- `dating → signup` 의존 제거(`DatingProfileService` 가 `SignupReapplyService` 를 안 씀). 초대 메일 문구 변경
+
+**건드린 파일/패키지**
+- `signup/` — `SignupRepository`(대상 쿼리), `SignupReapplyService`(도메인 필터·`invitedEmail`·`consumeInvite` 제거, 메일 문구),
+  `entity/SignupReapplyInvite`(`markUsed` 제거)
+- `dating/` — `DatingProfileService`, `DatingController`(Swagger), `dto/DatingProfileRequest`(`reapplyToken` deprecated)
+- `application.yml` — `app.signup.reapply-campaign.email-domain` 삭제
+- 테스트: `SignupReapplyServiceTest`·`SignupReapplyFlowTest`(도메인 무관 대상, 로그인 → 결과 연결 → 대상 제외,
+  초대 회원도 코드 인증 없으면 403)·`DatingProfileServiceTest` 갱신. `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- 대상이 **사전신청자 전원(결과 있는 사람)** 으로 늘었다. 발송 전 `dry-run` 으로 수를 꼭 보고, Gmail 하루 약 500통 한도를 넘으면
+  나눠 보낸다(실패분·만료분은 재실행 때 다시 대상이 된다)
+- 이미 결과가 있는 계정으로 로그인하면 계정 결과가 우선이라 사전신청 결과는 연결되지 않는다 → 그 사전신청은 계속 "미연결"로
+  남아 48시간 뒤 재실행하면 초대를 또 받는다. 축제 기간 한두 번 돌리는 용도라 감수했다
+- `signup_reapply_invite.used_at` 은 이제 안 쓴다(예전 방식 흔적). 개발 DB 에 기존 행이 있어도 무해하다
+
+**막힌 것 / 넘기는 것**
+- `application.yml` 변경 팀 채널 공지 필요
+- `reapplyToken` 필드 삭제 여부 팀 확인
+
+**문서 변경**
+- `docs/plan.md` — TBD-16 아래 "재신청 초대 변경" 결정 추가(이전 "초대 = 소유 증명" 문구 폐기 명시)
+- `docs/api-spec.md` — §5 `GET /api/signups/reapply`(목적·대상·흐름·`email` 주의), §10.2 `reapplyToken` 폐기 예정, §10.6 문구
+- `docs/architecture.md` — §3 `dating → signup` 금지로 되돌림, §4 매직링크 표·설명, §5 스키마 주석
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 첫 줄
+
+---
+
+### 2026-09-27 (일) · 최선우 · dating/ 요청 목록 상대 프로필 (#102) · Codex
+
+**한 일**
+- `GET /api/dating/requests` 목록에 상대 프로필·궁합 점수 추가. 발신자 추천 이력의 점수를 재사용해 추천 카드가 비활성화돼도 표시
+- 받은 목록은 발신자의 사진·이름·학과를 무료 공개하고, 보낸 목록은 기존 해금 상태를 따른다. 연락처는 수락 후 공개
+- PostgreSQL 통합 테스트로 양쪽 목록·사진 URL·해금 상태·HTTP 응답 확인
+
+**건드린 파일/패키지**
+- `dating/`, `docs/plan.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 목록 응답만 `counterpart`가 추가된다. 요청 생성·수락·거절·취소 응답은 그대로다
+- 별도 마이그레이션은 없다. 추천 이력은 요청 시 반드시 존재하며, 목록 조회에서 비활성 추천도 점수·해금 상태에 사용한다
+
+**막힌 것 / 넘기는 것**
+- PR 리뷰·dev 머지 전
+
+**문서 변경**
+- 기획 §8.6, API 명세 §11.1, 요구사항 FR-DT-11
+
+**프론트에 알려야 할 것**
+- 요청 목록 항목에 `counterpart.score`·`mbti`·`bio`·`blurredPhotoUrl`·`fields` 추가. 받은 목록의 `fields.photo/name/department`는 무료로 값 제공, 보낸 목록은 해금 상태 반영
+
+### 2026-09-27 (일) · 최선우 · dating/ 보낸 요청 취소와 재요청 (#100) · Codex
+
+**한 일**
+- 보낸 사람의 PENDING 요청 취소 API 추가. 취소 이력은 sent 목록에 남고 received 목록에서 제외
+- V23 에 CANCELLED 상태를 추가하고, 취소된 행을 제외한 양방향 부분 UNIQUE 인덱스로 재요청 허용
+- PostgreSQL 통합 테스트로 취소 후 재요청·권한·상태 충돌·HTTP 경로 검증
+
+**건드린 파일/패키지**
+- `dating/`, `db/migration/V23__allow_cancelled_dating_request_retry.sql`, `docs/plan.md`, `docs/api-spec.md`, `docs/architecture.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 취소 후 재요청도 현재 추천 카드에 상대가 있을 때만 가능하다. REJECTED·ACCEPTED 는 중복 제약에 계속 포함돼 재요청 불가
+- 수락·거절·취소는 동일한 회원 잠금 순서로 처리하며, 후행 동작은 409 로 거절한다
+
+**막힌 것 / 넘기는 것**
+- PR 리뷰·dev 머지 전. V23 은 V22 뒤에 적용해야 한다
+
+**문서 변경**
+- API 명세 §11, 기획 §8.6, 아키텍처 스키마 메모, 요구사항 FR-DT-10
+
+**프론트에 알려야 할 것**
+- `POST /api/dating/requests/{id}/cancel` 신규. 성공 시 `CANCELLED`·`respondedAt` 반환, 받은 목록에서 제외, 보낸 목록에 유지
+
+### 2026-09-26 (토) · 곽도윤 · result/·common/auth 로그인 후 만든 결과를 계정에 연결 (TBD-14 일부) · Claude Code
+
+**한 일**
+- dev 에서 "로그인 → 사주 결과 생성" 순서로 쓴 계정이 `POST /api/dating/profile` 에서 `RESULT_NOT_FOUND` 404.
+  결과 연결이 카카오 로그인(`resultId` 동봉) 때만 일어나서, 로그인 후에 만든 결과는 영영 계정에 안 붙었다
+- `POST /api/results` 가 로그인 쿠키를 **선택적으로** 읽는다. 유효하고 계정에 결과가 없으면 새 결과에
+  `member_id` 를 채운다. 이미 있으면 계정 결과 유지(새 결과는 익명) — plan §1.1 "계정 우선"과 같은 방향(사용자 결정)
+- 쿠키 없음·만료·위조는 에러 없이 익명 처리 — 사주 API 는 로그인 없이 동작해야 한다
+
+**건드린 파일/패키지**
+- `common/auth/` — `OptionalMember`·`OptionalMemberArgumentResolver` 신규, `AuthWebConfig`(리졸버 등록)·`JwtAuthInterceptor`(주석)
+- `result/` — `ResultController`·`ResultService`(`createResult(request, memberId)`)·`ResultRepository`(`lockMember`)
+- 테스트: `ResultServiceTest` 3건 추가. `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- 같은 회원의 동시 생성(버튼 연타)은 `member` 행 `FOR UPDATE` 로 직렬화한다. 안 그러면 둘 다 연결을 시도해
+  부분 UNIQUE(`uq_result_member`)에 걸려 500. 잠금은 해석(LLM) **뒤에** 잡는다
+- 토큰의 회원이 DB 에 없으면(개발 DB 초기화 등) 연결 없이 익명으로 만든다 — FK 위반 500 방지
+- 이미 "로그인 후 결과를 만든" 기존 계정은 자동으로 고쳐지지 않는다. 결과를 한 번 더 만들면 그때 연결된다
+- `lockMember` 네이티브 쿼리는 단위 테스트(목)만 거쳤다 — 실제 DB 로는 dev 배포 후 확인 필요
+
+**막힌 것 / 넘기는 것**
+- `result/`(최선우 담당)·`common/` 수정 **팀 채널 공지 필요**(아직 안 함)
+- TBD-14 의 나머지(5.8 로그인 유저 중복 등록 방지)는 그대로 TBD
+
+**문서 변경**
+- `docs/plan.md` — TBD-14 일부 결정 기록
+- `docs/api-spec.md` — `POST /api/results` 로그인 시 계정 연결 설명 추가
+
+**프론트에 알려야 할 것**
+- `POST /api/results` 를 `credentials: 'include'` 로 호출해야 로그인 계정에 연결된다. 요청·응답 형식 변경 없음
+
+---
+
+### 2026-09-26 (토) · 곽도윤 · dating/ 학교메일 인증을 등록 전 6자리 코드로 전환 (TBD-16 변경) · Claude Code
+
+**한 일**
+- 프론트 요청: "인증 버튼 누르면 바로 메일 발송". 매직링크(V21)는 프로필이 있어야 발급되고 링크가 다른 탭에서
+  열려서 폼이 완료를 알 수 없다 → **프로필 등록 전 6자리 코드**로 바꿨다(사용자 결정, 링크 대신 코드도 사용자 선택)
+- `dating_email_code` 테이블(V24) — 토큰이 아니라 **회원에 묶는다**(`member_id` PK, 회원당 최근 발송분 1행).
+  코드는 SHA-256 해시만 저장
+- `POST /api/dating/email-codes`(발송)·`POST /api/dating/email-codes/verify`(확인) 신규. 둘 다 로그인 필요
+- `POST /api/dating/profile` — `reapplyToken` 이 없으면 그 이메일이 코드 인증돼 있어야 등록된다(아니면
+  `DATING_NOT_VERIFIED`). 등록 즉시 `markVerified`. **등록 후 매직링크 자동 발송은 제거**
+- 남용 방지: 코드당 5회 실패, 재발송 60초 쿨다운, 24시간 10회 발송 한도(메일 폭탄·Gmail 한도 소진·
+  "재발송→5회 시도" 반복 추측을 같이 막는다). 발송·확인은 행 잠금(`findForUpdate`)으로 연타 경합을 막는다
+- SMTP 실패는 `MAIL_UNAVAILABLE` 503 으로 돌려주고 코드를 지운다(쿨다운에 안 걸려 바로 재시도 가능).
+  **이번에 "재발송 API 없음" 문제도 같이 해결됨** — 발송 API 자체가 재발송이다
+
+**건드린 파일/패키지**
+- `dating/` — `DatingEmailCodeService`·`DatingEmailCodeRepository`·`entity/DatingEmailCode`·
+  `dto/DatingEmailCode{Request,Response,VerifyRequest,VerifyResponse}` 신규, `DatingProfileService`·`DatingController` 수정
+- `common/exception/ErrorCode.java` — `INVALID_EMAIL_CODE`(400)·`EMAIL_CODE_RATE_LIMITED`(429)·`MAIL_UNAVAILABLE`(503)
+- `db/migration/V24__add_dating_email_code.sql` (신규. 최선우 V23 과 번호가 겹쳐 V23 → V24 로 개명, 2026-09-27)
+- 테스트: `DatingEmailCodeServiceTest`(단위), **`DatingEmailCodeFlowTest`(Testcontainers, HTTP)** 신규,
+  `DatingProfileServiceTest`·`SignupReapplyFlowTest` 갱신. `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- **코드 확인은 바깥 트랜잭션 없이 불려야 한다.** 틀린 입력의 실패 횟수가 예외와 함께 커밋돼야 해서
+  `DatingEmailCodeService.verify` 가 `noRollbackFor = BusinessException.class` 인데, `DatingProfileService`
+  (클래스 레벨 readOnly 트랜잭션)에 합류하면 read-only 오류가 나고 실패 횟수도 롤백된다. 그래서
+  `verifyEmailCode`·`sendEmailCode` 는 `Propagation.NOT_SUPPORTED` 다 — Flow 테스트가 실제로 이걸 잡았다
+- 매직링크 `GET /api/dating/profile/verify` 와 `DatingEmailVerificationService` 는 **이미 나간 링크용으로 남겨 뒀다**
+  (새 발급 없음, Swagger 에 deprecated). 엔드포인트 삭제는 api-spec 계약 삭제라 팀 확인 후 지울 것.
+  dev 에 이 방식으로 만든 미인증 프로필이 있으면 그 링크로만 인증된다
+- 수치(10분·5회·60초·10회)는 `DatingEmailCodeService` 상수다. `application.yml` 을 안 건드리려고 설정으로 빼지 않았다
+- 메일 문구는 임시값(다른 메일과 같은 반말 톤)
+
+**막힌 것 / 넘기는 것**
+- `ErrorCode`·`db/migration/`(V24) 변경 **팀 채널 공지 필요**(아직 안 함)
+- SMTP 발송 한도 미확인은 그대로(위 "막혀 있는 것" 표)
+
+**문서 변경**
+- `docs/plan.md` — TBD-16 변경 기록(등록 전 코드 인증)
+- `docs/architecture.md` — 매직링크 표(V21 폐기 예정), "소개팅 학교메일 6자리 코드" 절 신설, §5 스키마 `dating_email_code`
+- `docs/api-spec.md` — §1 에러코드 3개, §10 머리말 신규 흐름, §10.2 등록 조건·응답 예시, §10.6 폐기 예정, §10.7 신설
+- `docs/handoff.md` — Flyway V24 예약(+ V21·V22 상태를 "dev 머지 완료"로 정정), ErrorCode 표, 프론트 공지 표
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-26 첫 줄. **`/dating/verify` 페이지는 더 이상 필요 없다**
+
+---
+
+### 2026-09-26 (토) · 곽도윤 · Swagger 문서 누락 점검 + dating 8개 엔드포인트 문서화 · Claude Code
+
+**한 일**
+- 구현된 엔드포인트와 `/v3/api-docs` 실제 출력을 대조했다(컨텍스트 기동해서 덤프 떠서 비교).
+  **경로 누락은 없었다** — 29개 전부 Swagger에 노출되고 `api-spec.md` 에도 29개 경로 전부 있다
+- 다만 8개가 `@Operation` summary 없이 메서드+경로만 뜨고 에러 응답도 성공 코드 하나만 있었다:
+  `POST /api/dating/profile/photo`·`POST /api/dating/profile`·`GET /api/dating/profile/me`·
+  `GET /api/dating/recommendations`(#84), 요청 4개(#86). **API 동작은 건드리지 않고 어노테이션만** 붙였다
+  (summary·description + 실제 서비스 코드가 던지는 에러코드 그대로 `@ApiResponses`). 8개 모두 최선우 구현분
+- 스타일은 `DatingUnlockController` 를 따라 에러 설명에 코드명을 적고 JSON 예시는 넣지 않았다 — 25개
+  예시 블록을 붙이면 본문이 주석에 묻힌다. 공통 에러 포맷은 `api-spec.md` §1 에 있다
+
+**건드린 파일/패키지**
+- `dating/DatingController`·`dating/DatingRequestController` — **어노테이션만.** 로직·시그니처·응답 변경 없음
+- `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- 아직 에러 응답이 안 붙은 곳: `POST /api/dating/candidates/{candidateId}/unlock`(402 `INSUFFICIENT_THREAD`·
+  404·503 누락), `GET /api/wallet`·`POST /api/wallet/check-in`. 곽도윤 구현분이라 이번엔 남겨뒀다
+- **운영에서 Swagger 가 그대로 열려 있다.** `SPRINGDOC_API_DOCS_ENABLED`·`SPRINGDOC_SWAGGER_UI_ENABLED`
+  기본값이 `true` — 운영은 `false` 로 닫는 걸 검토할 것 (스위치는 이미 있다)
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- 없음 (`api-spec.md` 는 이미 29개 경로를 다 담고 있어서 손댈 게 없었다)
+
+**프론트에 알려야 할 것**
+- 없음 (Swagger UI 에서 소개팅 API 설명·에러코드가 보이게 된 것뿐. 계약 변경 없음)
+
+---
+
+### 2026-09-26 (토) · 곽도윤 · signup/ 기존 사전신청자 재신청 백필 캠페인 (Part B) · Claude Code
+
+**한 일**
+- 사전신청자에게 초대 메일을 보내 **사진·학교메일 인증까지 미리 끝내게** 하는 1회성 캠페인을 구현했다.
+  기존 사전신청 데이터(이름·연락처·학과·MBTI·자기소개)를 프론트 폼에 그대로 채워주고, 없던 것(사진)과
+  새로 필요한 것(카카오 로그인)만 받는다
+- `signup_reapply_invite` 테이블 신설(V22, TTL 48시간). **`email_verification` 을 재사용하지 않았다** —
+  계획을 바꾼 부분이다. 이유: ① 수명(30분 vs 48시간)과 소비 시점이 다르다(재신청 토큰은 클릭이 아니라
+  프로필 등록이 끝날 때 소비된다 — 카카오 로그인·사진 업로드를 거치는 다단계 흐름 동안 살아 있어야 한다)
+  ② 한 테이블에 섞으면 "이 토큰이 사전등록용인지 재신청용인지" 구분 컬럼이 필요해지고, 살아 있는
+  사전신청 인증 흐름의 코드(`EmailVerificationService`)를 건드려야 한다. Part A 에서 소개팅 인증을 별도
+  테이블로 뺀 것과 같은 판단이다. 세 매직링크의 차이는 `architecture.md` §4 표로 정리해 뒀다
+- `GET /api/signups/reapply?token=` 신규 — 사전신청 입력값 + **`resultId`** 반환. 로그인 불필요이고 토큰을
+  소비하지 않는다
+- **사주 결과↔계정 연결은 새로 만들지 않았다.** 프론트가 위 `resultId` 를 기존 `POST /api/auth/kakao` 의
+  `resultId` 로 넘기면 `MemberRaceOps.linkResultIfUnowned` 가 그대로 처리한다(백엔드 변경 0)
+- `POST /api/dating/profile` 에 `reapplyToken`(선택) 추가. 값이 있으면 초대받은 주소와 요청 `email` 이
+  같은지 확인하고(다르면 `INVALID_INPUT`), 등록 즉시 `markVerified` + 토큰 소비 + **인증 메일 생략**.
+  전부 한 트랜잭션이라 등록이 실패하면 토큰도 다시 쓸 수 있다
+- 일괄 발송은 공개 API 로 두지 않았다 — 관리자 인증이 없는데 대량 메일 트리거를 열 수 없다.
+  `SignupReapplyCampaignRunner`(기동 시 1회, `app.signup.reapply-campaign.mode` = `off`|`dry-run`|`send`)로
+  돌린다. 대상은 `@dgu.ac.kr` + 사주 결과 있음 + (완료했거나 아직 유효한 초대 없음)
+- `dating → signup` 의존을 새로 만들었다(초대 토큰 검증·소비만). `architecture.md` §3 의존 방향 표에 추가.
+  역방향(`signup → dating`)은 순환이라 금지 — 그래서 캠페인 대상 쿼리도 signup 쪽 테이블만 본다
+  (프로필을 이미 만든 사람은 "사용된 초대"로 판별한다)
+
+**건드린 파일/패키지**
+- `signup/` — `SignupReapplyService`·`SignupReapplyInviteRepository`·`SignupReapplyCampaignRunner`·
+  `entity/SignupReapplyInvite`·`dto/SignupReapplyResponse` 신규, `SignupController`·`SignupRepository` 수정
+- `dating/` — `DatingProfileService`(재신청 분기), `dto/DatingProfileRequest`(`reapplyToken` 추가)
+- `db/migration/V22__add_signup_reapply_invite.sql` (신규)
+- `application.yml`·`docker-compose.prod.yml`·`.env.*.example` — `REAPPLY_URL`,
+  `REAPPLY_INVITE_TTL_HOURS`(48), `REAPPLY_CAMPAIGN_MODE`(off), `REAPPLY_CAMPAIGN_EMAIL_DOMAIN`(dgu.ac.kr)
+- 테스트: `SignupReapplyServiceTest`(단위), **`SignupReapplyFlowTest`(Testcontainers)** — 대상 선정 쿼리와
+  초대→등록 흐름을 실제 DB 로 확인한다. 대상 쿼리가 틀리면 엉뚱한 사람에게 대량 메일이 나가서 목킹만으로
+  끝내지 않았다. `DatingProfileServiceTest`·`SignupControllerTest` 갱신
+- `./gradlew test` 전체 통과
+
+**다음 사람이 알아야 할 것**
+- **`REAPPLY_CAMPAIGN_MODE` 를 켠 채로 두면 재기동마다 돈다.** `dev` push 가 곧 배포다. 완료했거나 아직
+  유효한 초대는 대상에서 빠지므로 같은 사람에게 두 번 가지는 않지만, 48시간이 지나도 안 누른 사람에게는
+  재발송된다. **쓰고 나면 `off` 로 되돌릴 것.** 먼저 `dry-run` 으로 대상 수만 확인하는 걸 권한다
+- 로그에 이메일·토큰을 남기지 않는다(AGENTS.md) — 발송 실패는 `signupId` + 예외 타입까지만 찍힌다.
+  SMTP 자체를 검증하려면 `POST /api/signups/resend`(mailSent 플래그)로 따로 확인하는 게 빠르다
+- 재사용된 초대를 다른 계정이 쓰려고 하면 토큰 검사보다 **이메일 중복 검사(409 `DATING_PROFILE_CONFLICT`)에
+  먼저 걸린다.** 어느 쪽이든 막히지만 프론트 에러 문구를 잡을 때 참고할 것 (`SignupReapplyFlowTest` 참고)
+- 사전신청에 **사주 결과가 없는 사람은 대상에서 제외**했다(계정에 연결할 결과가 없어서 새로 신청하는 게
+  빠르다). 사전신청 이메일이 `@dgu.ac.kr` 이 아닌 사람도 제외 — 어차피 소개팅 도메인 검증을 통과 못 한다
+- 축제(2026-10-01) 뒤에는 `signup_reapply_invite` 테이블과 `signup/` 재신청 코드를 통째로 버려도 된다
+
+**막힌 것 / 넘기는 것**
+- **SMTP 발송 한도 미확인**(위 "지금 막혀 있는 것" 표에 이미 있던 항목). 대상 수가 많으면 Gmail 한도에
+  걸릴 수 있는데 스로틀링은 넣지 않았다 — 실패한 초대는 지워지므로 재실행하면 실패분만 다시 시도한다
+- 프론트에 `/dating/reapply` 페이지가 필요하다(api-spec §5 프론트 흐름). 프론트 도메인 확정 후 `REAPPLY_URL` 설정
+
+**문서 변경**
+- `docs/plan.md` — **TBD-16 종료** (프로필 제출 직후 자동 발송, 저장 위치는 프로필, 인증 전 차단 유지,
+  한 학교메일 = 한 계정)
+- `docs/architecture.md` — §3 의존 방향(`dating → signup` 허용, 역방향 금지), §4 매직링크 3종 비교 표,
+  §5 스키마(`dating_email_verification`·`signup_reapply_invite`)
+- `docs/api-spec.md` — §5 `GET /api/signups/reapply` 신설(프론트 4단계 흐름 포함), §10.2 `reapplyToken`
+
+**프론트에 알려야 할 것**
+- `GET /api/signups/reapply?token=` 신규, `POST /api/dating/profile` 에 `reapplyToken`(선택) 추가.
+  **기존 필드 변경·삭제 없음.** `/dating/reapply` 페이지와 4단계 흐름은 `api-spec.md` §5 참고
+  (미공지 — 곽도윤이 직접 전달 예정)
+
+---
+
+### 2026-09-26 (토) · 곽도윤 · 인프라: 개발 서버 EC2 기동 + dev/prod 분리 구멍 3개 수정 · Claude Code
+
+**한 일**
+- `docs/runbook-dev-server.md` 1~9단계를 EC2 에서 실행해 개발 서버를 띄웠다. 운영·개발 `/api/health` 둘 다 200, `wks_dev` DB 에 Flyway V1~V18 적용, `wks_dev` 계정으로 운영 DB 접속이 막히는 것 확인
+- 기동하다 나온 버그: `docker-compose.dev.yml` 에 `SPRING_PROFILES_ACTIVE: dev` 가 없어 `application-dev.yml` 이 안 읽혔다(`Failed to configure a DataSource`). 추가함
+- 점검에서 찾은 구멍 2개 수정:
+  - `nginx/api-dev.conf` 가 `proxy_pass http://wks-app-dev:8080` 로 고정돼 있었다. nginx 는 뜰 때 이 이름을 resolve 하므로, dev 컨테이너가 없으면 공유 nginx 전체가 기동 실패해 **운영까지 죽는다**(7단계에서 실제로 `host not found in upstream` 발생). `resolver 127.0.0.11` + 변수 `proxy_pass` 로 요청 시점 resolve 로 바꿨다. dev 가 없으면 dev 도메인만 502
+  - `docker-compose.prod.yml` 은 `env_file` 없이 `environment:` 에 적힌 변수만 넘기는데 `KAKAO_*`·`JWT_SECRET`·`DATING_VERIFY_REDIRECT_URL` 이 빠져 있었다. 로그인 코드가 `main` 에 가는 순간 운영 로그인이 `KAKAO_UNAVAILABLE` 로 조용히 꺼질 상태였다. 추가함
+- `.gitignore` 에 `.env.dev` 추가(`.env`·`.env.prod` 만 있었다). `.env.prod.example` 에 compose 가 넘기는데 없던 키를 빈 값으로 추가(기존 값은 안 건드림)
+
+**건드린 파일/패키지**
+- `docker-compose.dev.yml`, `docker-compose.prod.yml`, `nginx/api-dev.conf`, `.gitignore`, `.env.prod.example`
+- 문서: `docs/runbook-dev-server.md`, `docs/git-workflow.md`, `AGENTS.md`, 이 파일
+
+**다음 사람이 알아야 할 것**
+- **이 수정이 `dev` 에 머지되기 전에 `dev` 에 push 하면 개발 서버가 다시 죽는다.** `deploy-dev.yml` 이 배포할 때마다 저장소의 `docker-compose.dev.yml`(프로필 없는 판)로 EC2 파일을 덮어쓴다. 지금 EC2 는 손으로 고친 판으로 떠 있다
+- 앱이 새 환경변수를 읽게 되면 `docker-compose.prod.yml` 의 `app.environment` 에도 추가한다. 개발은 `env_file` 이라 괜찮고, 운영은 빠뜨려도 앱은 떠서 알아채기 어렵다
+- `nginx/api-dev.conf.active`(nginx 가 실제로 읽는 파일)는 어떤 배포도 갱신하지 않는다. 이번 resolver 변경도 `main` 릴리즈 후 runbook 11단계로 손으로 반영해야 한다
+- `JWT_SECRET` 은 32바이트 이상이어야 한다. `JwtProvider` 가 문자열을 UTF-8 바이트 그대로 키로 쓴다(base64 디코딩 안 함). 짧으면 기동 실패
+- GHCR 이미지는 private 이다. EC2 에서 손으로 `pull` 하려면 `read:packages` 개인 토큰으로 `docker login` 을 먼저 한다. 워크플로가 남긴 로그인은 잡 토큰이라 이미 무효다
+- 인증서는 named volume(`certbot-etc`)에 있어서 호스트 `/etc/letsencrypt` 에는 안 보인다. nginx 컨테이너 안에서 확인한다
+- 개발 서버 `wks_dev` DB 비밀번호가 약한 값으로 들어가 있다. runbook 3단계의 `ALTER ROLE` 로 바꾸고 `/opt/wks-dev/.env` 도 같이 고칠 것
+
+**막힌 것 / 넘기는 것**
+- 운영 릴리즈 전 `/opt/wks/.env` 에 새 키 채우기, dev 전용 Gemini 키 발급, resolver EC2 반영 — "지금 막혀 있는 것" 표
+- 운영 `app` 이 호스트 8080 을 publish 한다(`ports: "8080:8080"`). 보안그룹에서 8080 이 열려 있으면 nginx rate limit 을 우회해 직접 붙을 수 있다. 보안그룹 확인 필요(이번엔 안 건드림)
+- 운영 `MAIL_FROM` 도 compose 가 안 넘겨 기본값 `noreply@wks.local` 로 나간다. 의도인지 확인 필요(이번엔 안 건드림)
+
+**문서 변경**
+- `AGENTS.md`: "`dev` push = 운영 배포, PR CI 없음" 이라는 옛 문장을 현재 구조로 교체, 운영 compose 환경변수 규칙 추가 — **팀 채널 공지 필요**(AGENTS.md 는 공지 대상 파일)
+- `docs/git-workflow.md`: 상단 현재 상태 갱신, "배포가 자동으로 안 하는 것"(`.env`·`api-dev.conf.active`) 추가
+- `docs/runbook-dev-server.md`: 실행 이력, 3단계 heredoc, 4단계 `.env` 키별 주의, 6단계 인증서 확인 방법, 7단계 upstream 실패 대응, 8단계 GHCR 로그인, 11단계 신설
+- `docs/api-spec.md` §9 인증 규칙: 프론트 도메인별 CORS·로그인 가능 여부 표 추가(추가만, 기존 필드 변경 없음)
+
+**프론트에 알려야 할 것**
+- 개발 서버 주소 `https://api-dev.threadoffate.site` (프론트 `https://dev.threadoffate.site` 에서만 CORS 허용 + `localhost:3000`)
+- **로그인 테스트는 `*.threadoffate.site` 에서만 된다.** `localhost`·`netlify.app` 에서는 CORS 는 통과하지만 `SameSite=Lax` 쿠키가 안 실려 로그인 뒤 `/api/me` 가 401. `api-spec.md` §9 "인증 규칙"에 도메인별 표로 추가함
+
+**CORS 점검 결과 (2026-09-26, 실서버 preflight)**
+- 운영 허용: `threadoffate.site`, `www.threadoffate.site`, `wks-fe.netlify.app`, `localhost:5173`. 개발 허용: `dev.threadoffate.site`, `localhost:3000`. 서로의 프론트는 403
+- **운영 응답에 `Access-Control-Allow-Credentials: true` 가 없다** — 운영이 아직 `allowCredentials(true)` 이전 코드(`main`)라서다(개발엔 있음). `dev`→`main` 릴리즈 후 아래로 `access-control-allow-credentials: true` 가 나오는지 확인. 안 나오면 쿠키 로그인 요청이 CORS 에서 막힌다:
+  `curl -si -X OPTIONS https://api.threadoffate.site/api/me -H "Origin: https://threadoffate.site" -H "Access-Control-Request-Method: GET" | grep -i access-control`
+- `.env.prod.example` 의 `CORS_ALLOWED_ORIGINS` 세 번째 값이 `https://t>` 로 잘려 있었다(EC2 실제 `.env` 는 정상). 실서버 허용 목록대로 고침. 이 김에 파일 줄바꿈을 저장소 원본과 같은 LF 로 통일
+
+### 2026-09-26 (토) · 곽도윤 · dating/ 학교이메일 인증 매직링크 구현 (TBD-16 Part A) · Claude Code
+
+**한 일**
+- 기존 사전신청자 백필 캠페인(사진·이메일인증 미리 해두게 하기) 준비의 1단계로, 그동안 코드에 없던
+  **소개팅 학교메일 재학 인증**을 구현했다. `DATING_NOT_VERIFIED` 게이트는 있었지만
+  `DatingProfile.markVerified()`를 부르는 곳이 어디에도 없어서 지금까지는 아무도 이 게이트를 통과할
+  수 없었다
+- `dating_email_verification` 테이블 신설(V21) — `signup/email_verification`과 같은 구조(토큰 PK,
+  TTL, 1회용)지만 `dating_profile`을 참조한다. `signup`은 로그인 개념이 생기기 전 스키마라 재사용하지
+  않았다
+- `DatingEmailVerificationService` 신설(발급·발송·검증, TTL은 `app.dating.email-verification-ttl-minutes`).
+  `DatingProfileService.create()` 끝에서 자동으로 인증 메일을 발송하도록 연결했고(SMTP 실패해도 프로필
+  등록 자체는 롤백 안 됨, signup과 같은 패턴), `GET /api/dating/profile/verify?token=`을 신규 추가해
+  `profile.markVerified()` 후 프론트로 302 리다이렉트한다
+- 이 엔드포인트는 매직링크 토큰 자체가 신원 증명이라 로그인 쿠키 없이 눌러야 해서
+  `DatingAuthWebConfig`에서 `/api/dating/profile/verify`만 JWT 인터셉터 대상에서 제외했다 —
+  **AGENTS.md/api-spec.md의 "모든 `/api/dating/**`는 로그인 필요" 블랭킷 규칙에 대한 유일한 예외**다.
+  문서에도 예외로 명시해 뒀다(§10 안내문, §10.6 신설)
+
+**건드린 파일/패키지**
+- `dating/` (`DatingEmailVerificationService`·`DatingEmailVerificationRepository`·`entity/DatingEmailVerification` 신규,
+  `DatingProfileService`·`DatingController`·`DatingAuthWebConfig` 수정)
+- `db/migration/V21__add_dating_email_verification.sql` (신규)
+- `application.yml`, `.env.prod.example`, `.env.dev.example` — `app.dating.email-verification-ttl-minutes`,
+  `DATING_VERIFY_REDIRECT_URL` 추가
+- 테스트: `DatingEmailVerificationServiceTest`·`DatingProfileServiceTest`·`DatingControllerTest` 신규.
+  `DatingProfileServiceTest`는 이번에 처음 생김(기존엔 없었음) — 새로 추가한 인증 발송 연결부만 다루고,
+  `create()`의 기존 검증 로직 전체 커버리지는 이번 범위 밖으로 남겨뒀다
+- `./gradlew test`(Testcontainers 포함) 전체 통과 확인
+
+**다음 사람이 알아야 할 것**
+- **재발송 API는 아직 없다.** SMTP 발송이 실패하면 그 신청자는 인증 메일을 영영 못 받는다 — 이번엔
+  범위 밖으로 남겨둠(signup의 `/api/signups/resend`와 같은 패턴으로 나중에 추가하면 됨)
+- 이건 백필 캠페인의 전제 작업(Part A)일 뿐이다. **기존 `signup` 사전신청자를 카카오 로그인·사진
+  업로드로 이어붙이는 Part B(토큰 TTL 48시간, `/api/signups/reapply` 등)는 아직 시작 안 함**
+- `dating/`은 AGENTS.md 담당표에 "미정"으로 남아있는데 이번에 곽도윤이 계속 손을 댔다(V20에 이어)
+  — 최선우한테 공지 필요
+
+**막힌 것 / 넘기는 것**
+- Part B(백필 캠페인 본체) 구현 필요 — 다음 세션에서 진행 예정
+
+**문서 변경**
+- `docs/api-spec.md` §10 — §10.6(학교 이메일 인증) 신설, 로그인 쿠키 필요 규칙에 예외 명시,
+  "#84 구현 상태와 남은 연동"에서 이메일 인증 연동 완료로 갱신
+
+**프론트에 알려야 할 것**
+- `POST /api/dating/profile` 성공 시 이제 인증 메일이 자동 발송된다. `GET /api/dating/profile/verify?token=`
+  클릭 시 302로 `DATING_VERIFY_REDIRECT_URL`(기본 `/dating/verify`)로 리다이렉트 — 프론트에 이 경로
+  페이지가 필요하다. (미공지 — 곽도윤이 직접 전달 예정)
+
+---
+
+### 2026-09-26 (토) · 곽도윤 · wallet/ 실(재화) 원장·해금·출석 구현 (FR-TH) · Claude Code
+
+**한 일**
+- `wallet/` 신설. `thread_ledger` 하나로 지급·차감·잔액을 전부 처리한다(plan.md §9.4). 잔액 컬럼 없이
+  `SUM(amount)`로 계산하고, `UNIQUE(member_id, reason, ref_id)`로 중복 지급·차감을 막는다(FR-TH-02).
+  동시성은 `pg_advisory_xact_lock(memberId)`로 회원 단위 직렬화한다 — `member` 테이블을 잠그지 않은
+  이유는 wallet이 다른 도메인 엔티티를 참조하지 않기 때문(architecture.md §3, "원장이 가장 아래")
+- **TBD-11(잔액 부족 HTTP 상태) 확정 필요해서 사용자에게 직접 물어봄 → 402 Payment Required로 결정**
+  (plan.md·backend-requirements.md 갱신, TBD 종료)
+- 자동 지급 3종을 각 트리거 지점에 심었다: 가입 보너스 10(`MemberService.loginAndLink`, 신규 회원 분기
+  안, ref_id=memberId), 친구 궁합지도 등록 3(`CompatibilityService.create`, origin이 로그인 계정일 때만,
+  ref_id=compatibility.id), 출석 5(`WalletController.checkIn`, ref_id=KST 날짜)
+- 소개팅 카드 해금 `POST /api/dating/candidates/{candidateId}/unlock` 신규(plan.md §8.5, FR-DT-06). 실
+  차감·해금 기록(`DatingUnlockChargeService`, 짧은 트랜잭션)과 값 조회(`DatingUnlockService`)를
+  분리했다 — `REASON` 해금은 #94에서 최선우가 만들어 둔 `DatingReasonService.getOrCreate`를 그대로
+  호출하는데, 그 안에서 LLM을 최대 30초 부를 수 있어서 실 차감 트랜잭션·advisory lock을 그 시간만큼
+  붙잡아 두면 커넥션 풀(10개)이 마른다(#94 인수인계 메모, CompatibilityReasonService와 같은 이유) —
+  같은 클래스 안에서 `@Transactional` 메서드를 직접 호출하면(self-invocation) 스프링 프록시를 안 거쳐서
+  트랜잭션이 실제로 안 걸리는 문제가 있어 별도 빈(`DatingUnlockChargeService`)으로 분리했다
+- `dating_recommendation`에 `photo_unlocked`·`name_unlocked`·`department_unlocked`·`reason_unlocked`
+  4개 컬럼 추가(V20). 이 행이 (조회자, 후보) 쌍에 정확히 하나이고 재추천되지 않아 재사용에 안전하다 —
+  별도 해금 테이블을 안 뒀다
+- `GET /api/dating/recommendations`가 실제 해금 상태를 반영하도록 고쳤다 — 지금까지는 `fields.*`가
+  전부 `locked: true` 고정이었다(값 자체가 없었음). `LockedField`를 `{locked, cost, value}`로 바꿔서
+  잠겼으면 `cost`만, 풀렸으면 `value`만 채운다(반대쪽은 null) — 잠긴 값을 응답에 아예 안 넣는 서버 블러
+  원칙(FR-DT-03)을 유지
+- `GET /api/me`의 `threadBalance`가 하드코딩 0이었던 걸 실제 잔액으로 연결
+- Flyway **V12(원장) 예약이 죽어 있었다.** V13~V18이 먼저 merge돼 dev에 이미 적용된 상태라 이제 와서
+  V12를 쓰면 out-of-order 오류가 난다 — V12는 폐기 처리하고 thread_ledger는 **V19**로 다시 받았다.
+  dating_recommendation 해금 컬럼은 V20. `./gradlew build`로 19개 마이그레이션(V12 제외) 검증 확인
+- **버그 하나 발견·수정**: `saju/DatingReasonGenerator.java`를 새로 만들려다가 `dating/` 패키지에 동명
+  클래스가 이미 있다는 걸 뒤늦게 알았다. 그 과정에서 기존 `prompts/dating-reason-system.txt`(이미 튜닝된
+  프롬프트)를 실수로 덮어썼는데, git status로 바로 발견해서 `git checkout`으로 원복하고 중복 파일을
+  지웠다 — 실제로 커밋된 적은 없다
+
+**검증**
+- `./gradlew build` 전체 통과 (컴파일 + 전체 테스트, Testcontainers 포함)
+- `wallet/WalletServiceTest`(신규, Testcontainers): 잔액=원장합계, 같은 ref_id 중복 지급·차감 방지,
+  잔액 부족 시 402 확인
+- `dating/DatingUnlockServiceTest`(신규, Mockito): 필드별로 올바른 값을 꺼내는지
+- `dating/DatingSchemaTest`에 추가한 해금 테스트 2건에서 **테스트 오염 버그를 발견해 바로 고쳤다** — 새
+  후보 프로필을 인증(verified) 상태로 만들었더니, 이 클래스의 다른 테스트들이 트랜잭션 롤백 없이 같은
+  Postgres 컨테이너를 공유하는 구조라 내 후보가 다른 테스트의 top-3 추천 풀에 끼어들어 그 테스트의
+  의도한 recipient를 밀어냈다(같은 "갑자·을축·병인" 뷰어 팔자를 여러 테스트가 재사용해서 벌어짐). 내
+  테스트용 후보는 인증하지 않고(`markVerified()` 생략) 추천 행도 selector를 거치지 않고 직접 저장하는
+  걸로 고쳐서 해결
+- `member/MemberServiceTest`·`compatibility/CompatibilityServiceTest`에 `@Mock WalletService` 추가,
+  후자에는 지급/미지급 케이스 테스트 2건 신규 추가
+
+**건드린 파일/패키지**
+- 신규: `wallet/`(전체), `dating/DatingUnlockField.java`·`DatingUnlockChargeService.java`·
+  `DatingUnlockService.java`·`DatingUnlockController.java`·`dto/DatingUnlockRequest.java`·
+  `dto/DatingUnlockResponse.java`, `db/migration/V19__add_thread_ledger.sql`·
+  `V20__add_dating_unlock_fields.sql`, `wallet/WalletServiceTest.java`, `dating/DatingUnlockServiceTest.java`
+- 수정: `member/MemberService.java`·`MeService.java`, `compatibility/CompatibilityService.java`,
+  `dating/entity/DatingRecommendation.java`, `dating/dto/DatingRecommendationResponse.java`,
+  `dating/DatingRecommendationService.java`, `dating/DatingPhotoService.java`(`originalUrl` 추가),
+  `common/exception/ErrorCode.java`(`INSUFFICIENT_THREAD` 402)
+- 테스트 수정: `MemberServiceTest`·`CompatibilityServiceTest`·`DatingSchemaTest`
+- 문서: `docs/api-spec.md` §1·§10·신설 §12, `docs/plan.md`(TBD-11 종료), `docs/backend-requirements.md`
+  (FR-TH-06, §17 머리말), `docs/handoff.md`(이 항목, Flyway 표, ErrorCode 표)
+
+**다음 사람이 알아야 할 것**
+- **`api.md`(프론트 공유용)에는 아직 소개팅·실 섹션 자체가 없다** — `docs/api-spec.md`는 §10~§12까지
+  있는데 `api.md`는 §6(로그인)에서 끝난다. 이건 이번 작업 전부터 있던 격차라 손 안 댔다. 프론트에
+  api.md를 계속 참고시키려면 §7~§9(소개팅) 통째로 옮기는 작업이 따로 필요하다
+- **제휴처 보상(`PARTNER` reason, `rewardGranted` 필드)은 여전히 미구현이다.** 코드에 reason enum 값만
+  예약해 뒀다 — 제휴처별 금액을 어디서 관리할지(하드코딩/DB/관리자 API) 명세가 없어서 손 안 댔다
+- **리롤(`REROLL`)도 미구현이다** (plan.md TBD-6, 비용 미정)
+- 원장 격리는 `wallet_dev`처럼 별도 DB가 아니라 같은 스키마의 한 테이블이라, 개발/운영 DB 자체가
+  분리(`docs/runbook-dev-server.md`)돼 있으면 원장도 자동으로 같이 분리된다 — 추가 조치 불필요
+- `DatingUnlockChargeService`는 패키지 프라이빗이라 `dating` 패키지 밖에서 재사용 못 한다 — 의도한
+  설계(같은 클래스 self-invocation 문제 회피용 내부 협력자일 뿐, 공개 API 아님)
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: 이 브랜치(`feat/wallet`, `dev`에서 분기) PR 리뷰·머지
+- 프론트: §10.5(해금)·§12(실) API 연동, `api.md` 소개팅·실 섹션 백필은 별도 작업으로 남김
+
+**문서 변경**
+- `docs/api-spec.md`, `docs/plan.md`, `docs/backend-requirements.md`, `docs/handoff.md`(이 항목,
+  Flyway 예약 표, ErrorCode 표)
+
+**프론트에 알려야 할 것**
+- `POST /api/dating/candidates/{candidateId}/unlock` 신규 — §10.5. `GET /api/dating/recommendations`
+  응답의 `fields.*`가 이제 실제 해금 상태를 반영한다(그 전엔 전부 잠금 고정이었음, 이 필드들이 실제로
+  쓰이기 시작하는 건 이번이 처음이라 프론트 계약 파괴는 아님). `GET /api/wallet`·`POST /api/wallet/check-in`
+  신규 — §12. `GET /api/me`의 `threadBalance`가 이제 실제 값이다(그전엔 0 고정이었음)
+
+### 2026-09-25 (금) · 최선우 · dating/ 소개팅 궁합 이유 캐시 (#94) · Codex
+
+**한 일**
+- 친구 궁합 이유와 별도로 소개팅 전용 문장을 생성해 추천 이력에 캐싱했다. V18에 `dating_recommendation.reason_content`를 추가했다
+- 첫 `REASON` 해금 성공 후 호출할 내부 서비스만 만들었다. 추천 조회에서는 생성하지 않고, 해금·실 차감 API는 후속 작업이다
+- 기존 `GeminiJson`의 호출 한도를 공유하며, 동시 생성 시 조건부 저장 후 먼저 저장된 문장을 반환한다. 전체 `./gradlew test` 통과
+
+**건드린 파일/패키지**
+- `dating/DatingReasonGenerator.java`, `DatingReasonService.java`, `DatingRecommendationRepository.java`, `entity/DatingRecommendation.java`, 관련 테스트·프롬프트
+- `saju/GeminiJson.java` 호출 메서드 접근 범위, `db/migration/V18__add_dating_reason_cache.sql`
+
+**다음 사람이 알아야 할 것**
+- 해금 API는 실 차감·해금 기록이 성공한 뒤 `DatingReasonService.getOrCreate(viewerMemberId, candidateId)`를 호출한다. LLM 호출 중에는 DB 트랜잭션을 열지 않는다
+- 동일 추천 이력에 이유 한 건을 보관한다. 다른 추천 후보에게 이유가 섞이지 않으며 친구 궁합 캐시를 쓰지 않는다
+- 로컬 DB에 과거 실험용 V18(`add_dating_photo_blurred_key`)이 남아 있어 #94 V18과 체크섬이 충돌했다. `/private/tmp/wks_before_issue94.dump` 백업 후 옛 V18 컬럼·이력만 제거했고, 현재 V18 적용과 `/api/health` UP을 확인했다
+
+**막힌 것 / 넘기는 것**
+- 해금·실 원장 API 구현 및 실패 시 차감 처리 정책은 후속 작업
+
+**문서 변경**
+- `docs/plan.md` §1.2·8.5, `docs/architecture.md` 궁합 이유, `docs/backend-requirements.md` FR-CP-15, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 없음 (공개 API 변경 없음)
+
+---
+
+### 2026-09-25 (금) · 최선우 · dating/ 사진 블러 썸네일 (#88) · Codex
+
+**한 일**
+- 소개팅 사진 업로드 URL은 JPEG·PNG만 발급하고, 프로필 등록 시 실제 파일 형식을 검사해 96×121 블러 PNG를 별도 S3 객체로 저장했다. 피그마 사진 영역 343×433·레이어 흐림 고르게 15를 기준으로 비율·흐림을 근사했다
+- 추천 카드에 블러 썸네일 임시 조회 URL을 추가했다. 원본 URL·키는 응답에 없다
+- 사진 형식·블러 생성·S3 서명 키 분리·추천 응답 테스트를 추가했고 `./gradlew test` 전체 통과했다
+
+**건드린 파일/패키지**
+- `dating/DatingPhotoService.java`, `DatingProfileService.java`, `DatingRecommendationService.java`, `dto/DatingRecommendationResponse.java` 및 관련 테스트
+- `docs/plan.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- 썸네일 키는 `dating-thumbnails/{photoId}.png`; 원본 키와 독립적이다. S3 버킷은 비공개여야 한다
+- 원본 사진 조회 URL은 실 차감·사진 해금 API에서만 발급해야 한다
+- 프로필 등록 때 S3 원본 읽기·썸네일 쓰기 권한이 필요하다. 10MB·2천만 픽셀 초과 파일은 거절한다
+
+**막힌 것 / 넘기는 것**
+- 실제 S3 버킷 권한·CORS를 통한 업로드→등록→추천 전체 흐름은 아직 수동 검증 전
+
+**문서 변경**
+- `docs/plan.md` §9.2, `docs/api-spec.md` §10, `docs/backend-requirements.md` FR-DT-04
+
+**프론트에 알려야 할 것**
+- 소개팅 사진은 JPEG·PNG만 업로드 가능. 추천 카드의 `blurredPhotoUrl`로 블러 사진을 표시하며, 원본은 해금 API 후 제공 예정
+
+---
+
+### 2026-09-25 (금) · 최선우 · dating/ 프로필 수정 API 제거 (#89) · Codex
+
+**한 일**
+- V1에서 프로필 수정·사진 교체를 제공하지 않기로 한 결정에 맞춰 `PATCH /api/dating/profile/me`와 서비스·엔티티 수정 메서드를 제거했다
+- 기존 추천 테스트에서 프로필 수정에 기대던 부분을 정리하고, PATCH 매핑이 없음을 확인하는 테스트를 추가했다
+
+**건드린 파일/패키지**
+- `dating/DatingController.java`, `DatingProfileService.java`, `entity/DatingProfile.java`, `DatingSchemaTest.java`, `common/exception/ErrorCode.java`, `GlobalExceptionHandler.java`
+
+**다음 사람이 알아야 할 것**
+- V1 소개팅 프로필은 최초 등록(POST)·내 프로필 조회(GET)만 제공한다. 사진 교체도 지원하지 않는다
+- 공통 예외 처리기에 405 응답을 추가했다. 제거된 PATCH 호출은 `METHOD_NOT_ALLOWED` 405를 반환한다
+
+**막힌 것 / 넘기는 것**
+- `common/exception/`은 곽도윤 담당 패키지이므로 PR 리뷰 때 함께 확인 필요
+
+**문서 변경**
+- `docs/plan.md` §8.3, `docs/api-spec.md` §1·§10.3, `docs/handoff.md` 이 기록
+
+**프론트에 알려야 할 것**
+- `PATCH /api/dating/profile/me` 제거. V1에서는 프로필·사진 수정 UI를 연결하지 않는다
+
+---
+### 2026-09-25 (금) · 곽도윤 · auth/·common/auth/ 로그인을 쿠키 기반으로 전환 · Claude Code
+
+**한 일**
+- **의도적 결정 (본인 확인).** 로그인 토큰 전달 방식을 `Authorization: Bearer` 헤더 + 프론트 로컬 저장소에서
+  **HttpOnly 쿠키**로 바꿨다. `AGENTS.md`의 기존 "쿠키를 넣지 않는다" 규칙을 뒤집는 거라 진행 전에 재확인
+  받았다 — Spring Security·서버 쪽 세션 저장소는 여전히 안 쓴다(쿠키는 JWT 를 담는 그릇일 뿐)
+- `common/auth/JwtCookie`(신규) — 쿠키 발급(`issue`)·삭제(`clear`)·요청에서 읽기(`readFrom`)를 한 곳에
+  모았다. 속성: `HttpOnly`·`SameSite=Lax`·`Path=/`·`Domain` 없음(host-only — 운영/개발 쿠키가 안 섞임)·
+  `Secure`는 `app.auth.cookie-secure`(기본 true, 로컬만 false)로 제어
+- `JwtAuthInterceptor`가 이제 쿠키에서만 토큰을 읽는다 (`Authorization` 헤더 파싱 제거 — 폴백 없이 완전
+  전환). `/api/me/**`·`/api/dating/**` 둘 다 같은 인터셉터라 자동으로 적용됨
+- `POST /api/auth/kakao` 응답에서 `token` 필드를 **삭제**했다 (프론트 계약 변경, api-spec.md·api.md 갱신).
+  대신 응답에 `Set-Cookie`가 실린다. `AuthService.login()`은 이제 `LoginOutcome(token, body)`를 돌려주고
+  Controller가 `token`을 꺼내 쿠키를 만든 뒤 `body`만 클라이언트에 보낸다
+- `POST /api/auth/logout` 신규 추가 — 쿠키를 지운다. **쿠키가 HttpOnly라 프론트 JS가 못 지우므로 이
+  엔드포인트가 없으면 로그아웃 자체가 불가능해진다** (2026-09-23 결정 "로그아웃은 클라이언트가 로컬
+  토큰 삭제"는 이제 성립 안 함 — 그 결정을 대체함)
+- `WebConfig`에 `allowCredentials(true)` 추가 (쿠키가 크로스 오리진 요청에 실리려면 필수 — CORS
+  `allowedOrigins` 와일드카드 금지 규칙과도 호환됨, credentials 모드에서는 와일드카드 자체가 금지라)
+- `OpenApiConfig`의 Swagger 보안 스키마를 `bearerAuth`(HTTP Bearer)에서 `cookieAuth`(APIKEY, in=COOKIE,
+  name=wks_token)로 바꿨다. `MeController`·`DatingController`·`DatingRequestController`의
+  `@SecurityRequirement` 이름도 맞춰 바꿈
+- CSRF는 별도 토큰 없이 `SameSite=Lax` + 상태변경 API가 전부 POST/PATCH인 것으로 막는다 — CSRF 토큰
+  시스템(Spring Security 등)은 도입하지 않았다(범위 밖이라고 판단, 필요하면 별건)
+- **기존 테스트 중 하나가 깨졌다**: `DatingSchemaTest.datingRouteRequiresBearerToken`이 `Authorization`
+  헤더로 인증하던 걸 전제해서 401 대신 예상한 404가 안 나왔다 — 쿠키를 심도록 고치고 테스트명도
+  `datingRouteRequiresLoginCookie`로 바꿈. `AuthProperties`에 `cookieSecure` 필드가 추가돼 생성자를
+  직접 호출하던 3개 테스트(`KakaoClientTest`·`RedirectUriPolicyTest`·`JwtProviderTest`)도 인자 추가
+- 신규 테스트: `JwtCookieTest`(쿠키 속성 단위테스트), `AuthControllerTest`(로그인 응답에 토큰 필드가
+  없고 Set-Cookie가 실리는지, 로그아웃이 Max-Age=0 쿠키를 내려주는지)
+- `./gradlew build` 전체 통과 확인 (컴파일 + 전체 테스트 스위트)
+- 문서 갱신: `AGENTS.md`(핵심 규칙 문구 교체), `docs/api-spec.md` §9(요청/응답 예시·인증 규칙·로그아웃
+  엔드포인트 추가), `docs/architecture.md`(다이어그램·설계원칙 4·8·9, API 표), `docs/convention.md`(인증
+  절), `docs/plan.md` §8(한 줄), `api.md` §6(프론트 공유용, 같은 내용)
+
+**건드린 파일/패키지**
+- 신규: `common/auth/JwtCookie.java`, `common/auth/JwtCookieTest.java`, `auth/AuthControllerTest.java`
+- 수정: `common/auth/AuthProperties.java`(`cookieSecure` 필드), `common/auth/JwtAuthInterceptor.java`,
+  `common/config/WebConfig.java`, `common/config/OpenApiConfig.java`, `auth/AuthController.java`,
+  `auth/AuthService.java`, `auth/dto/KakaoLoginResponse.java`, `member/MeController.java`,
+  `dating/DatingAuthWebConfig.java`(주석)·`DatingController.java`·`DatingRequestController.java`(Tag·
+  SecurityRequirement), `application.yml`·`application-local.yml.example`(`cookie-secure`)
+- 테스트 수정: `KakaoClientTest.java`, `RedirectUriPolicyTest.java`, `JwtProviderTest.java`(생성자 인자),
+  `dating/DatingSchemaTest.java`(쿠키로 전환)
+- 문서: 위 "한 일" 참고
+
+**다음 사람이 알아야 할 것**
+- **프론트(WKS-FE)가 반드시 같이 바뀌어야 한다.** 이 레포는 백엔드뿐이라 프론트는 못 건드렸다 — 아래
+  "프론트에 알려야 할 것" 그대로 전달 필요. 프론트가 안 바뀐 채로 이 백엔드가 배포되면 **로그인이 완전히
+  깨진다** (프론트가 여전히 응답 바디의 `token`을 찾고 `Authorization` 헤더를 보내려 하기 때문)
+- 로컬 개발 시 `application-local.yml`에 `app.auth.cookie-secure: false`가 없으면 브라우저가 로그인
+  쿠키를 저장하지 않는다 (plain HTTP라 Secure 쿠키 거부됨) — `application-local.yml.example`에 이미
+  반영해뒀으니 로컬 파일도 맞춰 갱신할 것
+- `wks_token` 쿠키는 host-only(Domain 속성 없음)라 `api.threadoffate.site`와 `api-dev.threadoffate.site`
+  가 쿠키를 안 공유한다 — 의도한 설계(운영/개발 격리)
+- CSRF 방어가 `SameSite=Lax`뿐이라는 걸 인지할 것. 상태변경 API를 GET으로 만들면 이 방어가 뚫린다 —
+  새 API 만들 때 메서드를 지킬 것
+- 이 브랜치(`feat/cookie-based-auth`, `dev`에서 분기)는 아직 커밋만 했고 PR은 안 올렸다
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: 이 PR 리뷰·머지, 프론트 팀에 아래 변경사항 전달
+- 프론트 팀 (WKS-FE, 별도 레포라 여기서 직접 수정 못 함):
+  1. 로그인 API 응답에서 `token` 필드 제거됨 — 더 이상 읽지 않는다
+  2. `localStorage`(`wks:auth`)에 토큰 저장하던 로직(`src/api/authToken.ts` 등) 전체 제거
+  3. 인증이 필요한 모든 API 호출에 `credentials: 'include'`(axios는 `withCredentials: true`) 추가 —
+     빠지면 브라우저가 쿠키를 안 보내서 401
+  4. `LogoutButton.tsx`가 `clearAuthToken()`(로컬 삭제) 대신 `POST /api/auth/logout`을 호출하도록 변경
+     — HttpOnly 쿠키는 JS가 못 지운다
+  5. 카카오 콜백 처리 후 더 이상 토큰을 저장할 필요 없음 — 로그인 성공 응답만 받으면 쿠키는 이미 심어져
+     있다
+  6. 로컬 개발 시 프론트가 `localhost:8080`(백엔드)과 다른 포트(`5173`/`3000`)에서 뜨는데, 쿠키가
+     `SameSite=Lax`라 같은 사이트(`localhost`)면 포트가 달라도 전송된다 — 별도 처리 불필요하지만
+     `credentials: 'include'`는 로컬에서도 꼭 필요
+
+**문서 변경**
+- `AGENTS.md`, `docs/api-spec.md`, `docs/architecture.md`, `docs/convention.md`, `docs/plan.md`,
+  `api.md`, `docs/handoff.md`(이 항목)
+
+**프론트에 알려야 할 것**
+- 위 "막힌 것 / 넘기는 것" 항목 1~6 그대로. **이번 백엔드 변경은 프론트 협업 없이는 배포하면 안 된다**
+  (로그인이 깨짐) — 프론트 작업이 끝나고 같이 배포할 것
+
+### 2026-09-24 (목) · 최선우 · dating/ 매칭 요청 API (#86) · Codex
+
+**한 일**
+- #84 머지를 확인한 최신 `origin/dev`에서 `feat/86-dating-requests` 브랜치를 만들었다
+- 현재 추천 카드 상대에게 무료 요청, 보낸·받은 요청 목록, 수락·거절 및 수락 후 양쪽 연락처 공개를 구현했다. 실 원장은 사용하지 않는다
+- 회원 행을 순서대로 잠가 동시 수락을 직렬화하고, 두 프로필 쌍의 요청은 DB UNIQUE 인덱스로 중복을 차단했다
+- 정책 변경에 따라 수락 후에도 양쪽 프로필은 소개팅을 계속 이용하고 추천 후보 자격을 유지한다. `matched_at`은 더 이상 쓰지 않는다
+- PostgreSQL Testcontainers 포함 전체 `./gradlew test --offline` 통과
+
+**건드린 파일/패키지**
+- `dating/` 요청 Controller·Service·Repository·Entity·DTO, 추천 Repository, `db/migration/V17__add_dating_request.sql`, `common/exception/ErrorCode.java`, `DatingSchemaTest`
+
+**다음 사람이 알아야 할 것**
+- `requestId`는 요청 UUID, `candidateId`는 조회자 기준 상대 프로필 UUID다. 연락처는 `ACCEPTED`일 때만 응답한다
+- 요청은 무료로 확정돼 `plan.md` TBD-5를 종료했다. 새 요청은 현재 추천 카드의 후보에게만 가능하고 한 쌍당 한 번만 가능하다
+- 매칭 수락 후에도 다른 사람에게 요청하거나 요청받을 수 있다. 연락처 공개는 수락된 요청의 두 사람 사이에서만 이뤄진다
+
+**막힌 것 / 넘기는 것**
+- #84에서 남은 학교 이메일 인증 연동이 되기 전에는 추천 조회가 403이므로 실제 요청 왕복도 진행할 수 없다
+- `common/exception/ErrorCode.java`와 `db/migration/` 변경의 팀 채널 사전 공지는 사용자가 이전에 하지 않겠다고 했다
+
+**문서 변경**
+- `docs/plan.md` 무료 정책 확정, `docs/api-spec.md` §1·§11 프론트 계약, `docs/handoff.md` V17 예약·에러 코드·기록
+
+**프론트에 알려야 할 것**
+- 매칭 요청은 무료. §11의 요청 생성·보관함·수락/거절 API 및 수락 전후 연락처 공개 조건 전달 필요
+
+---
+
+### 2026-09-24 (목) · 최선우 · dating/ 프로필·Top 3 API (#84) · Codex
+
+**한 일**
+- 분리된 `dev` 작업 공간에서 소개팅 사진 업로드 URL·프로필 등록/조회/수정·현재 Top 3 조회를 구현했다. 추천은 기존 `CompatibilityCalculator`만 사용하며 친구 궁합 행이나 LLM을 생성하지 않는다
+- 프로필은 학교 메일 인증 전 추천 대상이 아니고, 후보는 인증된 소개팅 신청 이성으로 제한했다. 노출 이력은 회원·후보별 UNIQUE로 남기고 매칭된 후보가 현재 카드에서 빠지면 미노출 후보로 채운다
+- `photoId`를 발급해 S3 키는 서버에만 저장하고, 프로필 등록 때 회원 소유와 실제 업로드를 확인한다. 잠긴 후보 필드의 값·사진 URL·연락처는 응답에 없다
+- 추천 응답의 `fields`는 고정 필드 DTO로 선언해 Swagger에 `additionalProp` 예시 키가 나타나지 않게 했다
+- Swagger 프로필 요청 예시를 동국대 메일과 전화번호/인스타그램 2종으로 정리했다. 예시 `photoId`는 실제 발급값으로 교체해야 한다
+- Swagger 내 프로필 응답의 `candidateId`(프로필)와 `photoId`(사진)에 서로 다른 예시 UUID와 설명을 붙였다
+- 프론트 전달을 위해 `api-spec.md` §10을 요청·응답 JSON과 사진 업로드 순서로 다시 작성하고, 실제 S3 연동·학교 인증이 미검증/미연동임을 분리해 명시했다
+- 소개팅 프로필과 사주 결과는 `member_id`로 간접 연결한다. `dating_profile.result_id` 직접 FK를 제거해 사주 결과의 계정 연결은 `result.member_id` 하나로 유지했다
+- PostgreSQL Testcontainers로 V15→V16·JPA 매핑·추천 이력/보충·JWT 경로를 검증했고 전체 `./gradlew test --offline` 통과
+
+**건드린 파일/패키지**
+- `dating/` 신규 (Controller, 프로필·사진·추천 서비스, 엔티티·Repository·DTO, 인증 경로 등록), `result/ResultRepository.java` 후보 결과 일괄 조회 메서드
+- `db/migration/V15__add_dating_profile_and_recommendation.sql`, `db/migration/V16__remove_dating_profile_result_id.sql`, `common/exception/ErrorCode.java`, `docs/plan.md`, `docs/api-spec.md`, `docs/handoff.md`, `dating/` 테스트
+
+**다음 사람이 알아야 할 것**
+- 이 작업은 #84 브랜치 `feat/84-dating-profile-recommendations`의 기본 작업 폴더(`/Users/seonwoo-choi/IdeaProjects/WKS-BE`)에 있다. 원래 #57 브랜치는 보존했다
+- 리롤/해금/요청 API는 아직 없다. 리롤 비용·무료 횟수(TBD-6), 요청 비용(TBD-5), 학교 메일 인증 흐름(TBD-16)이 미결정이고 wallet/·학교 인증 구현이 필요하다
+- 학교 이메일 인증 담당은 `DatingProfile.markVerified`를 연결해야 추천이 열린다. `GET /api/me`의 `hasDatingProfile`은 아직 연결 전이다. 소개팅 카드 등급 문구는 화면 고정이므로 추천 응답에 `tier`를 넣지 않는다
+- V15와 V16은 V12(원장)·V13·V14가 순서대로 머지된 뒤에만 머지한다. V15를 로컬에 적용한 뒤 `result_id` 직접 FK를 제거하게 되어 V15 원본을 유지하고 V16으로 분리했다. 공용 파일 변경 팀 채널 공지는 사용자 요청으로 생략했다
+- 로컬 PostgreSQL에는 V12 없이 V15가 먼저 적용돼 있었다. V15 원본 복원 후 V16을 적용해 `bootRun` 기동을 확인했다. 무시되는 `application-local.yml`에 `spring.flyway.out-of-order: true`를 로컬 한정으로 넣어 V12가 나중에 합쳐져도 적용되게 했다. V12 적용 후 이 설정은 제거한다. 운영/개발 서버는 V12→V15→V16 순서로 머지해야 한다
+
+**막힌 것 / 넘기는 것**
+- #84 PR을 올리고 리뷰받아야 한다. 학교 이메일 인증·wallet/ 연동은 곽도윤 담당
+- S3 실제 버킷·권한이 없어 사진 업로드의 외부 왕복은 검증하지 못했다. 테스트에서는 외부 호출을 하지 않았다
+
+**문서 변경**
+- `docs/plan.md` §7.3·TBD 정리, `docs/api-spec.md` §1·§10, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- `docs/api-spec.md` §10의 `photoId` 기반 프로필 요청과 Top 3 후보 응답. 해금·리롤·요청 API는 뒤 PR에서 추가
+
+
+### 2026-09-23 (수) · 차은호 · saju/ + result/ 나와 잘 맞는 오행 + 이유 (#82 → PR #83) · Claude Code
+
+**한 일**
+- 피그마 사주 결과 화면의 "나와 잘 맞는 오행은 토(土)" 구획(기능명세 3.5·5.13) 데이터를 결과 응답에 넣었다: `elementMatch: { element, korean, reason }`
+- 오행은 코드가 정한다: `LuckyPlace.luckyElement`(행운의 장소와 같은 보완 오행, 사람마다 고정) 를 public 으로 열어 재사용. 기획에 별도 규칙이 없어서 이렇게 잡았다 — **기획 확인 필요**
+- 이유 문장은 기존 사주 해석 Gemini 호출에 `elementMatch` 필드 하나를 얹어 **한 번에** 받는다 (FR-GM-02). 프롬프트 입력에 "잘 맞는 기운: 흙 (나를 살려 주는 기운)" 한 줄 추가 — 그 기운이 나에게 무슨 뜻인지(비겁·식상·재성·관성·인성을 쉬운 말로)도 코드가 넘긴다
+- `reading.element_match_content` (V14, nullable). 옛 행은 NULL → 응답 `elementMatch: null` → 화면 미노출. 프롬프트가 바뀌어 `analysisVersion` 이 달라지므로 같은 입력도 다시 생성된다 (#62)
+- plan §8.2 의 별도 엔드포인트 `GET /api/results/{resultId}/element-match` 대신 결과 조회에 포함했다 (호출 1회, 5.13 자동 충족). plan 은 안 고쳤다 — 기획이 원본이라 기획 쪽에서 반영해 주면 좋겠다
+
+**건드린 파일/패키지**
+- `saju/`: `Reading`(필드 추가), `ReadingGenerator`(프롬프트 한 줄·필드 하나), `LuckyPlace.luckyElement` public, `prompts/reading-system.txt`
+- `result/`: `ResultAnalysisPort.AnalysisResult`(필드), `SajuResultAnalysisAdapter`, `entity/Reading`(컬럼·생성자), `ResultService`(생성자 인자·`toAnalysis`), `dto/ResultResponse`(`elementMatch` + `ElementMatchResponse`)
+- `db/migration/V14__add_reading_element_match.sql`
+- 테스트: `ReadingGeneratorTest`(프롬프트 기대값), `SajuResultAnalysisAdapterTest`·`ResultServiceTest`(생성자·`elementMatch` 단언)
+
+**다음 사람이 알아야 할 것**
+- **#81(V13) 다음에 머지한다.** 이 브랜치는 `feat/79-compatibility-reason` 에서 땄다 (`GeminiJson` 의존)
+- `SharedResultResponse`(공유 페이지) 에는 안 넣었다. 5.13 은 공유 유입자의 *자기* 결과(= 일반 홈)라 `ResultResponse` 로 충족
+- 기존 저장 결과는 `elementMatch: null`. 축제 전 운영 DB 결과가 적으면 무시, 많으면 재생성 여부 결정
+
+**막힌 것 / 넘기는 것**
+- 기획: 잘 맞는 오행 선정 규칙이 보완 오행이 맞는지 확인. 아니면 `LuckyPlace.luckyElement` 대신 다른 함수로 바꾸면 된다 (응답·프롬프트 구조는 그대로)
+- 차은호: #81 머지 뒤 PR #83 base 를 `dev` 로 변경. 팀 채널 공지(`result/` 관통 변경·V14)
+- 운영: 이 PR 배포 전에 만든 결과는 `elementMatch: null`. 운영 DB 결과가 많으면 재생성 여부 결정 (같은 입력 재생성은 버전이 달라 LLM 을 다시 부른다)
+- 로컬 end-to-end 에서 옛 행 NULL 경로는 앱이 먼저 꺼져 못 봤다. 단위 테스트(`ResultServiceTest.oldReadingWithoutElementMatchReasonYieldsNullSection`)로 대신 고정
+
+**문서 변경**
+- `docs/api-spec.md` (§2·§3 `elementMatch`), `docs/architecture.md` (§6 파이프라인), `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 위 표 2026-09-23 행 (`elementMatch`)
+
+### 2026-09-23 (수) · 차은호 · saju/ + compatibility/ 궁합 상세 이유 (#79 #80 → PR #81) · Claude Code
+
+**한 일**
+- 궁합지도 상세 시트의 세 질문("왜 나에게 귀인일까요?"·"둘이 만나게 된다면?"·"둘이 싸우게 된다면?")을 Gemini 한 번 호출로 만드는
+  `saju/CompatibilityReasonGenerator` + `prompts/compatibility-reason-system.txt` 추가. 피그마(4.1.2 궁합 자세히 보기)의 구획당 2~4문장에 맞춰 각 3~4문장·150자 이내
+- `GET /api/compatibilities/{id}/reason` 추가 (`CompatibilityReasonService`·`CompatibilityReasonController`). 처음 열 때 생성해 `compatibility.reason_*` 3컬럼(V13)에 캐싱, 재조회는 LLM 0회
+- Gemini 호출부를 `saju/GeminiJson` 으로 뽑아 `ReadingGenerator` 와 공유. `CallBudget` 도 하나라 사주 해석·궁합 이유가 같은 한도를 쓴다 (FR-CP-14)
+- 궁합 응답(`POST …/compatibility`)과 결과 조회의 `compatibilities[]` 에 `id` 추가 (프론트가 reason 을 부르려면 필요. 추가만이라 계약 위반 아님)
+- `ErrorCode.COMPATIBILITY_NOT_FOUND`(404) 추가, `CompatibilityTier.korean()` 추가
+- 로컬 postgres 로 end-to-end 확인: V13 적용·`validate` 통과, 결과 2개 → 궁합 → reason 첫 호출 2.3초(Gemini 1회) → 재호출 10ms(캐시) → 없는 id 404. 생성 문장은 상생 방향(흙→쇠)이 입력과 일치했고 "당신" 없이 두 사람을 기운으로 가리켰다
+
+**건드린 파일/패키지**
+- `saju/`: `GeminiJson`(신규), `CompatibilityReasonGenerator`(신규), `CompatibilityReason`(신규), `ReadingGenerator`(호출부 분리, 프롬프트 조립은 그대로)
+- `compatibility/`: `CompatibilityReasonService`·`CompatibilityReasonController`·`dto/CompatibilityReasonResponse`(신규), `CompatibilityRepository`(`findByIdWithResults`·`saveReasonIfAbsent`), `entity/Compatibility`(3컬럼), `entity/CompatibilityTier`(`korean()`), `dto/CompatibilityResponse`(`id`)
+- `result/dto/ResultResponse.CompatibilityResponse`(`id`), `common/exception/ErrorCode`, `db/migration/V13__add_compatibility_reason.sql`, `resources/prompts/compatibility-reason-system.txt`
+- 테스트: `CompatibilityReasonGeneratorTest`·`CompatibilityReasonServiceTest`(신규), `ReadingGeneratorTest`·`GeminiSmokeTest`·`CompatibilityControllerTest`(생성자 변경 반영)
+
+**다음 사람이 알아야 할 것**
+- **궁합 이유 프롬프트에는 성별을 넣지 않는다.** 두 사람이 같은 글을 보고, 성별을 고려한 글은 소개팅 쪽이 따로 만든다 (2026-09-23 결정)
+- `CompatibilityReasonService.getReason` 은 일부러 트랜잭션이 없다. LLM 30초를 트랜잭션 안에서 기다리면 공유가 몰릴 때 커넥션 풀이 마른다. 동시 최초 열람은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 저장되고 진 쪽은 다시 읽는다
+- 프롬프트를 바꿔도 기존 캐시는 옛 글로 남는다(버전 컬럼 없음). 다시 만들려면 `reason_*` 를 NULL 로
+- **최선우·곽도윤:** `compatibility/`·`result/dto`·`ErrorCode` 를 건드렸다. PR 리뷰에서 봐 주면 좋겠다. 이유 API 담당이 "미정"이라 내가 가져갔다
+- 피그마 사주 결과 화면의 **"나와 잘 맞는 오행 + 이유"(기능명세 3.5)** 는 같은 날 #82 → PR #83 으로 따로 했다 (위 기록)
+- 피그마의 연애운·결혼운·자녀운 본문은 6문장 안팎으로 보이는데 현재 프롬프트는 8~10문장이다. 기획 확인 후 줄일지 결정 (위 "지금 막혀 있는 것" 표)
+- 리뷰어: 최선우(`seonwoochoi24`)·곽도윤(`hairyung2002`) 지정함
+- 로컬 확인 때 `wks-postgres` 컨테이너에 옛 데이터가 있어 V10~V13 만 새로 적용됐다. 빈 DB 에서 V1 부터 도는 것은 이번에 안 봤다
+
+**막힌 것 / 넘기는 것**
+- 차은호: `ErrorCode`·`db/migration/`·`compatibility/` 변경 **팀 채널 공지** (AGENTS.md 규칙, 아직 안 함)
+- 프론트: `id` 필드 2곳 + reason 엔드포인트 공지 (위 "프론트에 공지한 API 변경" 표, 미전달)
+
+**문서 변경**
+- `docs/api-spec.md` (§1 에러 코드, §3 `compatibilities[].id`, §4 `id` + `GET /api/compatibilities/{id}/reason`), `docs/architecture.md` (§6 궁합 이유), `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-23 행. `id` 필드 추가 2곳 + reason 엔드포인트
+
+### 2026-09-23 (수) · 곽도윤 · 인프라: 운영 compose·main 배포 트리거 diff 승인·적용 · Claude Code
+
+**한 일**
+- 바로 아래 기록(같은 날, "인프라 파일 준비")에서 diff로만 제시했던 두 변경을 본인이 확인 후 승인해
+  실제로 적용했다:
+  - `docker-compose.prod.yml`: `postgres`·`app`·`nginx` 세 서비스에 `wks-edge`(external) 네트워크 추가,
+    `nginx`에 `./nginx/api-dev.conf.active:/etc/nginx/conf.d/api-dev.conf:ro` 볼륨 마운트 추가, `app`에
+    `JAVA_TOOL_OPTIONS`(`-Xmx300m -XX:MaxMetaspaceSize=128m`)와 로그 rotate(json-file, max-size 10m,
+    max-file 3) 추가. `certbot` 서비스는 wks-edge에 안 붙였다(네트워크로 다른 컨테이너와 통신할 필요가
+    없음 — named volume으로만 nginx와 인증서를 공유)
+  - `.github/workflows/deploy.yml`: 트리거를 `push: branches: [dev]` → `[main]`으로 변경. 그 외(이미지
+    태그 `:latest`, 배포 경로, concurrency 그룹)는 그대로 유지
+- 더미 값으로 `docker compose -f docker-compose.prod.yml config` 통과 확인, `deploy.yml` YAML 파싱 확인
+- `docs/git-workflow.md`·`docs/runbook-dev-server.md`의 "diff 승인 대기" 문구를 "적용 완료"로 갱신하고,
+  **머지 직후 공백**을 명시했다: `deploy.yml` 트리거 변경이 `dev`에 머지되는 순간부터 `dev` push는 더 이상
+  운영을 배포하지 않는데, `main`으로 릴리즈해본 적이 아직 한 번도 없어서 **첫 `dev`→`main` PR을 병합하기
+  전까지는 운영에 새 커밋이 전혀 배포되지 않는 공백이 생긴다.** 기존 컨테이너는 계속 떠 있으니 서비스
+  중단은 아니지만, 이 공백 동안은 핫픽스 자동 배포가 안 된다
+
+**건드린 파일**
+- `docker-compose.prod.yml`, `.github/workflows/deploy.yml`, `docs/git-workflow.md`, `docs/runbook-dev-server.md`
+
+**다음 사람이 알아야 할 것**
+- **이 변경들은 로컬 작업 트리에만 있고 아직 커밋되지 않았다.** 다른 미커밋 작업(auth/member 등, 위쪽
+  기록 참고)과 섞이지 않게 인프라 변경만 따로 브랜치를 따서 커밋·PR 올릴 것
+- `docker-compose.prod.yml`을 EC2에 실제로 반영하면(runbook 2-2단계) 운영 컨테이너 3개가 재생성되며
+  약 30~60초 다운타임이 생긴다 — 그 시점에 `nginx/api-dev.conf.active` 파일이 EC2에 먼저 있어야 한다
+  (runbook 2-1, 없으면 Docker가 빈 디렉터리를 만들어 nginx가 기동 실패한다)
+- **머지 후 되도록 빨리 첫 `dev`→`main` 릴리즈 PR을 만들어 병합할 것.** 안 그러면 운영이 자동 배포 공백
+  상태로 남는다 (위 "한 일" 참고)
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: 이 변경들 커밋·PR, `docs/runbook-dev-server.md` 실제 EC2 실행, 첫 `dev`→`main` 릴리즈 PR
+
+**문서 변경**
+- `docs/git-workflow.md`, `docs/runbook-dev-server.md`, `docs/handoff.md`(이 항목)
+
+**프론트에 알려야 할 것**
+- 없음
+
+### 2026-09-23 (수) · 곽도윤 · 인프라(EC2 운영·개발 서버 nginx 분리) 파일 준비 · Claude Code
+
+**한 일**
+- 하나의 EC2에서 `api.threadoffate.site`(운영)·`api-dev.threadoffate.site`(개발)를 nginx server_name으로
+  나누는 구성을 준비했다. **EC2 원격 접속·명령 실행은 하지 않았다** — 레포 파일만 만들었고, 실행은 본인이
+  `docs/runbook-dev-server.md` 순서대로 한다
+- 현재 구조 확인 결과: `dev` push가 **이미 운영에 배포되고 있다** (`deploy.yml` 트리거가 `dev`).
+  `main` 트리거 워크플로는 없다 — 이번 작업 브리핑이 "main이 이미 운영 배포 중"이라고 가정했던 부분과
+  실제가 달라서, 트리거를 `dev`→`main`으로 바꾸는 `deploy.yml` 변경은 **diff만 만들고 적용하지 않았다**
+  (아래 "막힌 것" 참고 — 팀 전체 릴리즈 방식이 바뀌는 결정이라 확인 필요)
+- postgres 계정 격리(`db/init/init-wks-dev.sql`)를 로컬 postgres:16 컨테이너로 직접 검증하다가, `wks`가
+  이 postgres 컨테이너의 슈퍼유저라 `REVOKE CONNECT`가 `wks_dev → wks` 방향만 막고 `wks → wks_dev`는
+  못 막는다는 걸 확인했다. 더 중요한 방향(개발 환경에서 운영 개인정보 접근)은 막힌다 — SQL 주석·runbook에 반영
+- `.env.dev.example`에 값 뒤에 인라인 `#` 주석을 썼다가 `docker compose config`로 직접 검증하는 과정에서
+  주석이 값 문자열에 그대로 붙는 걸 발견해 고쳤다 (`.env` 파일은 인라인 주석을 지원하지 않는다 — 값 앞
+  줄에 주석을 둬야 한다)
+- nginx 설정 2종(bootstrap 80번 전용 / 최종 80+443)은 로컬에서 `docker run nginx:1.27-alpine nginx -t`로
+  문법·인증서 로딩까지 검증함(더미 자체서명 인증서로 확인). `proxy_pass` 대상 컨테이너가 로컬 테스트
+  네트워크엔 없어서 "host not found in upstream"이 나오는데, 이건 기존 `nginx/default.conf`도 로컬 단독
+  테스트에서 똑같이 나는 현상이라 문법 문제가 아님을 대조 확인함
+- **`.env.prod.example`에 실제 비밀값이 있는 걸 다시 확인했다** — 이미 위 표·2026-09-23 다른 기록에 있는
+  것과 같은 항목. 본인이 이미 보류 결정을 내린 사안이라 추가 조치는 안 함, 재확인만
+
+**건드린/새로 만든 파일**
+- `nginx/api-dev.bootstrap.conf`(신규), `nginx/api-dev.conf`(신규) — 기존 `nginx/default.conf`는 **안 건드림**
+- `docker-compose.dev.yml`(신규, `/opt/wks-dev`용), `.env.dev.example`(신규)
+- `db/init/init-wks-dev.sql`(신규) — Flyway 아님, 수동 1회 실행용
+- `src/main/resources/application-dev.yml`(신규)
+- `.github/workflows/deploy-dev.yml`(신규), `.github/workflows/ci.yml`(신규, PR 빌드+테스트)
+- `docs/runbook-dev-server.md`(신규) — EC2에서 실행할 순서. ⚠️ 운영 영향 단계 표시, 각 단계 확인·롤백 포함
+- `docs/git-workflow.md` — CI/CD 매핑 표를 확정된 구조로 갱신, 과도기(트리거 미전환 구간) 위험 명시
+- **아직 안 건드림(승인 대기)**: `docker-compose.prod.yml`(wks-edge 네트워크 추가), `.github/workflows/deploy.yml`(트리거 `dev`→`main`) — diff는 세션 응답에 남겨둠, 이 파일엔 미반영
+
+**다음 사람이 알아야 할 것**
+- **`docker-compose.prod.yml`·`deploy.yml` 두 파일은 diff만 있고 적용 안 됐다.** 적용하면 운영 컨테이너
+  3개(postgres·app·nginx)가 재생성되며 약 30~60초 다운타임이 생긴다 (`docs/runbook-dev-server.md` 2-2단계)
+- **`deploy.yml` 트리거를 바꾸기 전까지는 `dev` push가 여전히 운영을 배포한다.** `deploy-dev.yml`이 먼저
+  머지되면 `dev` push 한 번이 운영·개발 양쪽에 동시 배포되는 과도기가 생긴다 — `git-workflow.md`에 명시함
+- nginx 인증서 발급 전에 443 블록을 먼저 넣으면 운영까지 같이 죽는다 — runbook 5~7단계 순서(80번 먼저 →
+  인증서 발급 → 443번)를 반드시 지킬 것. 볼륨 마운트 파일(`nginx/api-dev.conf.active`, git 비추적)을
+  네트워크 변경 전에 미리 만들어둬야 하는 이유도 runbook 2-1에 적어둠(안 그러면 Docker가 빈 디렉터리를
+  대신 만들어 nginx가 기동 실패한다)
+- 카카오 디벨로퍼스에 개발용 앱을 별도로 만들어 Redirect URI(`https://dev.threadoffate.site/...`, 로컬
+  콜백 포함)를 등록해야 `.env.dev.example`의 `KAKAO_CLIENT_ID`/`SECRET`을 채울 수 있다 — DNS 제외하고
+  이 범위 밖 수동 작업
+
+**막힌 것 / 넘기는 것**
+- 곽도윤: `docker-compose.prod.yml`·`deploy.yml` diff 검토·승인, 승인 후 이 세션이나 다음 작업에서 적용
+- 곽도윤: `docs/runbook-dev-server.md` 실제 실행(이 세션은 EC2를 건드리지 않음), Route53 A레코드, 카카오
+  개발용 앱 등록, GitHub Secrets는 기존 것(`EC2_HOST` 등) 재사용이라 신규 추가 없음(재확인 요망)
+- 팀: `deploy.yml` 트리거 전환 시점 — 전환하면 그날부터 운영 릴리즈가 `dev`→`main` PR 머지 방식으로
+  바뀐다는 걸 전원이 알아야 함
+
+**문서 변경**
+- `docs/git-workflow.md`(CI/CD 매핑 표, GitHub Secrets 절), `docs/handoff.md`(이 항목)
+
+**프론트에 알려야 할 것**
+- 없음 (백엔드 배포 인프라 변경, API 계약 변경 없음). 개발 서버 도메인(`api-dev.threadoffate.site`)이
+  뜨면 프론트가 dev 환경에서 쓸 base URL로 공유 가능
+
+### 2026-09-23 (수) · 곽도윤 · auth/·member/·common/auth/ 카카오 로그인 로컬 구현·검증 + 로그아웃 추가 · Claude Code
+
+**한 일**
+- 2026-09-21 문서화 단계였던 카카오 로그인을 실제로 구현하고 로컬에서 왕복 검증했다. `auth/`(AuthController·AuthService·KakaoClient·KakaoConfig·RedirectUriPolicy)·`common/auth/`(JwtProvider·JwtAuthInterceptor·CurrentMemberArgumentResolver·AuthWebConfig)·`member/`(Member·MemberService·MeController·MeService) 전부 이번에 처음 로컬 검증됨. `ErrorCode` 에 `UNAUTHENTICATED`·`KAKAO_UNAVAILABLE` 추가돼 있었다
+- 카카오 디벨로퍼스 콘솔 설정 완료: REST API 키·Client Secret 발급, 카카오 로그인 활성화. **Redirect URI 는 5173 이 아니라 3000 이다** — `docs/plan.md`/ADR 이 Vite 기본 포트(5173)를 가정했지만 프론트 `vite.config.ts` 는 포트를 3000 으로 고정해뒀다(WKS-FE `docs/phases/03-saju-reading/RESULT.md` 가 2026-09-15 에 이미 이 불일치를 기록해 뒀었음). 실제 등록값: `http://localhost:3000/dev/kakao-callback`
+- 왕복 검증(로컬): `/dev/kakao` → 카카오 인가 → 콜백 → `isNewUser`/`restoredResultId` 정상, `GET /api/me` 200(토큰 있음)/401 `UNAUTHENTICATED`(토큰 없음), DB `member` 테이블에 `kakao_id` 만 저장됨(개인정보 없음, AGENTS.md 규칙 준수) 확인. 사주 결과 생성(`POST /api/results`)도 실제 Gemini 키로 성공 확인 — 계정 결과 연결·복원(`restoredResultId`)도 실제 UUID로 동작 확인
+- **로그아웃 추가 (2026-09-21 "로그아웃 없음" 결정을 일부 뒤집음, 사용자 본인 지시).** 서버 쪽 토큰 폐기는 여전히 없다 — 클라이언트가 로컬 토큰을 지우는 방식뿐이다(`features/auth/LogoutButton.tsx` → `clearAuthToken()`). 지우기 전 사본은 만료까지 유효함을 화면에 안내 문구로 명시
+- JWT 만료를 **30일 → 15일**로 줄였다(`application.yml` `app.auth.jwt.ttl-days`). refresh token 은 미구현 — 카카오 재로그인이 원클릭이라 마찰이 적다고 판단(축제 특성상 사용 기간도 짧음)
+- 프론트 로컬 저장 필드명을 `token` → `accessToken` 으로 바꿨다(`wks:auth` 의 내부 필드만, API 응답 필드 `KakaoLoginResponse.token` 은 그대로 — 프론트-백엔드 계약은 안 건드림)
+- **`.env.prod.example` 에 실제 비밀값(DB 비번·Gemini 키·카카오 client-id/secret)이 들어갔다.** 정리하자고 제안했으나 본인이 "private 저장소라 상관없다"며 보류 결정. 위 "막힌 것" 표에 남겨둠 — public 전환 논의 시 반드시 재확인할 것
+- 로컬 `application-local.yml`에 카카오 client-id/secret·JWT secret·Gemini 실키를 채워 넣었다(이 파일은 `.gitignore` 대상이라 커밋 안 됨)
+
+**건드린 파일/패키지 (백엔드, 전부 미커밋)**
+- `application.yml`(`app.auth.jwt.ttl-days: 15`), `application-local.yml`(로컬 전용, 커밋 안 됨), `common/auth/JwtProvider.java`(주석), `docs/api-spec.md`·`api.md`·`docs/architecture.md`·`docs/backend-requirements.md`(만료 30→15일, 로그아웃 문구 정정), `docs/handoff.md`
+- `auth/`·`common/auth/`·`member/` 자체는 이번 세션 이전부터 로컬에 있던 것(누가 작성했는지는 이 세션에서 확인 못 함) — 이번에 처음으로 실제 기동·검증함
+
+**건드린 파일/패키지 (프론트, WKS-FE, 전부 미커밋)**
+- `src/api/authToken.ts`(필드명 `token`→`accessToken`, 주석), `src/api/authToken.test.ts`
+- `src/features/auth/LogoutButton.tsx`(신규)·`LogoutButton.test.tsx`(신규)·`index.ts`(export 추가)
+- `src/app/dev/KakaoLoginTestPage.tsx`(로그인 상태면 로그아웃 버튼 토글)·`KakaoLoginTestPage.test.tsx`
+- `docs/decisions/ADR-20260922-kakao-login-and-jwt-session.md`(Amendment 섹션 추가: 포트 정정, 로그아웃, TTL, 필드명)
+- `.env.local`(신규, 커밋 안 됨) — `VITE_KAKAO_CLIENT_ID`
+
+**다음 사람이 알아야 할 것**
+- **아직 아무것도 커밋되지 않았다.** 백엔드는 현재 `Fix/#54/PreRegistration` 브랜치 위에 사전신청 변경(V10 개명 등)과 이번 auth 작업이 섞여 있다 — `dev`에서 새 브랜치를 따서 auth 만 분리해 커밋할 것. 프론트도 별도 브랜치/PR 필요
+- **redirect URI 는 3000 이다, 5173 이 아니다.** ADR·이전 기록의 5173 언급은 틀렸다(수정은 ADR Amendment 에 반영함). 운영 배포 시에도 실제 프론트 배포 포트/도메인 기준으로 카카오 콘솔·`allowed-redirect-uris` 를 맞출 것
+- **로그아웃은 클라이언트 전용이다.** 서버는 토큰을 폐기하지 않는다 — 로그아웃 버튼을 눌러도 탈취된 토큰 사본은 만료(15일)까지 유효하다. 진짜 서버 측 무효화(jti 블록리스트 등)가 필요하면 별도 작업(새 DB 테이블·V13 마이그레이션 필요)
+- **JWT 라이브러리(`nimbus-jose-jwt`) 팀 공지가 아직 안 됐다.** convention.md 규칙상 커밋 전에 팀 채널에 알릴 것
+- `.env.prod.example` 에 실제 비밀값이 남아 있다 — 위 "막힌 것" 표 참고
+- Gemini 키는 2026-09-17 #72 사고 때 남았던, 아직 폐기 안 한 그 키를 로컬 테스트에 그대로 재사용했다. 운영 배포 전 재발급 필요는 그대로 유효
+
+**막힌 것 / 넘기는 것**
+- 팀: JWT 라이브러리 승인 공지, 브랜치 분리·PR
+- 곽도윤: `.env.prod.example` 정리 여부(본인이 보류 결정했으나 재확인 필요), Gemini 키 폐기·재발급
+
+**문서 변경**
+- `docs/api-spec.md`(§9 만료·로그아웃 문구), `api.md`(같음), `docs/architecture.md`(JWT 절), `docs/backend-requirements.md`(§16 FR-AU-09 등), `docs/handoff.md`(이 항목, 현재 상태 표, 막힌 것 표, Flyway 표)
+- WKS-FE: `docs/decisions/ADR-20260922-kakao-login-and-jwt-session.md` Amendment 섹션
+
+**프론트에 알려야 할 것**
+- 로그인 API 계약(`docs/api-spec.md` §9)은 안 바뀌었다(필드 삭제·타입 변경 없음) — `token` 필드명 그대로. 바뀐 건 프론트 로컬 저장 방식뿐이라 백엔드 관점에서 새로 공지할 계약 변경은 없음
+- JWT 만료가 30일에서 15일로 줄었다 — 프론트가 어딘가에 30일을 하드코딩해 안내 문구를 썼다면 확인 필요
+
+### 2026-09-21 (월) · 곽도윤 · 문서 (V1 기획 반영: 카카오 로그인·소개팅·실) · Claude Code
+
+**한 일**
+- `docs/plan.md`(V1 기획 원본)에 맞춰 문서를 정렬했다 (구현 전). 같은 날 오전에 쓴 문서에서 **정정된 것**:
+  - 인증: 서버 사이드 세션 + Spring Security·Session JDBC → **프론트 주도 code 교환 + JWT** (`POST /api/auth/kakao`). Spring Security·Session JDBC·CSRF·쿠키·`spring_session`(V12) 계획은 폐기
+  - 결과 연결: `member_result` 테이블·N개 저장 → **`result.member_id`(계정당 1개, 부분 unique)**. "`result` 에 `member_id` 금지" 규칙 폐기
+  - 이름: plan.md 의 `user_id` → `member_id` (`user` 는 금지어이자 Postgres 예약어)
+  - 소개팅이 `signup` 을 대체한다. **학교 메일 재학 인증은 유지**하고 매직링크를 재사용한다 (위치·저장 미정, TBD-16)
+- 결정 (2026-09-21): JWT 채택(만료 30일·갱신 없음), 로그아웃·기기 관리·토큰 폐기·**탈퇴 없음**(삭제 요청은 운영자 수동 처리) / 카테고리는 api-spec 기준(`MARRIAGE`·`CHILDREN`·`LOVE`)이며 plan §3.8 의 변경 문구는 오기 / 궁합 id 는 순번 그대로(열거 위험 수용) / 원장 `ref_id NOT NULL` / 축제 09-29 ~ 10-01 확정 / plan.md 에 없던 3가지를 보완한 부분(아래 참고)은 그대로 유지
+- `docs/plan.md` 수정: `user_id`→`member_id`, 로그인 요청에 `resultId?` 추가, JWT 명시, ledger `ref_id NOT NULL`, §3.8 정정, TBD-3·12·17 종료, TBD-13~16 추가, §12 에 로그아웃·탈퇴 추가 (수정한 곳에 날짜 표시)
+- Flyway 번호 정리: `V9__add_signup_photo_key.sql` → **`V10`** 으로 개명 완료(`git mv`, PR 은 곽도윤이 올린다). 로그인은 V11, 원장은 V12 로 예약
+- 루트 `AGENTS.md` 를 작성했다 (이전엔 0바이트였다). 도구가 달라도 읽는 규칙 원본이다
+- 로그인 API 초안을 `docs/api-spec.md` §9 와 `api.md` §6 에 추가했다 (`POST /api/auth/kakao`, `GET /api/me`). §5 사전등록에는 "소개팅 프로필로 대체 예정" 표시
+- 로그인 API 에 `GET /api/me/result`(토큰 기반 내 결과 조회)를 추가했다. 브라우저가 `resultId` 를 잃어도 로그인 상태면 복원할 수 있다. `plan.md` §8.1·architecture·requirements(FR-AU-13)에도 반영. `KAKAO_UNAVAILABLE`(503)은 확정
+- `api.md` 를 `api-spec.md` 와 맞췄다 (`GET /api/results/{id}/input`·`PATCH` 누락, 응답의 `elements` 누락, `destiny.title` 문구). 줄바꿈은 다른 문서처럼 CRLF 로 통일
+- `docs/git-workflow.md` 를 실제에 맞게 정정: `dev` push 가 운영 배포, 배포 파이프라인이 테스트를 건너뜀, PR CI 없음, 브랜치 보호 불가, GitHub Secrets 목록
+- `common/agents.md`("인증 체인이 없다" 문구)와 `docs/git-workflow.md`(이슈 라벨에 `auth`·`member`·`dating`·`wallet`) 정정
+
+**건드린 파일/패키지**
+- 코드 변경 없음. `docs/architecture.md`, `docs/convention.md`, `docs/backend-requirements.md`(§16 재작성, §17 신설), `docs/handoff.md`, `docs/plan.md`
+
+**다음 사람이 알아야 할 것**
+- **문서만 바뀌었고 코드는 그대로다.** 로그인 API 는 `api-spec.md` §9·`api.md` §6 에 **초안**이 있다 (구현 PR 에서 확정, `ErrorCode` 도 그때 추가). 소개팅·실 API 는 명세 확정 전이라 아직 없다. `KAKAO_UNAVAILABLE`(503)은 2026-09-21 확정했다
+- **JWT 라이브러리는 미정이고 팀 승인이 필요하다.** Boot 4 는 Jackson 3 이라 Jackson 2 에 의존하는 라이브러리는 공존 여부를 확인할 것. 만료는 30일·갱신 없음으로 확정
+- **`V9` 중복은 해소했다.** `V9__add_signup_photo_key.sql` 을 `V10__add_signup_photo_key.sql` 로 개명했다 (dev 에는 V9 가 하나뿐이라 머지해도 기동에 문제없다). **이 브랜치로 로컬 DB 를 이미 기동해 예전 V9(photo_key)를 적용했다면 Flyway 이력이 어긋난다.** 로컬 DB 를 초기화(`docker compose down -v`)하거나 `flyway repair` 후 재기동할 것. 운영은 dev 브랜치 기준으로 배포되고 dev 에는 사진 마이그레이션이 없어서 영향 없다
+- **`.env.prod.example`(git 추적 중)에 실제 값으로 보이는 DB 비밀번호·Gemini 키가 있다.** #72 는 `application-prod.yml` 만 고쳤다. 폐기·재발급하고 플레이스홀더로 바꿔야 한다
+- **`GET /api/compatibilities/{id}/reason` 의 id 는 순번이다** (수용된 위험). 열거로 남의 궁합 이유 열람·LLM 생성 유발이 가능하고, 총량은 `CallBudget` 이 막는다
+- **PR 용 CI 가 없고 배포 파이프라인이 테스트를 건너뛴다.** `deploy.yml` 은 `bootJar -x test` 로 이미지를 만들어 `dev` push 마다 운영에 배포한다. 머지 전에 로컬에서 `./gradlew test` 를 돌릴 것. NFR-T-07·TR-E-05(CI 필수)는 아직 충족되지 않았다
+- plan.md 에서 비어 있던 부분을 채운 것(기획 확인 필요): 연결한 경우 `restoredResultId` 는 `null`, 존재하지 않는 `resultId` 로도 로그인은 성공, 이미 다른 회원에 연결된 결과는 연결하지 않음
+- 이번 범위 밖이라 **고치지 않고 남긴 문서 불일치**: architecture §5 의 `signup` DDL 이 V7·photo_key 를 반영하지 않음 / "`name`·`phone` 컬럼은 없다" 문구가 V7 이후 사실과 다름 / `TraceIdFilter` 가 architecture 에 있으나 코드에 없음 / `common/agents.md` 의 "인증 체인이 없다" 문구가 JWT 도입 후 사실과 다름
+
+**막힌 것 / 넘기는 것**
+- 팀: JWT 라이브러리 승인, `auth/`·`member/`·`wallet/`·`dating/` 담당 확정
+- 곽도윤: 카카오 디벨로퍼스 콘솔(redirect URI 는 프론트 콜백), `.env.prod.example` 정리, #54 PR 생성 (V10 개명 완료)
+- 기획: plan.md TBD-13~16(궁합 캐시 위치, 로그인 상태 결과 연결·5.8 중복 방지, 성별·선호성별, 학교 메일 인증 위치), 데이터 파기 범위, 처리방침 개정(삭제 요청 창구 포함)
+
+**문서 변경**
+- `docs/architecture.md`(머리말·§1·§2·§3·§4·§5·§6·§8·§9), `docs/convention.md`(용어·금지어·인증·로깅·테스트·AI 표), `docs/backend-requirements.md`(§2·§3·§10·§11·§15·§16·§17), `docs/handoff.md`, `docs/plan.md`, **`AGENTS.md`(신규 작성)**, `docs/api-spec.md`(§1·§5·§8·§9), `api.md`(§1·§4·§6), `src/main/java/com/darkness/wks/common/agents.md`, `docs/git-workflow.md`, `src/main/resources/db/migration/V10__add_signup_photo_key.sql`(개명)
+
+**프론트에 알려야 할 것**
+- 로그인 API 초안이 `api-spec.md` §9 / `api.md` §6 에 있다 (**구현 전, 확정 아님**). 공지 표는 아직 ❌ 다. 프론트에서 받아야 할 것: 콜백 주소(운영·로컬·netlify). 사전 예고: 사주·궁합·공유 API 는 바뀌지 않는다. 인증 API 는 `Authorization: Bearer` 이고 쿠키를 쓰지 않는다
 
 ### 2026-09-16 (수) · 곽도윤 · signup/ 사진 업로드 S3 연동 (#54) · Claude Code
 

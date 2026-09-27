@@ -24,7 +24,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 }
 ```
 
-- HTTP 상태코드도 함께 맞춘다 (200/201/302/400/404/409/500/503)
+- HTTP 상태코드도 함께 맞춘다 (200/201/302/400/401/404/409/500/503)
+- 인증이 필요한 API 는 로그인 쿠키(`wks_token`, HttpOnly)로 인증한다 (§9). `credentials: 'include'` 로 호출해야 한다. 사주·궁합·공유 API 는 인증이 없다
 - `error.message` 는 **사용자에게 그대로 보여줄 수 있는 한국어**
 - 스택트레이스·SQL 오류를 `message` 에 절대 넣지 않는다
 - `traceId` 는 장애 문의 시 로그 추적용. 프론트가 화면에 노출해도 된다
@@ -38,10 +39,24 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `INVALID_INPUT` | 400 | 유효성 검증 실패 |
 | `RESULT_NOT_FOUND` | 404 | resultId 없음 |
 | `SELF_COMPATIBILITY` | 400 | 자기 자신과 궁합 요청 |
+| `COMPATIBILITY_NOT_FOUND` | 404 | 궁합 `id` 없음 |
 | `DUPLICATE_SIGNUP` | 409 | 이미 신청한 이메일 |
 | `INVALID_EMAIL_DOMAIN` | 400 | 학교 웹메일 아님 |
 | `INVALID_TOKEN` | 400 | 인증 토큰 만료·위조·재사용 |
 | `LLM_UNAVAILABLE` | 503 | 해석 생성 실패. Gemini 오류·타임아웃, 또는 서버 호출 총량 상한(분당 60·일 1,600) 초과. 잠시 후 재시도 안내 |
+| `UNAUTHENTICATED` | 401 | 토큰 없음·만료·위조 |
+| `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃 |
+| `DATING_PROFILE_NOT_FOUND` | 404 | 내 소개팅 프로필 없음 |
+| `DATING_PROFILE_CONFLICT` | 409 | 프로필 또는 학교 이메일 중복 |
+| `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회, 코드 인증 안 한 이메일로 프로필 등록 |
+| `INVALID_EMAIL_CODE` | 400 | 학교 이메일 인증 코드 불일치·만료·5회 실패 초과·발송받은 이메일과 다름 |
+| `EMAIL_CODE_RATE_LIMITED` | 429 | 인증 코드 재발송 60초 쿨다운 중, 또는 24시간 10회 한도 초과 |
+| `MAIL_UNAVAILABLE` | 503 | 인증 코드 메일 발송 실패. 바로 다시 시도할 수 있다 |
+| `DATING_REQUEST_NOT_FOUND` | 404 | 요청 없음 또는 받은 사람 본인이 아님 |
+| `DATING_REQUEST_CONFLICT` | 409 | 중복 요청, 대상 미노출, 이미 처리된 요청 |
+| `DATING_NO_MORE_CANDIDATES` | 409 | 리롤할 새 후보가 없음 (차감 없음, 2026-09-27) |
+| `INSUFFICIENT_THREAD` | 402 | 실 잔액 부족 (해금·유료 리롤 시) |
+| `METHOD_NOT_ALLOWED` | 405 | 존재하는 경로에 지원하지 않는 HTTP 메서드 사용 |
 | `INTERNAL_ERROR` | 500 | 그 외 |
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
 
@@ -52,6 +67,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ### `POST /api/results`
 
 계산 + 해석 생성. **3~10초 걸릴 수 있다.** 프론트는 로딩 UX 필수.
+
+로그인 없이 동작한다. 로그인 쿠키(`wks_token`)가 유효하고 **계정에 아직 결과가 없으면** 새 결과를 계정에 연결한다(2026-09-26). 계정에 이미 결과가 있으면 연결하지 않는다(계정 결과 유지, 새 결과는 익명). 쿠키가 만료·위조여도 에러 없이 익명으로 처리한다. 응답 형식은 같다 — 프론트는 `credentials: 'include'` 로 보내기만 하면 된다.
 
 **Request**
 
@@ -107,6 +124,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
       { "category": "LOVE",     "grade": "B",  "content": "연애운에 대한 설명" }
     ],
     "elements": { "wood": 3, "fire": 2, "earth": 1, "metal": 1, "water": 1 },
+    "elementMatch": { "element": "EARTH", "korean": "토", "reason": "흙의 기운은 당신을 살려 주는 기운이에요. ..." },
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": []
@@ -115,6 +133,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ```
 
 - 화면의 고정 문구인 “당신의 운명은”은 프론트에서 표시한다
+- `elementMatch` 는 **나와 잘 맞는 오행 + 이유** (기능명세 3.5). `element` 는 `WOOD` `FIRE` `EARTH` `METAL` `WATER`, `korean` 은 목·화·토·금·수. 한자(木 등)는 프론트 매핑. 오행은 `luckyPlace` 와 같은 보완 오행이라 사람마다 고정, `reason` 은 2~3문장. CTA "OO 기운의 사람 만나보기"(3.6)는 `element` 를 그대로 쓴다. **`null` 이면 영역을 그리지 않는다** (이 필드가 생기기 전에 만든 결과)
 - `fortunes` 순서는 `MARRIAGE` → `CHILDREN` → `LOVE`로 고정한다
 - `zodiac` 은 십이간지 띠. `RAT` `OX` `TIGER` `RABBIT` `DRAGON` `SNAKE` `HORSE` `GOAT` `MONKEY` `ROOSTER` `DOG` `PIG`.
   **입춘 기준**이라 양력 연도로 계산한 띠와 1~2월생에서 다를 수 있다. 프론트가 생년으로 직접 계산하지 않는다. 캐릭터 이름·이모지는 프론트 매핑
@@ -149,17 +168,19 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "destiny": { "title": "오래 사랑할 운명", "description": "..." },
     "fortunes": [ ... ],
     "elements": { "wood": 3, "fire": 2, "earth": 1, "metal": 1, "water": 1 },
+    "elementMatch": { "element": "EARTH", "korean": "토", "reason": "..." },
     "luckyItem": "파란색 팔찌",
     "luckyPlace": "야외 무대",
     "compatibilities": [
-      { "nickname": "민수", "score": 31, "tier": "SEUCHIM",  "createdAt": "2026-09-11T13:20:00Z" },
-      { "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" }
+      { "id": 15, "nickname": "민수", "score": 31, "tier": "SEUCHIM",  "createdAt": "2026-09-11T13:20:00Z" },
+      { "id": 12, "nickname": "지현", "score": 92, "tier": "GUIIN", "createdAt": "2026-09-11T12:04:00Z" }
     ]
   }
 }
 ```
 
 - `compatibilities` 는 `createdAt` 내림차순
+- `id` 는 궁합 ID(순번). `GET /api/compatibilities/{id}/reason` 에 쓴다 (§4)
 - **상대의 생년월일·성별·resultId 는 내려보내지 않는다.** 닉네임과 점수만
 
 ### `GET /api/results/{resultId}/input`
@@ -235,6 +256,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 {
   "success": true,
   "data": {
+    "id": 12,
     "score": 92,
     "tier": "GUIIN",
     "originNickname": "도윤",
@@ -247,10 +269,38 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 - 이미 있는 조합이면 기존 값을 그대로 **200**으로 반환. 재계산하지 않는다
 - `score(A,B) == score(B,A)` 보장
 - `tier` 구간 (2026-09-13 기획 확정, 25점 구간 아님): `GUIIN` 90~100 · `CHALTTEOK` 75~89 · `BEOT` 61~74 · `SEUCHIM` 0~60
+- `id` 는 궁합 ID(순번). 아래 상세 이유 조회에 쓴다
+
+### `GET /api/compatibilities/{id}/reason`
+
+궁합지도에서 친구 Row 를 눌러 상세 시트를 열 때 호출한다 (기능명세 4.7 · 5.10).
+세 질문의 답을 한 번에 준다. **처음 열어볼 때 LLM 으로 생성해 저장**하므로 첫 호출만 느리고(최대 30초), 이후는 즉시 반환.
+`{id}` = 궁합 생성 응답 또는 결과 조회 `compatibilities[].id`.
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "why": "나무의 기운이 불의 기운을 살리는 사이라 ...",
+    "together": "함께 있으면 나무의 기운을 가진 분이 먼저 ...",
+    "conflict": "불의 기운 쪽이 먼저 달아오르기 쉬워요 ..."
+  }
+}
+```
+
+- `why` = "왜 나에게 귀인(찰떡·벗·스침)일까요?", `together` = "둘이 만나게 된다면?", `conflict` = "둘이 싸우게 된다면?". 각 3~4문장
+- **두 사람이 같은 내용을 본다.** 글은 어느 한쪽을 "당신"으로 부르지 않고, 각자를 기운("나무의 기운을 가진 분")으로 가리킨다. 성별은 반영하지 않는다
+- 없는 `id` 는 `COMPATIBILITY_NOT_FOUND` 404
+- 생성 실패는 `LLM_UNAVAILABLE` 503. **해당 영역만 미노출**하고 궁합지도는 유지한다. 다시 호출하면 재시도된다
+- 첫 호출이 느리므로 시트에 로딩 상태를 둔다. 같은 조합을 두 사람이 동시에 처음 열어도 저장은 한 번이고 둘이 같은 글을 받는다
 
 ---
 
 ## 5. 소개팅 사전등록
+
+> **V1 에서 소개팅 프로필(`/api/dating/**`, 명세 확정 전)로 대체될 예정이다.** 대체될 때까지 이 API 는 그대로 동작하고, 대체 시점은 별도로 공지한다. 학교 메일 재학 인증은 소개팅에서도 유지된다.
 
 ### `POST /api/signups/photo-upload-url`
 
@@ -370,6 +420,55 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 
 토큰 유효기간 30분, 사용 후 재사용 불가.
 
+### `GET /api/signups/reapply?token={token}`
+
+**기존 사전신청자 재신청 (2026-09-26 추가, 2026-09-27 변경, 축제용 1회성).** 사전신청 때는 로그인이 없어서
+그때 만든 사주 결과가 어느 계정에도 붙어 있지 않다. 사전신청자에게 초대 메일을 보내 **카카오 로그인만 하면
+그 결과가 계정에 연결**되게 하고, 이어서 일반 신청과 똑같이 학교메일 인증·사진 등록·소개팅 신청을 하게 한다.
+
+> **초대는 학교메일 인증이 아니다(2026-09-27 변경).** 사전신청 이메일은 gmail 등 아무 주소였고 인증된 적도 없어서,
+> 초대 메일은 그 주소로 가지만 학교메일 인증은 로그인 뒤 §10.7 코드 인증으로 따로 한다. 초대 대상도 도메인과 무관하다
+> (사주 결과가 있고 아직 계정에 연결되지 않은 사전신청자 전원).
+초대 메일의 링크는 **백엔드가 아니라 프론트 페이지**(`app.frontend.reapply-url`, 기본 `/dating/reapply`)를
+가리키고, 프론트가 그 `token` 으로 이 API 를 불러 폼을 채운다. 로그인 불필요.
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "email": "student@dgu.ac.kr",
+    "resultId": "3f2a9c1e-0000-4000-8000-000000000001",
+    "name": "홍길동",
+    "contactMethod": "PHONE",
+    "contactValue": "010-3333-3333",
+    "department": "컴퓨터공학과",
+    "mbti": "ESTP",
+    "bio": "안녕하세요"
+  }
+}
+```
+
+- 토큰 유효기간 **48시간**(`app.signup.reapply-invite-ttl-hours`). 토큰은 **소비되지 않는다** — 만료 전이면 여러 번 불러도 된다
+- 만료·위조 토큰은 `INVALID_TOKEN` 400
+- `email` 은 **사전신청 때 적은 주소**다(학교메일이 아닐 수 있다). 소개팅 신청서의 학교 이메일 칸에 그대로 채우지 말 것 — `@dgu.ac.kr` 이 아니면 비워 두고 사용자가 입력하게 한다
+- `name`·`contactMethod`·`contactValue`·`department`·`mbti`·`bio` 는 사전신청 당시 선택값이라 **`null` 일 수 있다.** 화면에서 받아 채워야 한다(소개팅 프로필은 전부 필수)
+- **`resultId` 를 `POST /api/auth/kakao` 의 `resultId` 로 넘겨야** 사전신청 때 본 사주 결과가 로그인 계정에 연결된다
+
+**프론트 흐름**
+
+```
+초대 메일 링크 → GET /api/signups/reapply?token=…       (폼 자동 채움, resultId 확보)
+   → POST /api/auth/kakao (code + resultId)             (로그인 + 사전신청 사주 결과 계정 연결)
+   → POST /api/dating/email-codes → …/verify            (학교메일 6자리 코드 인증, §10.7 — 일반 신청과 동일)
+   → POST /api/dating/profile/photo → S3 PUT            (사진 등록, §10.1)
+   → POST /api/dating/profile                           (§10.2 — 일반 신청과 동일)
+```
+
+- 카카오 로그인은 페이지를 떠났다 돌아오므로 **`resultId`·폼 값을 `sessionStorage` 등에 보관**해야 한다. 잃으면 결과가 연결되지 않는다
+- 이미 결과가 있는 계정으로 로그인하면 계정 결과가 우선이라 사전신청 결과는 연결되지 않는다(§9, plan §1.1)
+
 ---
 
 ## 6. 헬스체크
@@ -403,6 +502,567 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | Day 3 | 해석 실제 생성 + `GET /api/results/{id}` |
 | Day 4 | 궁합 API |
 | Day 5 | 사전등록 API |
+| 2026-09-22 (예정) | 카카오 로그인 (§9). 초안은 지금 볼 수 있다 |
 
 목 데이터와 실제 응답이 어긋나면 **이 문서를 보고 잘못된 쪽을 고친다.**
 "백엔드가 이미 그렇게 짰으니까"는 근거가 아니다.
+
+---
+
+## 9. 카카오 로그인 (V1 · 구현 전 초안)
+
+> **초안이다.** 구현 PR 에서 확정하고 그때 이 표시를 지운다. 기획 원본은 `docs/plan.md` §1.1·§1.3·§8.1.
+> 사주·궁합·공유 API 는 **로그인 없이 지금처럼 동작한다.** 로그인은 (1) 소개팅 이용, (2) 브라우저 저장소를 잃어도 내 결과·궁합지도를 다시 찾기 위한 것이다.
+
+```
+프론트: 카카오 인가 → redirectUri(프론트 콜백)로 code 수신
+  → POST /api/auth/kakao {code, redirectUri, resultId?, ref?}
+  → 서버가 Set-Cookie(wks_token, HttpOnly)로 토큰을 내려준다 — 프론트는 저장·첨부 안 해도 된다
+  → 이후 인증이 필요한 API 호출은 credentials: 'include' 로 요청하면 브라우저가 쿠키를 자동으로 실어 보낸다
+```
+
+**2026-09-25, Bearer 헤더에서 쿠키로 전환했다** (의도적 결정, `docs/handoff.md` 참고). 프론트는 토큰을
+직접 다루지 않는다 — `fetch`/`axios` 요청에 `credentials: 'include'`(axios는 `withCredentials: true`)만
+켜면 된다. `localStorage`에 토큰을 저장하던 기존 로직은 제거한다.
+
+### `POST /api/auth/kakao`
+
+프론트가 받은 카카오 인가 코드를 넘기면 서버가 카카오와 교환해 로그인시키고 JWT 를 내려준다. 인증이 필요 없는 API 다.
+
+**Request**
+
+```json
+{
+  "code": "카카오가 준 인가 코드",
+  "redirectUri": "https://threadoffate.site/auth/kakao/callback",
+  "resultId": "3f2a9c1e-....",
+  "ref": "PARTNER01"
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `code` | string | ✅ | 카카오 인가 코드 |
+| `redirectUri` | string | ✅ | 인가 요청에 쓴 것과 **같은 값**. 서버에 등록된 주소만 허용한다. 아니면 `INVALID_INPUT` 400 |
+| `resultId` | string \| `null` | 선택 | 브라우저에 저장된 사주 결과 id. 있으면 아래 표대로 계정에 연결·복원한다. 없거나 형식이 틀리거나 존재하지 않아도 **로그인은 성공**한다 (연결만 생략) |
+| `ref` | string \| `null` | 선택 | 제휴 코드. 잘못된 값은 조용히 무시하고 로그인은 성공한다 |
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "isNewUser": true,
+    "restoredResultId": null,
+    "rewardGranted": null
+  }
+}
+```
+
+같은 응답에 `Set-Cookie: wks_token=...; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1296000`
+헤더가 함께 온다. **`token` 필드는 응답 바디에 없다** (2026-09-25, 필드 삭제 — 이전엔 있었다). 쿠키는
+HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 — 브라우저가 알아서 이후 요청에 실어 보낸다.
+
+- **만료 15일, 갱신 없음.** 만료되면 401 이 오고 다시 로그인한다
+- 로그아웃은 `POST /api/auth/logout` 이 쿠키를 지운다 (아래). 서버 쪽 토큰 무효화는 없다 — 로그아웃 전에
+  탈취된 토큰 사본은 만료까지 그대로 유효하다
+- `isNewUser`: 이번 로그인으로 계정이 새로 만들어졌으면 `true`
+- `rewardGranted`: 제휴·가입 보상이 지급됐으면 `{ "partnerName": "OO", "amount": 10 }`, 아니면 `null`. **소개팅·실 기능이 구현되기 전에는 항상 `null`**
+- 카카오 동의항목은 받지 않는다. 서버는 회원번호만 쓴다. 이름·연락처는 소개팅 신청 폼에서 받는다
+
+**결과 연결·복원 규칙** (`docs/plan.md` §1.1: 계정 결과가 항상 우선)
+
+| 요청의 `resultId` | 계정에 결과 | 서버 동작 | `restoredResultId` |
+|---|---|---|---|
+| 있음 | 없음 | 브라우저 결과를 계정에 연결 | `null` (프론트는 브라우저 값을 그대로 쓴다) |
+| 있음 | 있음 | **계정 결과 복원.** 브라우저 결과는 삭제·병합하지 않는다 | 계정 결과 id (프론트는 브라우저 저장값을 이걸로 교체) |
+| 없음 | 있음 | 계정 결과 복원 | 계정 결과 id |
+| 없음 | 없음 | 아무것도 하지 않는다 (사주 입력으로 유도) | `null` |
+
+- 계정당 결과는 **1개**다. 이미 다른 계정에 연결된 `resultId` 는 연결하지 않는다 (로그인은 성공)
+- 브라우저 결과를 지우거나 합치지 않으므로 친구 궁합 기록은 잃지 않는다. 병합은 V2 과제다
+
+**에러**
+
+| code | HTTP | 상황 |
+|---|---|---|
+| `INVALID_INPUT` | 400 | `code`·`redirectUri` 누락, 등록되지 않은 `redirectUri` |
+| `INVALID_TOKEN` | 400 | 카카오 인가 코드 만료·이미 사용·위조 |
+| `KAKAO_UNAVAILABLE` | 503 | 카카오 서버 오류·타임아웃. 잠시 후 재시도 안내 |
+
+### `POST /api/auth/logout`
+
+로그인 쿠키를 지운다(`Set-Cookie` 로 `Max-Age=0`). 인증 없이 호출할 수 있다 — 쿠키가 없거나 이미
+만료된 상태에서 불러도 안전하게 아무 일도 안 한다.
+
+**Response 200**
+
+```json
+{ "success": true, "data": null }
+```
+
+### `GET /api/me`
+
+**인증 필요.** 로그인 상태와 내 계정 요약. 앱 진입 시 토큰이 유효한지 확인하는 용도로도 쓴다.
+
+**Response 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "memberId": 12,
+    "hasResult": true,
+    "hasDatingProfile": false,
+    "threadBalance": 0
+  }
+}
+```
+
+- `hasResult`: 계정에 연결된 사주 결과가 있는지. 결과 자체는 `GET /api/me/result` 로 받는다
+- `hasDatingProfile`: 소개팅 프로필을 등록했는지(`POST /api/dating/profile` 성공 여부). 프로필은 학교메일 인증 뒤에만 만들어지므로 `true` 면 인증까지 끝난 신청자다. `GET /api/dating/profile` 이 200 을 주는 조건과 같다
+- `threadBalance`: 현재 실 잔액
+- 토큰이 없거나 만료·위조면 `UNAUTHENTICATED` 401
+
+### `GET /api/me/result`
+
+**인증 필요.** 계정에 연결된 **내 사주 결과**를 토큰만으로 돌려준다. 프론트가 `resultId` 를 저장해 두지 않았거나 잃어버렸어도, 로그인 상태면 내 결과를 다시 받을 수 있다.
+
+**Response 200** — `GET /api/results/{resultId}` 와 **같은 구조** (`resultId`·`shareId`·`compatibilities` 포함)
+
+- 응답의 `resultId` 로 `GET /api/results/{resultId}/input`, `PATCH /api/results/{resultId}` 등 기존 API 를 그대로 쓴다. 프론트는 이 값을 다시 저장하면 된다
+- 계정에 연결된 결과가 없으면 `RESULT_NOT_FOUND` 404. 토큰이 없거나 만료·위조면 `UNAUTHENTICATED` 401
+- 비로그인 사용자는 지금처럼 브라우저에 저장한 `resultId` 로 `GET /api/results/{resultId}` 를 쓴다. 이 API 는 **로그인 사용자의 복원용**이다
+- 로그인 응답의 `restoredResultId` 와 같은 결과를 가리킨다 (계정당 결과는 1개)
+
+### 인증 규칙
+
+- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 소개팅(`/api/dating/**`), 이후 실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 쿠키 없이 동작하고, 보내도 무시된다**
+- 인증이 필요한 API 는 반드시 `credentials: 'include'`(axios는 `withCredentials: true`) 로 호출한다 — 안 그러면 브라우저가 쿠키를 안 실어 보내 401 이 난다
+- `401 UNAUTHENTICATED` 를 받으면 로그인 화면으로 보낸다 (프론트가 지울 토큰은 없다 — 쿠키는 서버가 관리)
+- 토큰을 URL 쿼리에 넣지 않는다. `Authorization` 헤더도 쓰지 않는다 — **쿠키 하나로만 인증한다** (2026-09-25 전환)
+- 프론트 콜백 주소(운영·로컬·netlify 등)를 **백엔드에 알려줘야 한다.** `redirectUri` 화이트리스트와 카카오 콘솔 등록에 필요하다
+- **로그인은 `*.threadoffate.site` 에 뜬 프론트에서만 된다** (2026-09-26 확인). 쿠키가 `SameSite=Lax` 라 브라우저는 사이트가 다른 곳(`localhost`, `*.netlify.app`)에서 보낸 `fetch` 에 쿠키를 저장하지도 싣지도 않는다. 이런 곳에서는 CORS 는 통과해 비로그인 API 는 되지만, 로그인 뒤 `/api/me` 가 **401** 로 떨어진다 — CORS 에러가 아니라서 헷갈리기 쉽다. 로그인이 걸린 화면은 아래 도메인에서 테스트한다
+
+| 프론트 | 붙는 API | CORS | 로그인 |
+|---|---|---|---|
+| `https://threadoffate.site`, `https://www.threadoffate.site` | `https://api.threadoffate.site` | ✅ | ✅ |
+| `https://dev.threadoffate.site` | `https://api-dev.threadoffate.site` | ✅ | ✅ |
+| `http://localhost:3000` | `https://api-dev.threadoffate.site` | ✅ | ❌ (401) |
+| `https://wks-fe.netlify.app`, `http://localhost:5173` | `https://api.threadoffate.site` | ✅ | ❌ (401) |
+
+  운영·개발 서버는 서로의 프론트 도메인을 허용하지 않는다(`dev.threadoffate.site` → 운영 API 는 CORS 403). 허용 도메인을 늘리려면 백엔드에 요청한다(EC2 `.env` 의 `CORS_ALLOWED_ORIGINS`)
+
+## 10. 소개팅 프로필·후보 추천
+
+모든 `/api/dating/**` 요청에 로그인 쿠키(`wks_token`)가 필요하다 (§9 참고, `credentials: 'include'` 필수) — **단 10.6(학교 이메일 인증 매직링크, 폐기 예정)은 토큰 자체가 신원 증명이라 예외다.**
+
+**신규 신청 흐름 (2026-09-26 변경)**: 학교 이메일 인증을 프로필 등록 **전에** 6자리 코드로 끝낸다(§10.7).
+
+```
+로그인 → POST /api/dating/email-codes {email}             (인증 버튼 → 코드 메일 발송)
+      → POST /api/dating/email-codes/verify {email, code}  (같은 화면에서 코드 입력)
+      → POST /api/dating/profile/photo → S3 PUT            (§10.1)
+      → POST /api/dating/profile (같은 email)              (§10.2, 등록 즉시 emailVerified: true)
+```
+ 응답은 §1의 `ApiResponse` 형식이다. 여기서는 #84에서 추가한 API만 다룬다.
+
+### 10.1 사진 업로드 준비 — `POST /api/dating/profile/photo`
+
+이 API는 **사진 파일을 받지 않는다.** S3에 직접 업로드할 임시 주소와 사진 식별자를 발급한다.
+
+**요청**
+
+```json
+{ "contentType": "image/jpeg" }
+```
+
+허용 형식은 `image/jpeg`, `image/png`다. 그 외에는 `INVALID_INPUT` 400.
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "uploadUrl": "https://s3.example.com/temporary-signed-url",
+    "photoId": "f1c4832a-0000-4000-8000-000000000002",
+    "expiresInSeconds": 600
+  }
+}
+```
+
+프론트는 반환된 `uploadUrl`에 사진 파일을 `PUT`한다. `Content-Type`은 발급 요청의 `contentType`과 같아야 한다. PUT이 끝난 뒤 반환받은 `photoId`를 프로필 등록 요청에 넣는다. 프로필 등록 시 서버가 실제 파일 형식을 확인하고 저해상도 블러 썸네일을 별도 S3 객체로 생성한다. 확장자만 JPEG·PNG인 다른 파일은 `INVALID_INPUT` 400이다. 예시 `photoId`는 실제 발급값으로 바꿔야 한다. `uploadUrl`은 만료되는 **업로드 전용 주소**이며 사진 조회 URL이 아니다.
+
+### 10.2 프로필 등록 — `POST /api/dating/profile`
+
+**요청 예시**
+
+```json
+{
+  "email": "student@dgu.ac.kr",
+  "name": "홍길동",
+  "contactMethod": "PHONE",
+  "contactValue": "010-3333-3333",
+  "department": "컴퓨터공학과",
+  "mbti": "ESTP",
+  "bio": "안녕하세요",
+  "photoId": "f1c4832a-0000-4000-8000-000000000002"
+}
+```
+
+모든 필드가 필수다. **`email`은 이 계정으로 코드 인증(§10.7)을 마친 학교 이메일이어야 한다** — 아니면 `DATING_NOT_VERIFIED` 403(2026-09-26 변경. 그래서 등록된 프로필은 항상 `emailVerified: true`이고 인증 메일은 더 이상 발송되지 않는다). `contactValue`는 문자열이며 `PHONE`이면 전화번호, `INSTAGRAM`이면 인스타그램 아이디(예: `my_insta_id`)를 넣는다. `photoId`는 **로그인한 회원에게 발급됐고 S3에 파일 업로드가 완료된 사진**이어야 한다. 계정에 연결된 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
+
+**`reapplyToken`(선택, 폐기 예정)**: 2026-09-26 에 추가됐지만 **2026-09-27 부터 서버가 무시한다.** 재신청 사전신청자도 코드 인증(§10.7)을 거친다. 필드 삭제는 계약 변경이라 팀 확인 후 지운다 — 프론트는 넣지 않으면 된다.
+
+**응답 201 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "candidateId": "3f2a9c1e-0000-4000-8000-000000000001",
+    "email": "student@dgu.ac.kr",
+    "emailVerified": true,
+    "name": "홍길동",
+    "contactMethod": "PHONE",
+    "contactValue": "010-3333-3333",
+    "department": "컴퓨터공학과",
+    "mbti": "ESTP",
+    "bio": "안녕하세요",
+    "photoId": "f1c4832a-0000-4000-8000-000000000002"
+  }
+}
+```
+
+`candidateId`는 소개팅 프로필 ID이며 다른 사람의 추천 카드에서도 이 값으로 표시된다. `photoId`는 사진 ID라 서로 다른 값이다. `emailVerified`는 새로 등록한 프로필이면 항상 `true`다(등록 전에 인증하므로). 2026-09-26 이전에 매직링크 방식으로 등록된 미인증 프로필만 `false`일 수 있다.
+
+### 10.3 내 프로필 조회 — `GET /api/dating/profile/me`
+
+응답 200의 `data`는 10.2의 프로필 등록 응답과 같은 구조다. 내 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다. V1에는 프로필 수정·사진 교체 API가 없다. `PATCH /api/dating/profile/me`는 제공하지 않으며 호출 시 `METHOD_NOT_ALLOWED` 405다.
+
+### 10.4 현재 후보 — `GET /api/dating/recommendations`
+
+최대 3개의 현재 후보를 반환한다. 후보는 학교 메일 인증을 마친 소개팅 신청 이성 중 기존 궁합 점수 내림차순으로 고른다. 한 번 카드에 나온 후보는 **리롤 이후 새 추천에서** 제외한다. 매칭이 성사되어도 기존 카드는 유지되고, 두 사람 모두 다른 사람의 추천 후보가 될 수 있다. 학교 이메일 인증 전에는 `DATING_NOT_VERIFIED` 403이다.
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "candidates": [{
+      "rank": 1,
+      "candidateId": "3f2a9c1e-0000-4000-8000-000000000001",
+      "score": 90,
+      "mbti": "INFP",
+      "bio": "안녕하세요",
+      "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
+      "fields": {
+        "photo": { "locked": true, "cost": 10, "value": null },
+        "name": { "locked": true, "cost": 7, "value": null },
+        "department": { "locked": false, "cost": null, "value": "경영학과" },
+        "reason": { "locked": true, "cost": 3, "value": null }
+      }
+    }],
+    "rerollCost": 0
+  }
+}
+```
+
+`rerollCost`(2026-09-27 추가)는 **지금 리롤하면 드는 실**이다. 오늘(KST) 무료 리롤이 남았으면 `0`, 다 썼으면 `5`. 리롤 버튼에 "무료"/"5실" 표시에 쓴다.
+
+후보가 없으면 `candidates: []`. 소개팅 카드의 궁합 등급 문구는 화면에서 고정으로 표시하므로 `tier`를 내려주지 않는다. `blurredPhotoUrl`은 별도 S3 객체의 임시 조회 URL이며 원본 사진 조회 권한을 주지 않는다. 원본 사진 URL·S3 키와 잠긴 개인정보·연락처는 응답에 없다. 현재 카드가 3장인 동안에는 새 신청자가 와도 단순 재조회로 교체되지 않는다. 빈자리가 있으면 다음 조회 때 새 후보로 채울 수 있다.
+
+`fields.*`는 필드마다 **잠겨 있으면 `cost`만, 해금됐으면 `value`만** 채운다(반대쪽은 항상 `null`) — 잠긴 값은 서버가 아예 응답에 넣지 않는다(FR-DT-03). `photo.value`는 해금 후 원본 사진의 서명된 임시 URL, `reason.value`는 궁합 까닭 문장이다. **해금(§10.5)은 됐는데 `value`가 `null`**이면 값 생성이 지연·실패한 것이다(궁합 까닭 LLM 생성 재시도 등) — §10.5의 해금 API를 다시 부르면 된다(차감은 다시 안 된다).
+
+### 10.4.1 후보 리롤 — `POST /api/dating/recommendations/reroll` (2026-09-27)
+
+현재 카드를 **전부** 내리고, 한 번도 카드에 나온 적 없는 후보 중 궁합 점수 순으로 최대 3명을 새로 뽑는다(plan.md TBD-6 종료). 요청 바디는 없다.
+
+- **비용: KST 날짜 기준 하루 1회 무료, 이후 회당 5실.** 무료 횟수는 KST 자정에 다시 생긴다(출석 체크와 같은 기준)
+- 해금했거나 매칭 요청을 보낸 카드도 내려간다. 해금 상태는 되돌려지지 않고, 보낸 요청은 §11 요청 목록에서 계속 보인다. 내려간 후보는 다시 추천되지 않는다
+- 새 후보가 1~2명뿐이면 그 수만큼만 오고 비용은 같다
+- 새 후보가 **한 명도 없으면 409 `DATING_NO_MORE_CANDIDATES`** — 차감도 카드 변경도 없다
+- 무료분을 다 썼고 잔액이 5 미만이면 **402 `INSUFFICIENT_THREAD`** — 카드는 그대로
+- 연타를 서버가 막지 않는다. 두 번 누르면 두 번 리롤(두 번째는 유료)되므로 **프론트에서 요청 중 버튼을 막아야 한다**
+- 그 밖의 에러는 §10.4와 같다(401·403 `DATING_NOT_VERIFIED`·404)
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "candidates": [ /* §10.4 의 candidates 와 같은 구조 */ ],
+    "rerollCost": 5,
+    "threadBalance": 10
+  }
+}
+```
+
+- `rerollCost`: **다음** 리롤 비용 (§10.4와 같은 의미)
+- `threadBalance`: 차감 후 잔액
+
+### 10.5 카드 정보 해금 — `POST /api/dating/candidates/{candidateId}/unlock`
+
+사진·이름·학과·궁합 까닭 중 **사용자가 고른 필드를 한 번에** 실로 해금한다(plan.md §8.5). 이미 해금한 필드는 차감 없이 값만 반환한다(FR-DT-06).
+
+> **2026-09-27 변경 (계약 변경, 프론트 대응 필수)**: 요청 `field`(단건) → `fields`(배열), 응답 `field`·`value` → `values`(맵). 필드 하나만 열 때도 배열로 보낸다.
+
+**요청**
+
+```json
+{ "fields": ["PHOTO", "NAME"] }
+```
+
+- `fields`의 원소는 `PHOTO`(10) · `NAME`(7) · `DEPARTMENT`(5) · `REASON`(3). 빈 배열·`null`·모르는 값은 `INVALID_INPUT` 400
+- 네 개를 전부 보내면 plan.md §1.4의 **전체 해금(25)** 이다. 별도 API는 없다
+- 같은 필드를 두 번 넣어도 한 번으로 친다
+- 비용은 **아직 잠긴 필드의 합**이다. 이름을 연 뒤 전체를 고르면 25가 아니라 18(10+5+3)이 빠진다
+
+**응답 200 예시**
+
+```json
+{
+  "success": true,
+  "data": {
+    "values": {
+      "PHOTO": "https://s3.example.com/temporary-signed-original-url",
+      "NAME": "홍길동"
+    },
+    "balance": 8
+  }
+}
+```
+
+- `values`는 요청한 필드명 → 값. 키 순서는 `PHOTO`·`NAME`·`DEPARTMENT`·`REASON` 순(요청 순서와 무관)
+- 값은 필드에 따라 이름·학과·궁합 까닭 문장 또는 원본 사진의 서명된 임시 URL
+- `balance`는 차감 후 잔액
+- 잔액이 모자라면 **402 `INSUFFICIENT_THREAD`** 이고 **고른 필드 중 아무것도 해금되지 않는다**(전부 되거나 전부 안 되거나). 프론트는 합계를 미리 보여 주고 모자라면 버튼을 막는 게 좋다
+- `candidateId`가 내 현재 추천 목록(Top 3)에 없으면 `DATING_PROFILE_NOT_FOUND` 404
+- `REASON`은 첫 해금 성공 시점에 LLM으로 생성해 캐싱한다(7.3) — 생성이 실패하면 `LLM_UNAVAILABLE` 503이지만 **함께 고른 필드까지 차감·해금은 이미 끝난 뒤**이므로 같은 요청을 다시 보내면 차감 없이 값만 받는다
+
+### 10.6 학교 이메일 인증 (매직링크, **폐기 예정**) — `GET /api/dating/profile/verify?token={token}`
+
+> **2026-09-26 폐기 예정.** 인증이 프로필 등록 전 6자리 코드(§10.7)로 바뀌어 **새 링크는 더 이상 발급하지 않는다.** 이미 발송된 링크만 처리하려고 남겨 뒀다. 프론트는 이 흐름(`/dating/verify` 페이지)을 새로 만들 필요 없다.
+
+(이전 동작) 프로필 등록(10.2) 성공 직후 서버가 `email`로 인증 메일을 자동 발송했고, 메일의 링크를 누르면 이 API가 호출됐다.
+
+- 성공: `302` — 프론트 완료 페이지로 리다이렉트. 이후 `emailVerified`가 `true`로 바뀌고 `GET /api/dating/recommendations`가 더 이상 `DATING_NOT_VERIFIED`를 던지지 않는다
+- 실패(만료·위조·재사용 토큰): `400 INVALID_TOKEN`
+
+### 10.7 학교 이메일 코드 인증 — `POST /api/dating/email-codes`, `POST /api/dating/email-codes/verify`
+
+2026-09-26 추가. 폼의 "인증" 버튼을 누르면 바로 코드 메일이 나가고, 같은 화면에서 코드를 입력한다. 로그인 필요.
+
+**① 발송 — `POST /api/dating/email-codes`**
+
+```json
+{ "email": "student@dgu.ac.kr" }
+```
+
+**응답 200**
+
+```json
+{
+  "success": true,
+  "data": {
+    "expiresAt": "2026-09-26T12:10:00Z",
+    "resendAvailableAt": "2026-09-26T12:01:00Z"
+  }
+}
+```
+
+- 코드는 **6자리 숫자, 10분 유효.** 다시 보내면 이전 코드는 즉시 무효가 되고, 이미 인증된 상태도 초기화된다
+- 재발송은 **60초 뒤부터**(`resendAvailableAt` 으로 버튼 타이머), **24시간에 10번까지.** 넘으면 `EMAIL_CODE_RATE_LIMITED` 429
+- 발송 전에 프로필 등록과 같은 이메일 검사를 한다: 학교 메일 아님 `INVALID_EMAIL_DOMAIN` 400, 다른 계정이 이미 쓴 이메일·이미 프로필이 있는 계정 `DATING_PROFILE_CONFLICT` 409
+- 메일 발송 실패는 `MAIL_UNAVAILABLE` 503. 이때는 쿨다운에 걸리지 않으니 바로 재시도해도 된다
+
+**② 확인 — `POST /api/dating/email-codes/verify`**
+
+```json
+{ "email": "student@dgu.ac.kr", "code": "123456" }
+```
+
+**응답 200**
+
+```json
+{ "success": true, "data": { "email": "student@dgu.ac.kr", "verified": true } }
+```
+
+- `email`은 ①에서 보낸 주소와 같아야 한다. 코드 불일치·만료·발송받은 이메일과 다름은 전부 `INVALID_EMAIL_CODE` 400(어느 조건인지 구분하지 않는다)
+- **코드 하나당 5번 틀리면 맞는 코드도 받지 않는다** — 새로 발송받아야 한다
+- 이미 인증된 상태에서 다시 부르면 그대로 200 (중복 클릭 안전)
+- `code`가 6자리 숫자가 아니면 `INVALID_INPUT` 400
+- 인증 뒤 프로필 등록(§10.2)은 **같은 `email`** 로 한다. 인증에 유효기간은 없지만, 다른 이메일로 다시 발송하면 이전 인증은 사라진다
+
+### #84 구현 상태와 남은 연동
+
+- 위 API와 응답 형식은 구현됐지만 **실제 S3 버킷·권한·CORS를 이용한 URL 발급→PUT→프로필 등록 전체 흐름은 아직 검증 전**이다.
+- 학교 메일 인증은 **등록 전 6자리 코드(10.7)** 로 구현됐다(2026-09-26). 10.6 매직링크는 폐기 예정.
+- 정보 해금(§10.5)은 구현됐다(2026-09-26). 리롤(§10.4.1)도 구현됐다(2026-09-27, TBD-6 종료). 블러 썸네일은 별도 API 없이 추천 응답의 `blurredPhotoUrl`로 제공한다. 매칭 요청은 §11을 본다.
+
+---
+
+## 11. 소개팅 매칭 요청·보관함
+
+모두 로그인 쿠키(`wks_token`) 필수 (§9 참고). 매칭 요청은 **무료**이며 실을 차감하지 않는다. `candidateId`는 §10 추천 응답의 소개팅 프로필 ID다. `requestId`는 매칭 요청 자체의 ID로, 두 값은 다르다.
+
+| 메서드 | 경로 | 동작 |
+|---|---|---|
+| `POST` | `/api/dating/requests` | 현재 내 추천 카드에 있는 상대에게 요청. `201` |
+| `GET` | `/api/dating/requests?box=sent` | 내가 보낸 요청 목록. `200` |
+| `GET` | `/api/dating/requests?box=received` | 내가 받은 요청 목록. `200` |
+| `POST` | `/api/dating/requests/{id}/accept` | 받은 사람만 수락. `200` |
+| `POST` | `/api/dating/requests/{id}/reject` | 받은 사람만 거절. `200` |
+| `POST` | `/api/dating/requests/{id}/cancel` | 보낸 사람만 대기 중 요청 취소. `200` |
+
+요청 생성 본문:
+
+```json
+{"candidateId":"3fa85f64-5717-4562-b3fc-2c963f66afa6"}
+```
+
+요청 생성 응답 `201` 예시:
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestId": "312f3185-f114-4db0-a2fb-54d0669b7e33",
+    "candidateId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "status": "PENDING",
+    "createdAt": "2026-09-24T12:00:00Z",
+    "respondedAt": null,
+    "contactMethod": null,
+    "contactValue": null
+  }
+}
+```
+
+### 11.1 요청 목록 — `GET /api/dating/requests`
+
+`box` 쿼리 파라미터는 필수이며 `sent`(내가 보낸 요청) 또는 `received`(내가 받은 요청)만 허용한다. 다른 값은 `INVALID_INPUT` 400이다. 최신 요청부터 반환하고, 목록이 비어 있으면 `{"success":true,"data":[]}`다. 내 소개팅 프로필이 없으면 `DATING_PROFILE_NOT_FOUND` 404다.
+
+**보낸 요청 조회**: `GET /api/dating/requests?box=sent`
+
+```json
+{
+  "success": true,
+  "data": [{
+    "requestId": "312f3185-f114-4db0-a2fb-54d0669b7e33",
+    "candidateId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "status": "PENDING",
+    "createdAt": "2026-09-24T12:00:00Z",
+    "respondedAt": null,
+    "contactMethod": null,
+    "contactValue": null,
+    "counterpart": {
+      "score": 83,
+      "mbti": "INFP",
+      "bio": "안녕하세요",
+      "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
+      "fields": {
+        "photo": { "locked": true, "cost": 10, "value": null },
+        "name": { "locked": true, "cost": 7, "value": null },
+        "department": { "locked": true, "cost": 5, "value": null }
+      }
+    }
+  }]
+}
+```
+
+**받은 요청 조회**: `GET /api/dating/requests?box=received`
+
+```json
+{
+  "success": true,
+  "data": [{
+    "requestId": "312f3185-f114-4db0-a2fb-54d0669b7e33",
+    "candidateId": "84722660-622a-4d30-a5a5-0d6c736e8530",
+    "status": "PENDING",
+    "createdAt": "2026-09-24T12:00:00Z",
+    "respondedAt": null,
+    "contactMethod": null,
+    "contactValue": null,
+    "counterpart": {
+      "score": 83,
+      "mbti": "ESTP",
+      "bio": "축제를 좋아해요",
+      "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
+      "fields": {
+        "photo": { "locked": false, "cost": null, "value": "https://s3.example.com/temporary-original-photo-url" },
+        "name": { "locked": false, "cost": null, "value": "홍길동" },
+        "department": { "locked": false, "cost": null, "value": "컴퓨터공학과" }
+      }
+    }
+  }]
+}
+```
+
+두 목록은 같은 구조를 쓴다. `candidateId`는 **조회한 사람 기준 상대의 프로필 ID**여서, 같은 요청도 보낸 사람의 목록과 받은 사람의 목록에서 값이 다르다. 목록에만 `counterpart`가 추가되고 요청 생성·수락·거절·취소 응답 구조는 유지된다. `counterpart.score`는 발신자 추천 때 저장한 점수이며, 추천 카드가 비활성화돼도 목록에서 조회할 수 있다. `counterpart.fields.*`는 추천 카드와 같이 잠긴 값은 `null`로 두고 `cost`만 제공한다. 받은 목록에서는 발신자의 사진·이름·학과를 실 차감 없이 볼 수 있다. 원본 사진은 만료되는 S3 조회 URL이며 S3 키는 응답에 없다.
+
+`status`는 `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED` 중 하나다. `ACCEPTED`에서만 **해당 요청의 상대 연락처**를 반환하며, 나머지 상태에서는 `contactMethod`·`contactValue`가 `null`이다. 취소 내역은 보낸 목록에 남지만 받은 목록에서는 제외한다. 수락·거절·취소 응답도 기존 요청 객체이며 `respondedAt`이 채워진다. 요청 수에 상한은 없다.
+
+본인 요청, 이미 유효한 요청이 있는 두 사람의 재요청, 현재 추천 카드에 없는 상대는 거절한다. 한 쌍은 방향을 바꿔도 동시에 유효한 요청을 하나만 가질 수 있다. 취소 후에는 같은 상대가 현재 추천 카드에 있다면 재요청할 수 있고, 거절 후 재요청은 허용하지 않는다. 요청을 보내려면 내 학교 메일 인증이 완료돼 있어야 한다. 수락 후에도 양쪽은 계속 소개팅을 이용하고 다른 사람의 추천 후보에 남는다. 수락이 다른 요청의 상태를 바꾸지는 않는다. 실 기능과는 별개다.
+
+### 11.2 보낸 요청 취소 — `POST /api/dating/requests/{id}/cancel`
+
+보낸 사람만 `PENDING` 요청을 취소할 수 있다. 성공하면 `200`으로 해당 요청 객체를 반환한다. `status`는 `CANCELLED`, `respondedAt`은 취소 시각이며 연락처는 `null`이다. 받은 사람 목록에서는 즉시 사라지고 보낸 사람 목록에는 취소 이력으로 남는다.
+
+- 요청이 없거나 보낸 본인이 아니면 `DATING_REQUEST_NOT_FOUND` 404
+- 이미 수락·거절·취소된 요청이면 `DATING_REQUEST_CONFLICT` 409
+- 취소와 수락·거절이 동시에 들어오면 먼저 처리된 동작만 성공하고 나머지는 409
+- 취소 후 동일 상대에게 새 요청을 보내려면 현재 추천 카드에 상대가 있어야 한다
+
+학교 메일 인증 완료를 프로필에 반영하는 연동이 끝나기 전에는 추천 조회가 403이어서, 실제 추천 카드에서 매칭 요청까지 이어지는 흐름은 사용할 수 없다 (§10 구현 상태).
+
+---
+
+## 12. 실 (재화)
+
+로그인 쿠키(`wks_token`) 필수 (§9 참고). 원장 기반이라 잔액은 항상 지급·차감 내역의 합이다(plan.md §9.4).
+V1에서 만드는 건 잔액 조회·출석 체크·소개팅 해금(§10.5)·리롤(§10.4.1)뿐이다. **현금 충전은 없다**(FR-TH-05) — 잔액이
+모자라면 402 `INSUFFICIENT_THREAD`만 돌려주고, "구매하기" 화면은 프론트가 안내만 한다(plan.md TBD-8,
+아직 화면 없음).
+
+| 획득 | 양 | 지급 시점 |
+|---|---|---|
+| 가입 | 10 | 카카오 최초 로그인 성공 시 자동(계정당 1회) |
+| 출석 체크 | 5 | `POST /api/wallet/check-in` 호출, KST 날짜 기준 1일 1회 |
+| 친구 궁합지도 등록 | 3 | 내 공유 링크로 친구가 궁합을 생성할 때 자동(로그인 계정만, 궁합 1건당 1회) |
+| 제휴처 배너 유입 | 제휴처별 값 | 미구현 — `POST /api/auth/kakao` 응답의 `rewardGranted`는 당분간 항상 `null` |
+
+| 소모 (정보 해금, §10.5) | 양 |
+|---|---|
+| 사진 | 10 |
+| 이름 | 7 |
+| 학과 | 5 |
+| 궁합 까닭 | 3 |
+| 전체 (네 개 한 번에) | 25 — 이미 연 필드는 빠진다 |
+
+| 소모 (리롤, §10.4.1) | 양 |
+|---|---|
+| 하루(KST) 첫 리롤 | 0 (무료) |
+| 두 번째부터 | 5 |
+
+### `GET /api/wallet`
+
+**응답 200**
+
+```json
+{ "success": true, "data": { "balance": 18, "canCheckInToday": true } }
+```
+
+### `POST /api/wallet/check-in`
+
+출석 +5. 오늘 이미 했으면 **에러가 아니라 200으로 `checkedIn: false`** 를 돌려준다 — 재클릭이 자연스럽게
+처리되도록 한 설계다(2026-09-26 결정, 별도 TBD 아님).
+
+**응답 200**
+
+```json
+{ "success": true, "data": { "checkedIn": true, "balance": 23 } }
+```

@@ -28,7 +28,7 @@ class CompatibilityControllerTest {
     void returnsCreatedForNewCompatibility() {
         String shareId = UUID.randomUUID().toString();
         CreateCompatibilityRequest request = new CreateCompatibilityRequest(UUID.randomUUID().toString());
-        CompatibilityResponse response = new CompatibilityResponse(92, CompatibilityTier.GUIIN, "서연", "민수");
+        CompatibilityResponse response = new CompatibilityResponse(12L, 92, CompatibilityTier.GUIIN, "서연", "민수");
         when(compatibilityService.createCompatibility(shareId, request))
                 .thenReturn(new CompatibilityService.CreationResult(response, true));
 
@@ -44,7 +44,7 @@ class CompatibilityControllerTest {
     void returnsOkForExistingCompatibility() {
         String shareId = UUID.randomUUID().toString();
         CreateCompatibilityRequest request = new CreateCompatibilityRequest(UUID.randomUUID().toString());
-        CompatibilityResponse response = new CompatibilityResponse(82, CompatibilityTier.CHALTTEOK, "서연", "민수");
+        CompatibilityResponse response = new CompatibilityResponse(12L, 82, CompatibilityTier.CHALTTEOK, "서연", "민수");
         when(compatibilityService.createCompatibility(shareId, request))
                 .thenReturn(new CompatibilityService.CreationResult(response, false));
 

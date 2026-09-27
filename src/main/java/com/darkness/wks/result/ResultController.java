@@ -1,5 +1,6 @@
 package com.darkness.wks.result;
 
+import com.darkness.wks.common.auth.OptionalMember;
 import com.darkness.wks.common.response.ApiResponse;
 import com.darkness.wks.common.response.ErrorResponse;
 import com.darkness.wks.result.dto.CreateResultRequest;
@@ -33,7 +34,11 @@ public class ResultController {
 
     private final ResultService resultService;
 
-    @Operation(summary = "사주 결과 생성", description = "사주를 계산하고 운명, 운세 등급과 해석을 생성한다.")
+    @Operation(summary = "사주 결과 생성", description = """
+            사주를 계산하고 운명, 운세 등급과 해석을 생성한다. 로그인 없이 동작한다.
+            로그인 쿠키(wks_token)가 유효하고 계정에 아직 결과가 없으면 새 결과를 계정에 연결한다.
+            계정에 이미 결과가 있으면 연결하지 않는다(계정 결과 유지). 쿠키가 만료·위조여도 에러 없이 익명으로 처리한다.
+            """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "생성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류",
@@ -61,8 +66,9 @@ public class ResultController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<ResultResponse> createResult(@Valid @RequestBody CreateResultRequest request) {
-        return ApiResponse.success(resultService.createResult(request));
+    public ApiResponse<ResultResponse> createResult(@Parameter(hidden = true) @OptionalMember Long memberId,
+            @Valid @RequestBody CreateResultRequest request) {
+        return ApiResponse.success(resultService.createResult(request, memberId));
     }
 
     @Operation(summary = "닉네임 변경", description = """
