@@ -1,11 +1,8 @@
 package com.darkness.wks.saju;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 운명 제목 8종. 연애·결혼·자녀 각각 상(SS/S/A+)·하(A/B+/B) 조합 2×2×2 (기능명세서 유형 1~8 순서).
@@ -13,6 +10,7 @@ import java.util.Map;
  */
 public final class DestinyTitle {
 
+    private static final List<String> KEYS = List.of("상상상", "상상하", "상하상", "상하하", "하상상", "하상하", "하하상", "하하하");
     private static final Map<String, String> TITLES = load();
 
     private DestinyTitle() {
@@ -27,20 +25,12 @@ public final class DestinyTitle {
         return Grade.of(score).ordinal() <= Grade.A_PLUS.ordinal() ? "상" : "하";
     }
 
+    /** 줄 수만 세면 키 오타("상하싱")가 통과해 of() 가 조용히 null 을 준다. 키 8개가 정확히 있는지 본다 */
     private static Map<String, String> load() {
-        Map<String, String> map = new HashMap<>();
-        try (InputStream in = DestinyTitle.class.getClassLoader().getResourceAsStream("destiny-titles.txt")) {
-            if (in == null) throw new IllegalStateException("resource not found: destiny-titles.txt");
-            for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\n")) {
-                line = line.strip();
-                if (line.isEmpty() || line.startsWith("#")) continue;
-                String[] kv = line.split("=", 2);
-                map.put(kv[0].strip(), kv[1].strip());
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+        Map<String, String> map = LuckyPool.readKeyValues("destiny-titles.txt");
+        if (!map.keySet().equals(Set.copyOf(KEYS))) {
+            throw new IllegalStateException("destiny-titles.txt 의 키는 " + KEYS + " 여야 한다: " + map.keySet());
         }
-        if (map.size() != 8) throw new IllegalStateException("destiny-titles.txt 는 8줄이어야 한다: " + map.size());
         return map;
     }
 }

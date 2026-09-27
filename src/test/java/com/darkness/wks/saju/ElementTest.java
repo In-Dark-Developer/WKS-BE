@@ -3,6 +3,7 @@ package com.darkness.wks.saju;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ElementTest {
 
@@ -13,6 +14,14 @@ class ElementTest {
         assertThat(Element.ofBranch('자')).isEqualTo(Element.WATER);
         assertThat(Element.ofBranch('축')).isEqualTo(Element.EARTH);
         assertThat(Element.ofBranch('유')).isEqualTo(Element.METAL);
+    }
+
+    @Test
+    void rejectsNonGanZhiCharacters() {
+        assertThatThrownBy(() -> Element.ofStem('자')).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("자");
+        assertThatThrownBy(() -> Element.ofBranch('갑')).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Zodiac.fromYearPillar("갑갑")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> SajuCalculator.toKorean("AB")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
