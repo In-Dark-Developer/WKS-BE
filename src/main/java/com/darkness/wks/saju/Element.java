@@ -37,12 +37,18 @@ public enum Element {
         return colors;
     }
 
+    /** @throws IllegalArgumentException 천간이 아닌 글자. 깨진 저장값이 AIOOBE(-1) 로 터지면 원인을 못 찾는다 */
     public static Element ofStem(char stem) {
-        return STEM_ELEMENT[STEMS.indexOf(stem)];
+        int i = STEMS.indexOf(stem);
+        if (i < 0) throw new IllegalArgumentException("천간이 아니다: " + stem);
+        return STEM_ELEMENT[i];
     }
 
+    /** @throws IllegalArgumentException 지지가 아닌 글자 */
     public static Element ofBranch(char branch) {
-        return BRANCH_ELEMENT[BRANCHES.indexOf(branch)];
+        int i = BRANCHES.indexOf(branch);
+        if (i < 0) throw new IllegalArgumentException("지지가 아니다: " + branch);
+        return BRANCH_ELEMENT[i];
     }
 
     /** 내가 낳는 오행 (상생) */
