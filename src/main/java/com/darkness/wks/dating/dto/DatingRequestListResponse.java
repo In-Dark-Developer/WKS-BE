@@ -21,7 +21,7 @@ public record DatingRequestListResponse(
         Counterpart counterpart
 ) {
     public static DatingRequestListResponse from(DatingRequest request, Long viewerMemberId,
-                                                 DatingRecommendation recommendation,
+                                                 DatingRecommendation recommendation, String age,
                                                  String blurredPhotoUrl, String originalPhotoUrl) {
         boolean received = request.getRecipient().getMemberId().equals(viewerMemberId);
         DatingProfile other = received ? request.getSender() : request.getRecipient();
@@ -30,7 +30,7 @@ public record DatingRequestListResponse(
         LockedField name = field(received || recommendation.isNameUnlocked(), 7, other.getName());
         LockedField department = field(received || recommendation.isDepartmentUnlocked(), 5,
                 other.getDepartment());
-        Counterpart counterpart = new Counterpart(recommendation.getScore(), other.getMbti(), other.getBio(),
+        Counterpart counterpart = new Counterpart(recommendation.getScore(), age, other.getMbti(), other.getBio(),
                 blurredPhotoUrl, new ProfileFields(photo, name, department));
         return new DatingRequestListResponse(base.requestId(), base.candidateId(), base.status(),
                 base.createdAt(), base.respondedAt(), base.contactMethod(), base.contactValue(), counterpart);
@@ -40,7 +40,8 @@ public record DatingRequestListResponse(
         return visible ? LockedField.unlocked(value) : LockedField.locked(cost);
     }
 
-    public record Counterpart(int score, String mbti, String bio,
+    /** @param age 추천 카드와 같은 기본 공개 나이 표기(예: "00년생"). 결과가 연결되지 않았으면 {@code null} */
+    public record Counterpart(int score, String age, String mbti, String bio,
                               String blurredPhotoUrl, ProfileFields fields) {
     }
 
