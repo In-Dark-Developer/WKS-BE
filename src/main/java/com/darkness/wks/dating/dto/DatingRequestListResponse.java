@@ -30,8 +30,11 @@ public record DatingRequestListResponse(
         LockedField name = field(received || recommendation.isNameUnlocked(), 7, other.getName());
         LockedField department = field(received || recommendation.isDepartmentUnlocked(), 5,
                 other.getDepartment());
+        // 받은 목록은 받은 사람 시점 문장(요청 행에 캐시, 무료). 보낸 목록은 카드와 같은 해금 상태·문장 (#123)
+        LockedField reason = received ? LockedField.unlocked(request.getRecipientReason())
+                : field(recommendation.isReasonUnlocked(), 3, recommendation.getReasonContent());
         Counterpart counterpart = new Counterpart(recommendation.getScore(), age, other.getMbti(), other.getBio(),
-                blurredPhotoUrl, new ProfileFields(photo, name, department));
+                blurredPhotoUrl, new ProfileFields(photo, name, department, reason));
         return new DatingRequestListResponse(base.requestId(), base.candidateId(), base.status(),
                 base.createdAt(), base.respondedAt(), base.contactMethod(), base.contactValue(), counterpart);
     }
@@ -45,6 +48,7 @@ public record DatingRequestListResponse(
                               String blurredPhotoUrl, ProfileFields fields) {
     }
 
-    public record ProfileFields(LockedField photo, LockedField name, LockedField department) {
+    /** @param reason 받은 목록에서 {@code value} 가 {@code null} 이면 아직 생성 전이다 — 잠시 후 다시 조회하면 된다 */
+    public record ProfileFields(LockedField photo, LockedField name, LockedField department, LockedField reason) {
     }
 }
