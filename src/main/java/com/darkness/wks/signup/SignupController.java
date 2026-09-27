@@ -64,7 +64,7 @@ public class SignupController {
         return ApiResponse.success(photoUploadService.createUploadUrl(request.contentType()));
     }
 
-    @Operation(summary = "사전등록 신청", description = "이름·이메일·연락처·학과·MBTI·자기소개·성별·선호성별·사진으로 신청하고 인증 메일을 발송한다.")
+    @Operation(summary = "사전등록 신청", description = "이름·이메일·연락처·학과·MBTI·자기소개·성별·선호성별·사진으로 신청한다. 사주 결과(resultId)가 있으면 재신청 매직링크를, 없으면 인증 메일을 보낸다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "신청 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 또는 허용되지 않는 이메일 도메인",
@@ -107,7 +107,7 @@ public class SignupController {
         return ApiResponse.success(signupService.createSignup(request));
     }
 
-    @Operation(summary = "인증 메일 재발송", description = "이미 인증 완료된 이메일이면 400을 반환한다.")
+    @Operation(summary = "메일 재발송", description = "사주 결과가 있고 아직 계정에 연결되지 않았으면 재신청 매직링크를 새로 보낸다. 그 외에는 인증 메일을 보내고, 이미 인증 완료된 이메일이면 400을 반환한다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "재발송 처리"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "신청 내역 없음 또는 이미 인증 완료",

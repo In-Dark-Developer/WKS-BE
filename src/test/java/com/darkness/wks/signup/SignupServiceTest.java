@@ -11,6 +11,7 @@ import com.darkness.wks.signup.dto.ResendSignupResponse;
 import com.darkness.wks.signup.dto.SignupResponse;
 import com.darkness.wks.signup.entity.EmailVerification;
 import com.darkness.wks.signup.entity.Signup;
+import com.darkness.wks.signup.entity.SignupReapplyInvite;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -47,6 +48,9 @@ class SignupServiceTest {
 
     @Mock
     private PhotoUploadService photoUploadService;
+
+    @Mock
+    private SignupReapplyService reapplyService;
 
     @InjectMocks
     private SignupService signupService;
@@ -188,23 +192,91 @@ class SignupServiceTest {
     }
 
     @Test
-    void createsSignupWithExistingResult() {
-        Result result = new Result("서연", LocalDate.of(2002, 3, 14), null, null, Gender.FEMALE,
-                "임오", "계묘", "갑진", "신미");
-        UUID resultId = UUID.randomUUID();
-        ReflectionTestUtils.setField(result, "id", resultId);
+    void sendsMagicLinkInsteadOfVerificationMailWhenResultIsUnlinked() {
+        Result result = unlinkedResult();
         when(signupRepository.existsByEmail(anyString())).thenReturn(false);
-        when(resultRepository.findById(resultId)).thenReturn(Optional.of(result));
-        when(signupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        Signup savedSignup = new Signup("dev@dgu.ac.kr", result, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개", null);
-        when(emailVerificationService.issueToken(any()))
-                .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
+        when(resultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(signupRepository.save(any())).thenAnswer(invocation -> {
+            Signup signup = invocation.getArgument(0);
+            ReflectionTestUtils.setField(signup, "id", 7L);
+            return signup;
+        });
+        when(reapplyService.issueInvite(7L)).thenReturn(invite("invite-token"));
 
         SignupResponse response = signupService.createSignup(
-                new CreateSignupRequest("dev@dgu.ac.kr", resultId.toString(), Gender.MALE, Gender.FEMALE,
+                new CreateSignupRequest("dev@gmail.com", result.getId().toString(), Gender.MALE, Gender.FEMALE,
                         "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개", null));
 
         assertThat(response.couponIssued()).isTrue();
+        assertThat(response.mailSent()).isTrue();
+        verify(reapplyService).sendInviteEmail("dev@gmail.com", "invite-token");
+        verifyNoInteractions(emailVerificationService);
+    }
+
+    @Test
+    void discardsInviteAndReportsFailureWhenMagicLinkMailFails() {
+        Result result = unlinkedResult();
+        when(signupRepository.existsByEmail(anyString())).thenReturn(false);
+        when(resultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(signupRepository.save(any())).thenAnswer(invocation -> {
+            Signup signup = invocation.getArgument(0);
+            ReflectionTestUtils.setField(signup, "id", 7L);
+            return signup;
+        });
+        when(reapplyService.issueInvite(7L)).thenReturn(invite("invite-token"));
+        doThrow(new SignupReapplyService.InviteMailFailedException(new RuntimeException("smtp down")))
+                .when(reapplyService).sendInviteEmail(anyString(), anyString());
+
+        SignupResponse response = signupService.createSignup(
+                new CreateSignupRequest("dev@gmail.com", result.getId().toString(), Gender.MALE, Gender.FEMALE,
+                        null, null, null, null, null, null, null));
+
+        assertThat(response.mailSent()).isFalse();
+        verify(reapplyService).discardInvite("invite-token");
+    }
+
+    @Test
+    void sendsVerificationMailWhenResultAlreadyLinkedToAccount() {
+        Result result = unlinkedResult();
+        result.linkMember(3L);
+        when(signupRepository.existsByEmail(anyString())).thenReturn(false);
+        when(resultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(signupRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Signup savedSignup = new Signup("dev@dgu.ac.kr", result, Gender.MALE, Gender.FEMALE, null, null, null, null, null, null, null);
+        when(emailVerificationService.issueToken(any()))
+                .thenReturn(new EmailVerification("token", savedSignup, Instant.now().plusSeconds(1800)));
+
+        signupService.createSignup(new CreateSignupRequest("dev@dgu.ac.kr", result.getId().toString(),
+                Gender.MALE, Gender.FEMALE, null, null, null, null, null, null, null));
+
+        verify(emailVerificationService).sendVerificationEmail("dev@dgu.ac.kr", "token");
+        verifyNoInteractions(reapplyService);
+    }
+
+    @Test
+    void resendSendsNewMagicLinkEvenIfEmailAlreadyVerified() {
+        Signup signup = new Signup("dev@gmail.com", unlinkedResult(), Gender.MALE, Gender.FEMALE, null, null, null, null, null, null, null);
+        ReflectionTestUtils.setField(signup, "id", 7L);
+        signup.markVerified(Instant.now());
+        when(signupRepository.findByEmail("dev@gmail.com")).thenReturn(Optional.of(signup));
+        when(reapplyService.issueInvite(7L)).thenReturn(invite("invite-token-2"));
+
+        ResendSignupResponse response = signupService.resend("dev@gmail.com");
+
+        assertThat(response.mailSent()).isTrue();
+        verify(reapplyService).sendInviteEmail("dev@gmail.com", "invite-token-2");
+        verifyNoInteractions(emailVerificationService);
+    }
+
+    private Result unlinkedResult() {
+        Result result = new Result("서연", LocalDate.of(2002, 3, 14), null, null, Gender.FEMALE,
+                "임오", "계묘", "갑진", "신미");
+        ReflectionTestUtils.setField(result, "id", UUID.randomUUID());
+        return result;
+    }
+
+    private SignupReapplyInvite invite(String token) {
+        return new SignupReapplyInvite(token, null, Instant.now().plusSeconds(3600));
     }
 
     @Test

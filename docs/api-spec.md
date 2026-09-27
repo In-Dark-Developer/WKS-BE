@@ -380,13 +380,18 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "signupId": 1024,
     "couponIssued": true,
     "mailSent": true,
-    "message": "신청이 접수됐다. 인증 메일을 확인해라."
+    "message": "신청이 접수됐어요. 메일함(스팸함 포함)을 확인해 주세요."
   }
 }
 ```
 
 `mailSent: false` 여도 신청은 성공이다. SMTP 실패가 신청을 롤백시키지 않는다.
 프론트는 이 경우 재발송 안내를 노출한다.
+
+**보내는 메일 (2026-09-27 변경).** `resultId` 가 있고 그 결과가 아직 어느 계정에도 연결되지 않았으면 인증 메일 대신
+**재신청 매직링크**(아래 `GET /api/signups/reapply` 와 같은 초대 메일, 링크 = `app.frontend.reapply-url?token=`)를 보낸다.
+소개팅이 열린 뒤의 사전신청은 결국 카카오 로그인으로 그 결과를 계정에 잇고 소개팅 신청을 마쳐야 하기 때문이다.
+`resultId` 가 없거나 이미 계정에 연결된 결과면 기존대로 인증 메일을 보낸다. 요청·응답 형식은 그대로다.
 
 ### `POST /api/signups/resend`
 
@@ -396,7 +401,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 { "email": "dev@dgu.ac.kr" }
 ```
 
-메일 재발송. 이미 인증 완료된 이메일이면 400 `INVALID_INPUT` (전용 에러코드 없음).
+메일 재발송. 신청 때와 같은 규칙으로 보낸다 — 연결 안 된 사주 결과가 있으면 **새 재신청 매직링크**(이메일 인증 여부와 무관),
+아니면 인증 메일. 인증 메일 대상인데 이미 인증 완료된 이메일이면 400 `INVALID_INPUT` (전용 에러코드 없음).
 신청 내역이 없는 이메일도 400 `INVALID_INPUT`.
 
 **Response 200**
@@ -406,7 +412,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "success": true,
   "data": {
     "mailSent": true,
-    "message": "인증 메일을 재발송했다."
+    "message": "메일을 다시 보냈어요."
   }
 }
 ```
