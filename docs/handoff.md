@@ -175,6 +175,59 @@
 
 ## 기록
 
+### 2026-09-27 (일) · 곽도윤 · dating/ 추천 카드·요청 목록에 나이(age) 기본 공개 · Claude Code
+
+**한 일**
+- 추천 카드(`candidates[].age`)와 요청 목록(`counterpart.age`)에 상대의 나이를 `"00년생"` 문자열로 넣었다.
+  기본 공개, 서버가 만든다(사용자 결정). 2000년생 → `"00년생"`, 1998년생 → `"98년생"`
+- `dating_profile` 에는 생년월일이 없어서 `result.member_id` 로 연결된 `Result.birthDate` 에서 만든다
+  (`BirthYearLabel`). 카드·목록마다 `findAllByMemberIdIn` 한 번으로 불러온다(N+1 없음)
+
+**건드린 파일/패키지**
+- `dating/` — `BirthYearLabel`(신규), `DatingRecommendationService`, `DatingRequestService`(`ResultRepository` 주입), DTO 2개
+- 테스트: `BirthYearLabelTest`, `DatingSchemaTest` — 카드·목록의 `age`, JSON 에 `birthDate` 없음
+
+**다음 사람이 알아야 할 것**
+- 필드 이름은 `age` 지만 값은 숫자가 아니라 `"00년생"` 문자열이다(프론트 표시용, 사용자 결정)
+- 연도만 쓰므로 생년월일을 역산할 수 없다. 생년월일·시간 원본은 응답에 싣지 않는다
+- 결과가 연결되지 않은 예외 상황이면 `age` 는 `null`
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `plan.md` §7.2 공개 범위 표, `api-spec.md` §10.4·§11
+
+**프론트에 알려야 할 것**
+- 추천 카드·리롤·요청 목록 응답에 `age`(문자열, nullable, 예: `"00년생"`) 필드 추가. 그대로 표시하면 된다. 기존 필드는 그대로
+
+### 2026-09-27 (일) · 곽도윤 · dating/ 소개팅 요청 받으면 알림 메일 · Claude Code
+
+**한 일**
+- `POST /api/dating/requests` 로 요청이 **커밋되면** 받는 사람의 학교 메일(`dating_profile.email`)로 알림 메일을
+  보낸다(사용자 결정). 수락·거절·취소 알림은 없다
+- `DatingRequestService.send` 가 이벤트를 발행하고 `DatingRequestNotifier` 가 `AFTER_COMMIT` 에서 받아 Boot 기본
+  `applicationTaskExecutor` 로 비동기 발송한다. 롤백된 요청(충돌)에는 메일이 안 나가고, SMTP 지연이 응답을 붙잡지 않는다
+- 메일에는 보낸 사람 정보를 넣지 않는다 — 잠긴 필드가 메일로 새지 않게 "신청이 왔다"는 사실만 알린다
+
+**건드린 파일/패키지**
+- `dating/` — `DatingRequestNotifier`(신규), `DatingRequestService`(이벤트 발행)
+- 테스트: `DatingRequestNotifierTest` — 수신자·제목, 발송 실패 시 예외 삼킴
+
+**다음 사람이 알아야 할 것**
+- 발송 실패는 로그(`requestId`, 예외 타입)만 남고 재시도하지 않는다. 예외 메시지는 수신 주소가 실릴 수 있어 남기지 않는다
+- 비동기라 앱 종료 직전 요청의 메일은 유실될 수 있다(축제 규모에서 감수)
+- 취소 → 재요청을 반복하면 그때마다 메일이 간다. 발송 한도 문제가 보이면 쿨다운을 붙일 것
+
+**막힌 것 / 넘기는 것**
+- 메일에 프론트 "받은 신청함" 링크가 없다 — 프론트 경로가 확정되면 `app.frontend.*` 설정 + `docker-compose.prod.yml` 에 추가
+
+**문서 변경**
+- `plan.md` §12 결정 메모, `api-spec.md` §11 요청 생성 설명
+
+**프론트에 알려야 할 것**
+- 없음 (API 형식 변경 없음. 원하면 "요청이 가면 상대에게 메일이 간다"는 안내 문구 정도)
+
 ### 2026-09-27 (일) · 곽도윤 · signup/ 새 사전신청에도 인증 메일 대신 매직링크 발송 · Claude Code
 
 **한 일**

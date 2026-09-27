@@ -149,15 +149,26 @@ public class DatingRecommendationService {
                 .sorted(Comparator.comparingInt(DatingRecommendation::getScore).reversed()
                         .thenComparing(item -> item.getCandidate().getId()))
                 .toList();
+        Map<Long, String> ages = ages(ordered.stream()
+                .map(item -> item.getCandidate().getMemberId()).toList());
         return IntStream.range(0, ordered.size())
                 .mapToObj(index -> {
                     DatingRecommendation item = ordered.get(index);
                     String unlockedPhotoUrl = item.isPhotoUnlocked()
                             ? photoService.originalUrl(item.getCandidate().getPhoto()) : null;
-                    return CandidateCard.from(index + 1, item,
+                    return CandidateCard.from(index + 1, item, ages.get(item.getCandidate().getMemberId()),
                             photoService.thumbnailUrl(item.getCandidate().getPhoto()), unlockedPhotoUrl);
                 })
                 .toList();
+    }
+
+    /** 카드마다 결과를 따로 읽지 않도록 한 번에 불러온다. "00년생" 표기만 만들고 생년월일은 응답에 싣지 않는다. */
+    private Map<Long, String> ages(List<Long> memberIds) {
+        if (memberIds.isEmpty()) {
+            return Map.of();
+        }
+        return resultRepository.findAllByMemberIdIn(memberIds).stream()
+                .collect(Collectors.toMap(Result::getMemberId, result -> BirthYearLabel.of(result.getBirthDate())));
     }
 
     private int rerollsToday(Long memberId) {

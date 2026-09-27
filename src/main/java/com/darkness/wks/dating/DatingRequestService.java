@@ -2,6 +2,7 @@ package com.darkness.wks.dating;
 
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
+import com.darkness.wks.dating.DatingRequestNotifier.DatingRequestSentEvent;
 import com.darkness.wks.dating.dto.DatingRequestListResponse;
 import com.darkness.wks.dating.dto.DatingRequestResponse;
 import com.darkness.wks.dating.entity.DatingProfile;
@@ -9,8 +10,11 @@ import com.darkness.wks.dating.entity.DatingRecommendation;
 import com.darkness.wks.dating.entity.DatingRequest;
 import com.darkness.wks.dating.entity.DatingRequestStatus;
 import com.darkness.wks.member.entity.Member;
+import com.darkness.wks.result.ResultRepository;
+import com.darkness.wks.result.entity.Result;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +26,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -32,15 +37,20 @@ public class DatingRequestService {
     private final DatingRecommendationRepository recommendationRepository;
     private final DatingRequestRepository requestRepository;
     private final DatingPhotoService photoService;
+    private final ResultRepository resultRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public DatingRequestService(EntityManager entityManager, DatingProfileRepository profileRepository,
                                 DatingRecommendationRepository recommendationRepository,
-                                DatingRequestRepository requestRepository, DatingPhotoService photoService) {
+                                DatingRequestRepository requestRepository, DatingPhotoService photoService,
+                                ResultRepository resultRepository, ApplicationEventPublisher eventPublisher) {
         this.entityManager = entityManager;
         this.profileRepository = profileRepository;
         this.recommendationRepository = recommendationRepository;
         this.requestRepository = requestRepository;
         this.photoService = photoService;
+        this.resultRepository = resultRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -61,12 +71,14 @@ public class DatingRequestService {
                 || requestRepository.existsBetween(sender.getId(), candidateId)) {
             throw new BusinessException(ErrorCode.DATING_REQUEST_CONFLICT);
         }
+        DatingRequest saved;
         try {
-            return DatingRequestResponse.from(requestRepository.saveAndFlush(
-                    new DatingRequest(sender, candidate)), memberId);
+            saved = requestRepository.saveAndFlush(new DatingRequest(sender, candidate));
         } catch (DataIntegrityViolationException exception) {
             throw new BusinessException(ErrorCode.DATING_REQUEST_CONFLICT);
         }
+        eventPublisher.publishEvent(new DatingRequestSentEvent(saved.getId(), candidate.getEmail()));
+        return DatingRequestResponse.from(saved, memberId);
     }
 
     public List<DatingRequestListResponse> list(Long memberId, String box) {
@@ -88,6 +100,13 @@ public class DatingRequestService {
                 .collect(Collectors.toMap(
                         item -> new RequestPair(item.getViewerMemberId(), item.getCandidate().getId()),
                         Function.identity()));
+        // 상대의 나이만 쓴다. 요청마다 결과를 읽지 않도록 양쪽 회원을 한 번에 불러온다
+        List<Long> participantIds = requests.stream()
+                .flatMap(request -> Stream.of(request.getSender().getMemberId(),
+                        request.getRecipient().getMemberId()))
+                .distinct().toList();
+        Map<Long, String> ages = resultRepository.findAllByMemberIdIn(participantIds).stream()
+                .collect(Collectors.toMap(Result::getMemberId, result -> BirthYearLabel.of(result.getBirthDate())));
         return requests.stream().map(request -> {
             DatingRecommendation recommendation = recommendations.get(new RequestPair(
                     request.getSender().getMemberId(), request.getRecipient().getId()));
@@ -99,7 +118,7 @@ public class DatingRequestService {
             String originalPhotoUrl = received || recommendation.isPhotoUnlocked()
                     ? photoService.originalUrl(other.getPhoto()) : null;
             return DatingRequestListResponse.from(request, memberId, recommendation,
-                    photoService.thumbnailUrl(other.getPhoto()), originalPhotoUrl);
+                    ages.get(other.getMemberId()), photoService.thumbnailUrl(other.getPhoto()), originalPhotoUrl);
         }).toList();
     }
 

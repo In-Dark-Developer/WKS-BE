@@ -183,6 +183,7 @@ class DatingSchemaTest {
         assertThat(first).allSatisfy(card -> {
             assertThat(card.blurredPhotoUrl()).isEqualTo("https://example.com/blurred.png");
             assertThat(card.fields().photo().locked()).isTrue();
+            assertThat(card.age()).isEqualTo("00년생");
         });
         assertThat(recommendationService.getCurrent(viewer.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).containsExactlyElementsOf(
@@ -351,6 +352,7 @@ class DatingSchemaTest {
         var sent = requestService.list(sender.getMemberId(), "sent").get(0);
         assertThat(sent.requestId()).isEqualTo(request.requestId());
         assertThat(sent.counterpart().score()).isEqualTo(83);
+        assertThat(sent.counterpart().age()).isEqualTo("00년생");
         assertThat(sent.counterpart().mbti()).isEqualTo(recipient.getMbti());
         assertThat(sent.counterpart().bio()).isEqualTo(recipient.getBio());
         assertThat(sent.counterpart().blurredPhotoUrl()).isEqualTo("https://example.com/blurred.png");
@@ -379,6 +381,8 @@ class DatingSchemaTest {
                         .cookie(new Cookie("wks_token", jwtProvider.issue(recipient.getMemberId()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].counterpart.score").value(83))
+                .andExpect(jsonPath("$.data[0].counterpart.age").value("00년생"))
+                .andExpect(jsonPath("$.data[0].counterpart.birthDate").doesNotExist())
                 .andExpect(jsonPath("$.data[0].counterpart.fields.photo.value")
                         .value("https://example.com/original.jpg"))
                 .andExpect(jsonPath("$.data[0].counterpart.fields.photo.objectKey").doesNotExist());

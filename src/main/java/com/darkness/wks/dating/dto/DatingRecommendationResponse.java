@@ -11,21 +11,25 @@ import java.util.UUID;
  */
 public record DatingRecommendationResponse(List<CandidateCard> candidates, int rerollCost) {
 
-    public record CandidateCard(int rank, UUID candidateId, int score,
+    /**
+     * @param age 사주 결과의 양력 출생연도 표기(예: "00년생"). 기본 공개 — 생년월일 원본은 내리지 않는다.
+     *            결과가 연결되지 않은 예외 상황에서는 {@code null}
+     */
+    public record CandidateCard(int rank, UUID candidateId, int score, String age,
                                 String mbti, String bio, String blurredPhotoUrl, CandidateFields fields) {
         /**
          * @param unlockedPhotoUrl 사진이 해금됐을 때만 원본 서명 URL. 잠긴 상태에서는 절대 호출부에서
          *                         계산·전달하지 않는다(FR-DT-04) — {@code null} 이면 잠긴 것으로 본다
          */
-        public static CandidateCard from(int rank, DatingRecommendation recommendation, String blurredPhotoUrl,
-                                          String unlockedPhotoUrl) {
+        public static CandidateCard from(int rank, DatingRecommendation recommendation, String age,
+                                          String blurredPhotoUrl, String unlockedPhotoUrl) {
             var profile = recommendation.getCandidate();
             CandidateFields fields = new CandidateFields(
                     field(recommendation.isPhotoUnlocked(), 10, unlockedPhotoUrl),
                     field(recommendation.isNameUnlocked(), 7, profile.getName()),
                     field(recommendation.isDepartmentUnlocked(), 5, profile.getDepartment()),
                     field(recommendation.isReasonUnlocked(), 3, recommendation.getReasonContent()));
-            return new CandidateCard(rank, profile.getId(), recommendation.getScore(),
+            return new CandidateCard(rank, profile.getId(), recommendation.getScore(), age,
                     profile.getMbti(), profile.getBio(), blurredPhotoUrl, fields);
         }
 
