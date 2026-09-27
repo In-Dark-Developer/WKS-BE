@@ -39,11 +39,13 @@ public class DatingRequestService {
     private final DatingPhotoService photoService;
     private final ResultRepository resultRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final DatingReasonService reasonService;
 
     public DatingRequestService(EntityManager entityManager, DatingProfileRepository profileRepository,
                                 DatingRecommendationRepository recommendationRepository,
                                 DatingRequestRepository requestRepository, DatingPhotoService photoService,
-                                ResultRepository resultRepository, ApplicationEventPublisher eventPublisher) {
+                                ResultRepository resultRepository, ApplicationEventPublisher eventPublisher,
+                                DatingReasonService reasonService) {
         this.entityManager = entityManager;
         this.profileRepository = profileRepository;
         this.recommendationRepository = recommendationRepository;
@@ -51,6 +53,7 @@ public class DatingRequestService {
         this.photoService = photoService;
         this.resultRepository = resultRepository;
         this.eventPublisher = eventPublisher;
+        this.reasonService = reasonService;
     }
 
     @Transactional
@@ -114,6 +117,11 @@ public class DatingRequestService {
                 throw new IllegalStateException("Missing recommendation for dating request " + request.getId());
             }
             boolean received = request.getRecipient().getMemberId().equals(memberId);
+            if (received && request.getRecipientReason() == null) {
+                // 요청 직후 생성이 실패한 이유를 다시 만든다. 이번 응답은 null 로 나가고 다음 조회에 채워진다.
+                // ponytail: 목록 조회마다 실패 요청 수만큼 LLM 재시도. 축제 규모(수백 건)면 CallBudget 안이다
+                reasonService.fillRecipientReasonAsync(request.getId());
+            }
             DatingProfile other = received ? request.getSender() : request.getRecipient();
             String originalPhotoUrl = received || recommendation.isPhotoUnlocked()
                     ? photoService.originalUrl(other.getPhoto()) : null;

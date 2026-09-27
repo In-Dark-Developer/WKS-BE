@@ -22,7 +22,7 @@
 | 배포 상태 | ✅ 2026-09-26: `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버, 둘 다 EC2 에서 동작. `dev` 의 로그인·소개팅 커밋은 아직 `main` 미릴리즈 — **릴리즈 전에 아래 "막혀 있는 것"의 운영 `.env` 항목부터** |
 | 개발 서버 (`api-dev.threadoffate.site`) | ✅ 2026-09-26 기동(`wks_dev` DB, Flyway V18). **단 `SPRING_PROFILES_ACTIVE: dev` 수정이 `dev` 에 머지되기 전에 누가 `dev` 에 push 하면 다시 죽는다** — 아래 2026-09-26 인프라 기록 |
 | `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
-| Flyway 최신 버전 | V23 (`dev` 기준, 2026-09-27 로컬 확인). V12는 폐기(아래 예약 표) |
+| Flyway 최신 버전 | V24 (`dev` 기준, 2026-09-28 확인). V25 는 #123 PR 대기. V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
 | 실(재화) | ✅ 원장·자동지급 3종·소개팅 해금 `dev` 머지 완료(#97). 🔧 2026-09-27 리롤 구현(TBD-6 종료, 미커밋). 🔧 2026-09-27 해금을 여러 필드 묶음 요청으로 변경(전체 해금 포함, 미커밋). 제휴처 보상(`PARTNER`)은 미구현 |
 | api-spec 프론트 전달 | ❌ 미전달 |
@@ -56,6 +56,7 @@
 
 | 번호  | 예약자 | 내용 | 상태 |
 |-----|---|---|---|
+| V25 | 차은호 | #123 `dating_request` 에 `recipient_reason TEXT` (받은 사람 기준 궁합 이유 캐시) | PR |
 | V24 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
 | V23 | 최선우 | #100 소개팅 요청 `CANCELLED` 상태 및 취소 후 재요청 허용을 위한 부분 UNIQUE 인덱스 | dev 머지 완료 (PR #101) |
 | V22 | 곽도윤 | `signup_reapply_invite` (기존 사전신청자 재신청 초대 토큰, TTL 48시간). **축제 후 버려도 되는 1회성 캠페인 테이블** | dev 머지 완료 (#97) |
@@ -117,6 +118,7 @@
 |---|---|---|
 | 2026-09-27 | `POST /api/signups`·`POST /api/signups/resend` — `resultId` 가 있고 계정에 연결 안 된 신청이면 **인증 메일 대신 재신청 매직링크**를 보낸다. 요청·응답 필드 변경 없음, `message` 문구만 바뀜. 결과 없는 신청은 기존 인증 메일. `api-spec.md` §5 | ❌ |
 | 2026-09-27 | `GET /api/me` 의 `hasDatingProfile` 이 이제 실제 값이다(그동안 항상 `false`). 소개팅 프로필 등록(=학교메일 인증 완료 신청자)이면 `true`. 형식 변경 없음. `api-spec.md` §9 | ❌ |
+| 2026-09-28 | #123 `GET /api/dating/requests?box=received`·`?box=sent` 의 `counterpart.fields` 에 `reason` 추가. 받은 목록은 **받은 사람 기준** 문장, 무료, 항상 `locked:false`. 요청 직후·생성 실패 시 `value:null` → 잠시 후 목록 재조회. 보낸 목록은 카드와 같은 해금 상태. `api-spec.md` §11.1 | ❌ |
 | 2026-09-28 | #121 `POST /api/dating/candidates/{candidateId}/unlock` 에 `REASON` 포함 시 503 `LLM_UNAVAILABLE` 이면 **고른 필드 전부 차감·해금되지 않는다**(이유를 먼저 만들고 차감). "잠시 후 다시 시도" 안내. 요청·응답 형식 변경 없음. `api-spec.md` §10.5 | ❌ |
 | 2026-09-27 | **[해금 요청·응답 형식 변경, 프론트 대응 필수]** `POST /api/dating/candidates/{candidateId}/unlock` 요청 `{"field":"PHOTO"}` → `{"fields":["PHOTO","NAME"]}`(하나만 열어도 배열), 응답 `field`·`value` → `values: {"PHOTO": "...", "NAME": "..."}` + `balance`. 네 개 전부 = 전체 해금(25, 이미 연 필드는 빠짐). 잔액 부족 402면 **아무 필드도 안 열린다.** `api-spec.md` §10.5 | ❌ |
 | 2026-09-27 | **[리롤 신규]** `POST /api/dating/recommendations/reroll` — 현재 카드 3장을 전부 새 후보로 교체. 하루(KST) 1회 무료, 이후 5실. 응답 `candidates`·`rerollCost`·`threadBalance`. 새 후보 없으면 409 `DATING_NO_MORE_CANDIDATES`(차감 없음), 잔액 부족 402. `GET /api/dating/recommendations` 에 `rerollCost` 필드 추가. **연타 방지는 프론트 몫.** `api-spec.md` §10.4·§10.4.1 | ❌ |
@@ -175,6 +177,36 @@
 ---
 
 ## 기록
+
+### 2026-09-28 (월) · 차은호 · dating/ 받은 요청 목록에 받은 사람 기준 궁합 이유 (#123) · Claude Code
+
+**한 일**
+- 프론트 "나에게 요청한 사람" 카드에서 궁합 이유만 블러로 보이던 원인: 받은 요청 목록 API 에 `reason` 필드 자체가 없었다(기획·계약 둘 다 없던 항목). 처음엔 해금 API 버그로 의심했으나 dev DB 에 "해금됐는데 이유 null" 행은 0건
+- `dating_request.recipient_reason` (V25) 에 **받은 사람 기준** 문장을 요청당 1회 캐시. 추천 행의 `reason_content` 는 보낸 사람 시점 문장이라 재사용 불가
+- 생성은 요청 커밋 뒤 `applicationTaskExecutor` 에서 (`DatingReasonService.onRequestSent`, `DatingRequestNotifier` 와 같은 AFTER_COMMIT 패턴). 요청 응답·트랜잭션을 LLM 이 붙잡지 않는다. 실패는 로그만 남기고 받은 목록 조회 때 다시 시도(`fillRecipientReasonAsync`, 같은 요청은 `inFlight` 로 중복 호출 방지)
+- 응답 `counterpart.fields.reason` 추가. 받은 목록 `locked:false`(생성 전 `value:null`), 보낸 목록은 카드와 같은 해금 상태
+
+**건드린 파일/패키지**
+- `dating/DatingReasonService.java`(생성자에 `DatingRequestRepository`·`TaskExecutor` 추가), `DatingRequestService.java`, `DatingRequestRepository.java`, `entity/DatingRequest.java`, `dto/DatingRequestListResponse.java`
+- `db/migration/V25__add_dating_request_recipient_reason.sql`
+- 테스트: `DatingReasonServiceTest`(받은 사람이 viewer 자리, 실패 삼킴, 캐시), `DatingSchemaTest.receivedRequestGetsRecipientReasonAfterCommit`
+
+**다음 사람이 알아야 할 것**
+- 프롬프트는 그대로다. viewer·candidate 자리만 바꿔 넣는다 — 문장의 "당신" 이 받은 사람이 된다
+- 점수는 보낸 사람 추천 때 저장한 값(`counterpart.score` 와 동일). 받은 사람 → 보낸 사람 방향 추천 행은 없을 수 있어 그쪽 점수는 안 본다
+- `DatingSchemaTest` 의 `@Transactional` 테스트가 받은 목록을 조회하면 별도 스레드가 미커밋 요청을 못 찾아 `dating recipient reason failed ... NoSuchElementException` 경고를 남긴다. 테스트 노이즈일 뿐 실패는 아니다
+- LLM 호출 1회/요청 추가. `CallBudget`(1,600/일) 은 공용이라 요청 수가 급증하면 사주·카드 이유와 한도를 나눠 쓴다
+- 어젯밤(9/28 01:39 KST) dev `member` 가 전부 지워진 흔적(id 1~16 소실, 17부터 재생성). 옛 쿠키가 FK 위반 500 을 냈다. 누가·왜 지웠는지 미확인
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §11.1 (`reason` 필드, 받은 사람 기준 설명)
+- `handoff.md` V25 예약, 프론트 공지 표
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-28 #123 행. 받은 목록 `reason.value` 가 `null` 이면 "생성 중" 처리 후 재조회
 
 ### 2026-09-28 (월) · 차은호 · dating/ REASON 해금 순서 변경 (이유 생성 → 차감) · Claude Code
 
