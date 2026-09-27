@@ -10,6 +10,7 @@ import com.darkness.wks.signup.dto.ResendSignupResponse;
 import com.darkness.wks.signup.dto.SignupResponse;
 import com.darkness.wks.signup.entity.EmailVerification;
 import com.darkness.wks.signup.entity.Signup;
+import com.darkness.wks.signup.entity.SignupReapplyInvite;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +37,7 @@ public class SignupService {
     private final ResultRepository resultRepository;
     private final EmailVerificationService emailVerificationService;
     private final PhotoUploadService photoUploadService;
+    private final SignupReapplyService reapplyService;
 
     // 팀 결정 전 임시 설정값. 비워두면(로컬 기본값) 도메인 검증을 건너뛴다 — docs/todo.md §3 "학교 웹메일 도메인 화이트리스트" 미결정 참고
     @Value("${app.signup.allowed-email-domains}")
@@ -61,8 +63,9 @@ public class SignupService {
         signup.issueCoupon();
         signupRepository.save(signup);
 
-        EmailVerification verification = emailVerificationService.issueToken(signup);
-        boolean mailSent = trySendVerificationEmail(email, verification.getToken());
+        boolean mailSent = canLinkByInvite(signup)
+                ? trySendInvite(signup)
+                : trySendVerificationEmail(email, emailVerificationService.issueToken(signup).getToken());
 
         log.info("signup created. id={}, mailSent={}", signup.getId(), mailSent);
         return SignupResponse.of(signup, mailSent);
@@ -72,6 +75,10 @@ public class SignupService {
     public ResendSignupResponse resend(String email) {
         Signup signup = signupRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT));
+        // 매직링크 대상은 이메일 인증 여부와 무관하다 — 메일을 잃어버렸으면 새 초대를 다시 보낸다
+        if (canLinkByInvite(signup)) {
+            return ResendSignupResponse.of(trySendInvite(signup));
+        }
         if (signup.isVerified()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -79,6 +86,29 @@ public class SignupService {
         EmailVerification verification = emailVerificationService.issueToken(signup);
         boolean mailSent = trySendVerificationEmail(signup.getEmail(), verification.getToken());
         return ResendSignupResponse.of(mailSent);
+    }
+
+    /**
+     * 사주 결과가 있고 아직 어느 계정에도 붙지 않았으면 인증 메일 대신 재신청 매직링크를 보낸다(2026-09-27).
+     * 소개팅이 열린 뒤의 사전신청은 결국 카카오 로그인으로 그 결과를 계정에 잇고 소개팅 신청을 마쳐야 하는데,
+     * 인증 메일로는 그 흐름에 들어갈 방법이 없다. 결과가 없으면 이을 것이 없어 기존 인증 메일을 보낸다.
+     */
+    private boolean canLinkByInvite(Signup signup) {
+        return signup.getResult() != null && signup.getResult().getMemberId() == null;
+    }
+
+    private boolean trySendInvite(Signup signup) {
+        SignupReapplyInvite invite = reapplyService.issueInvite(signup.getId());
+        try {
+            reapplyService.sendInviteEmail(signup.getEmail(), invite.getToken());
+            return true;
+        } catch (SignupReapplyService.InviteMailFailedException exception) {
+            // 남겨두면 유효한 초대로 보여 캠페인 재시도 대상에서 빠진다(SignupReapplyCampaignRunner 와 같은 처리)
+            reapplyService.discardInvite(invite.getToken());
+            log.warn("signup invite mail failed. signupId={}, cause={}", signup.getId(),
+                    exception.getCause().getClass().getSimpleName());
+            return false;
+        }
     }
 
     @Transactional
