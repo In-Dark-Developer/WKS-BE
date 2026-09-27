@@ -380,13 +380,18 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
     "signupId": 1024,
     "couponIssued": true,
     "mailSent": true,
-    "message": "신청이 접수됐다. 인증 메일을 확인해라."
+    "message": "신청이 접수됐어요. 메일함(스팸함 포함)을 확인해 주세요."
   }
 }
 ```
 
 `mailSent: false` 여도 신청은 성공이다. SMTP 실패가 신청을 롤백시키지 않는다.
 프론트는 이 경우 재발송 안내를 노출한다.
+
+**보내는 메일 (2026-09-27 변경).** `resultId` 가 있고 그 결과가 아직 어느 계정에도 연결되지 않았으면 인증 메일 대신
+**재신청 매직링크**(아래 `GET /api/signups/reapply` 와 같은 초대 메일, 링크 = `app.frontend.reapply-url?token=`)를 보낸다.
+소개팅이 열린 뒤의 사전신청은 결국 카카오 로그인으로 그 결과를 계정에 잇고 소개팅 신청을 마쳐야 하기 때문이다.
+`resultId` 가 없거나 이미 계정에 연결된 결과면 기존대로 인증 메일을 보낸다. 요청·응답 형식은 그대로다.
 
 ### `POST /api/signups/resend`
 
@@ -396,7 +401,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 { "email": "dev@dgu.ac.kr" }
 ```
 
-메일 재발송. 이미 인증 완료된 이메일이면 400 `INVALID_INPUT` (전용 에러코드 없음).
+메일 재발송. 신청 때와 같은 규칙으로 보낸다 — 연결 안 된 사주 결과가 있으면 **새 재신청 매직링크**(이메일 인증 여부와 무관),
+아니면 인증 메일. 인증 메일 대상인데 이미 인증 완료된 이메일이면 400 `INVALID_INPUT` (전용 에러코드 없음).
 신청 내역이 없는 이메일도 400 `INVALID_INPUT`.
 
 **Response 200**
@@ -406,7 +412,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "success": true,
   "data": {
     "mailSent": true,
-    "message": "인증 메일을 재발송했다."
+    "message": "메일을 다시 보냈어요."
   }
 }
 ```
@@ -756,6 +762,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
       "rank": 1,
       "candidateId": "3f2a9c1e-0000-4000-8000-000000000001",
       "score": 90,
+      "age": "02년생",
       "mbti": "INFP",
       "bio": "안녕하세요",
       "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
@@ -770,6 +777,8 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
   }
 }
 ```
+
+`age`(2026-09-27 추가)는 상대의 **양력 출생연도 끝 두 자리 + "년생"** 문자열(예: 2000년생 → `"00년생"`, 1998년생 → `"98년생"`)이며 기본 공개다. 서버가 만들므로 화면은 그대로 표시한다. 생년월일·시간은 내려주지 않는다. 사주 결과가 연결되지 않은 예외 상황에서는 `null` 일 수 있다.
 
 `rerollCost`(2026-09-27 추가)는 **지금 리롤하면 드는 실**이다. 오늘(KST) 무료 리롤이 남았으면 `0`, 다 썼으면 `5`. 리롤 버튼에 "무료"/"5실" 표시에 쓴다.
 
@@ -961,6 +970,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
     "contactValue": null,
     "counterpart": {
       "score": 83,
+      "age": "02년생",
       "mbti": "INFP",
       "bio": "안녕하세요",
       "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
@@ -989,6 +999,7 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
     "contactValue": null,
     "counterpart": {
       "score": 83,
+      "age": "01년생",
       "mbti": "ESTP",
       "bio": "축제를 좋아해요",
       "blurredPhotoUrl": "https://s3.example.com/temporary-blurred-photo-url",
@@ -1002,11 +1013,13 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 }
 ```
 
-두 목록은 같은 구조를 쓴다. `candidateId`는 **조회한 사람 기준 상대의 프로필 ID**여서, 같은 요청도 보낸 사람의 목록과 받은 사람의 목록에서 값이 다르다. 목록에만 `counterpart`가 추가되고 요청 생성·수락·거절·취소 응답 구조는 유지된다. `counterpart.score`는 발신자 추천 때 저장한 점수이며, 추천 카드가 비활성화돼도 목록에서 조회할 수 있다. `counterpart.fields.*`는 추천 카드와 같이 잠긴 값은 `null`로 두고 `cost`만 제공한다. 받은 목록에서는 발신자의 사진·이름·학과를 실 차감 없이 볼 수 있다. 원본 사진은 만료되는 S3 조회 URL이며 S3 키는 응답에 없다.
+두 목록은 같은 구조를 쓴다. `candidateId`는 **조회한 사람 기준 상대의 프로필 ID**여서, 같은 요청도 보낸 사람의 목록과 받은 사람의 목록에서 값이 다르다. 목록에만 `counterpart`가 추가되고 요청 생성·수락·거절·취소 응답 구조는 유지된다. `counterpart.score`는 발신자 추천 때 저장한 점수이며, 추천 카드가 비활성화돼도 목록에서 조회할 수 있다. `counterpart.age`(2026-09-27 추가)는 §10.4 카드와 같은 기본 공개 나이 표기(`"00년생"`)다. `counterpart.fields.*`는 추천 카드와 같이 잠긴 값은 `null`로 두고 `cost`만 제공한다. 받은 목록에서는 발신자의 사진·이름·학과를 실 차감 없이 볼 수 있다. 원본 사진은 만료되는 S3 조회 URL이며 S3 키는 응답에 없다.
 
 `status`는 `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED` 중 하나다. `ACCEPTED`에서만 **해당 요청의 상대 연락처**를 반환하며, 나머지 상태에서는 `contactMethod`·`contactValue`가 `null`이다. 취소 내역은 보낸 목록에 남지만 받은 목록에서는 제외한다. 수락·거절·취소 응답도 기존 요청 객체이며 `respondedAt`이 채워진다. 요청 수에 상한은 없다.
 
 본인 요청, 이미 유효한 요청이 있는 두 사람의 재요청, 현재 추천 카드에 없는 상대는 거절한다. 한 쌍은 방향을 바꿔도 동시에 유효한 요청을 하나만 가질 수 있다. 취소 후에는 같은 상대가 현재 추천 카드에 있다면 재요청할 수 있고, 거절 후 재요청은 허용하지 않는다. 요청을 보내려면 내 학교 메일 인증이 완료돼 있어야 한다. 수락 후에도 양쪽은 계속 소개팅을 이용하고 다른 사람의 추천 후보에 남는다. 수락이 다른 요청의 상태를 바꾸지는 않는다. 실 기능과는 별개다.
+
+요청이 생성되면 받는 사람의 학교 메일로 "새 소개팅 신청이 도착했다"는 알림 메일이 간다(2026-09-27 추가). 메일에는 보낸 사람 정보가 없고, 발송은 비동기라 실패해도 요청 생성 응답에는 영향이 없다. 수락·거절·취소는 메일을 보내지 않는다.
 
 ### 11.2 보낸 요청 취소 — `POST /api/dating/requests/{id}/cancel`
 

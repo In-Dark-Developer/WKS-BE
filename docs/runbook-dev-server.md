@@ -215,6 +215,7 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint certbot certbot 
 
 ```bash
 docker compose -f docker-compose.prod.yml exec nginx ls -la /etc/letsencrypt/live/api-dev.threadoffate.site/   # fullchain.pem, privkey.pem
+sudo ls /etc/letsencrypt/live/api-dev.threadoffate.site/   # fullchain.pem, privkey.pem 확인
 ```
 
 **실패 시**: 대부분 DNS 전파 미완료(`dig` 재확인) 또는 5단계 80번 블록이 제대로 reload 안 된 경우다. `docker compose -f docker-compose.prod.yml logs nginx`로 확인.

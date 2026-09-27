@@ -34,6 +34,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
+      # 빠지면 발신 주소가 기본값(noreply@wks.local)이 되고, Gmail 이 계정 주소로 덮어쓰면서 발신 이름까지 사라진다
+      MAIL_FROM: ${MAIL_FROM}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       VERIFY_REDIRECT_URL: ${VERIFY_REDIRECT_URL}
