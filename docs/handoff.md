@@ -115,6 +115,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-27 | `POST /api/signups`·`POST /api/signups/resend` — `resultId` 가 있고 계정에 연결 안 된 신청이면 **인증 메일 대신 재신청 매직링크**를 보낸다. 요청·응답 필드 변경 없음, `message` 문구만 바뀜. 결과 없는 신청은 기존 인증 메일. `api-spec.md` §5 | ❌ |
 | 2026-09-27 | `GET /api/me` 의 `hasDatingProfile` 이 이제 실제 값이다(그동안 항상 `false`). 소개팅 프로필 등록(=학교메일 인증 완료 신청자)이면 `true`. 형식 변경 없음. `api-spec.md` §9 | ❌ |
 | 2026-09-27 | **[해금 요청·응답 형식 변경, 프론트 대응 필수]** `POST /api/dating/candidates/{candidateId}/unlock` 요청 `{"field":"PHOTO"}` → `{"fields":["PHOTO","NAME"]}`(하나만 열어도 배열), 응답 `field`·`value` → `values: {"PHOTO": "...", "NAME": "..."}` + `balance`. 네 개 전부 = 전체 해금(25, 이미 연 필드는 빠짐). 잔액 부족 402면 **아무 필드도 안 열린다.** `api-spec.md` §10.5 | ❌ |
 | 2026-09-27 | **[리롤 신규]** `POST /api/dating/recommendations/reroll` — 현재 카드 3장을 전부 새 후보로 교체. 하루(KST) 1회 무료, 이후 5실. 응답 `candidates`·`rerollCost`·`threadBalance`. 새 후보 없으면 409 `DATING_NO_MORE_CANDIDATES`(차감 없음), 잔액 부족 402. `GET /api/dating/recommendations` 에 `rerollCost` 필드 추가. **연타 방지는 프론트 몫.** `api-spec.md` §10.4·§10.4.1 | ❌ |
@@ -173,6 +174,33 @@
 ---
 
 ## 기록
+
+### 2026-09-27 (일) · 곽도윤 · signup/ 새 사전신청에도 인증 메일 대신 매직링크 발송 · Claude Code
+
+**한 일**
+- `SignupService.createSignup`·`resend`: 사주 결과가 있고 아직 계정에 연결되지 않은 신청이면 `SignupReapplyService` 로
+  초대를 발급해 **재신청 매직링크 메일**을 보낸다(사용자 요청). 기존 사전신청자에게 캠페인으로 보낸 것과 같은 메일·링크다.
+  인증 메일로는 카카오 로그인 → 결과 연결 → 소개팅 신청 흐름에 들어갈 방법이 없었다
+- 결과가 없거나 이미 계정에 연결된 결과면 기존 인증 메일 그대로. 발송 실패한 초대는 지운다(캠페인 러너와 같은 처리)
+- `resend` 는 매직링크 대상이면 이메일 인증 여부와 무관하게 새 초대를 보낸다(메일 잃어버린 사람 구제)
+- 응답 `message` 문구를 "메일함(스팸함 포함) 확인"으로 바꿈. 필드는 그대로
+
+**건드린 파일/패키지**
+- `signup/` — `SignupService`, `SignupController`(Swagger 문구), `dto/SignupResponse`·`dto/ResendSignupResponse`(문구)
+- 테스트: `SignupServiceTest` — 매직링크 발송·발송 실패 시 초대 삭제·연결된 결과면 인증 메일·재발송 매직링크 4건
+
+**다음 사람이 알아야 할 것**
+- 사전신청 시점에 초대가 발급되므로 캠페인(`REAPPLY_CAMPAIGN_MODE=send`)을 다시 돌려도 이 사람들에게 중복 발송되지 않는다(유효 초대가 있으면 제외)
+- 초대 TTL(`REAPPLY_INVITE_TTL_HOURS`)이 지나면 재발송 버튼으로 새 링크를 받을 수 있다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §5 `POST /api/signups`(보내는 메일)·`POST /api/signups/resend`
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-27 매직링크 항목. 사전신청 완료 안내 문구가 "인증 메일"을 가리키면 "메일"로 바꾸는 게 맞다
 
 ### 2026-09-27 (일) · 곽도윤 · member/ `GET /api/me` 의 `hasDatingProfile` 연결 · Claude Code
 
