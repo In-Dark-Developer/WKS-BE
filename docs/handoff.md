@@ -181,6 +181,31 @@
 
 ## 기록
 
+### 2026-09-29 (화) · (이름) · compatibility/·wallet/ 친구 등록 실 "1명당 3" → "5명당 3" · Claude Code
+
+**한 일**
+- 궁합지도 친구 등록 보상을 **서로 다른 친구 5명마다 3실**로 변경(사용자 결정). 같은 사람 한 번만 세기·나 자신 제외·로그인 소급은 그대로
+- 친구마다 원장 `MAP_FRIEND` 행을 남기고 5·10·15번째 행만 `amount = 3`, 나머지는 `0`(리롤 무료분과 같은 방식).
+  `WalletService.creditEveryNth` 신규 — 회원 advisory lock 안에서 세므로 동시 등록이 같은 순번을 받지 않는다
+
+**건드린 파일/패키지**
+- `wallet/` — `WalletService.creditEveryNth`, `ThreadLedgerRepository.countByMemberIdAndReason`
+- `compatibility/` — `MapFriendRewardService`
+- 테스트: `MapFriendRewardFlowTest`(4명 0 → 5명 3, 소급 6명 → 3, 이어서 10명 → 6), `CompatibilityServiceTest`
+
+**다음 사람이 알아야 할 것**
+- 순번은 `MAP_FRIEND` 행 수로 센다. 2026-09-28 이전에 "1명당 3" 으로 받은 행도 1명으로 센다(이미 받은 실은 그대로, 회수 없음)
+- 소급 지급은 궁합 등록 순서와 무관하게 행 수로만 세므로 총액은 같다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `plan.md` §1.4·§5.8, `api-spec.md` §12 표
+
+**프론트에 알려야 할 것**
+- API 형식 변경 없음. 화면 안내 문구가 "친구 1명당 실 3개" 라면 "친구 5명마다 실 3개" 로 바꿔야 한다
+
 ### 2026-09-28 (월) · 차은호 · saju/ Gemini 무료 3프로젝트 분산·503 유료 전환 (#127) · Codex → Claude Code
 
 **한 일**
