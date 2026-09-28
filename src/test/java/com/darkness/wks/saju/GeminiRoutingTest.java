@@ -35,7 +35,7 @@ class GeminiRoutingTest {
         var a = endpoint("a", null, 1, 100);
         var b = endpoint("b", null, 2, 100);
         var c = endpoint("c", null, 2, 100);
-        var pool = new GeminiClientPool(List.of(a, b, c), null, 60, 1600, clock);
+        var pool = new GeminiClientPool(List.of(a, b, c), null, clock);
         assertThat(pool.acquireFree()).isSameAs(a);
         assertThat(pool.acquireFree()).isSameAs(b);
         pool.failed(b, new ApiException(503, "UNAVAILABLE", "ignored"));
@@ -48,11 +48,11 @@ class GeminiRoutingTest {
     }
 
     @Test
-    void concurrentReservationsRespectGlobalAndProjectLimits() throws Exception {
-        var a = endpoint("a", null, 15, 100);
-        var b = endpoint("b", null, 15, 100);
-        var c = endpoint("c", null, 15, 100);
-        var pool = new GeminiClientPool(List.of(a, b, c), null, 20, 1600, clock);
+    void concurrentReservationsRespectProjectLimits() throws Exception {
+        var a = endpoint("a", null, 7, 100);
+        var b = endpoint("b", null, 7, 100);
+        var c = endpoint("c", null, 6, 100);
+        var pool = new GeminiClientPool(List.of(a, b, c), null, clock);
         var executor = Executors.newFixedThreadPool(8);
         try {
             var jobs = new ArrayList<java.util.concurrent.Callable<Boolean>>();
@@ -60,9 +60,9 @@ class GeminiRoutingTest {
             int accepted = 0;
             for (var future : executor.invokeAll(jobs)) if (future.get()) accepted++;
             assertThat(accepted).isEqualTo(20);
-            assertThat(a.budget.status()).startsWith("minute=7/15");
-            assertThat(b.budget.status()).startsWith("minute=7/15");
-            assertThat(c.budget.status()).startsWith("minute=6/15");
+            assertThat(a.budget.status()).startsWith("minute=7/7");
+            assertThat(b.budget.status()).startsWith("minute=7/7");
+            assertThat(c.budget.status()).startsWith("minute=6/6");
         } finally {
             executor.shutdownNow();
         }
@@ -71,7 +71,7 @@ class GeminiRoutingTest {
     @Test
     void quotaRetryDelayDailyLimitAndInvalidCredentialsAreRespected() {
         var a = endpoint("a", null, 15, 100);
-        var pool = new GeminiClientPool(List.of(a), null, 60, 1600, clock);
+        var pool = new GeminiClientPool(List.of(a), null, clock);
         pool.failed(a, new ApiException(429, "RESOURCE_EXHAUSTED", "Details: "
                 + "{\"@type\":\"type.googleapis.com/google.rpc.RetryInfo\",\"retryDelay\":\"120s\"}"));
         clock.now = clock.now.plusSeconds(60);
@@ -90,36 +90,80 @@ class GeminiRoutingTest {
     }
 
     @Test
-    void google503FallsBackOnceBut429AndMalformedJsonDoNot() throws Exception {
+    void sajuReserveIsLeftOnlyForSaju() {
+        var paid = endpoint("paid", null, 5, 3);
+        var pool = new GeminiClientPool(List.of(), paid, Map.of(LlmPurpose.SAJU, 1), clock);
+        assertThat(pool.acquirePaid(LlmPurpose.DATING)).isSameAs(paid);
+        assertThat(pool.acquirePaid(LlmPurpose.COMPATIBILITY)).isSameAs(paid);
+        assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNull(); // 남은 1회는 사주 예약분
+        assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isSameAs(paid);
+        assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNull();
+        clock.now = Instant.parse("2026-09-29T07:00:00Z"); // 태평양 자정 뒤 다시 찬다
+        assertThat(pool.acquirePaid(LlmPurpose.DATING)).isSameAs(paid);
+    }
+
+    @Test
+    void sajuCanAlsoSpendTheSharedPart() {
+        var paid = endpoint("paid", null, 5, 3);
+        var pool = new GeminiClientPool(List.of(), paid, Map.of(LlmPurpose.SAJU, 1), clock);
+        for (int i = 0; i < 3; i++) assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isSameAs(paid);
+        assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNull();
+        assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNull();
+    }
+
+    @Test
+    void google503And429FallBackOnceButMalformedJsonDoesNot() throws Exception {
         try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
             server.status.put("free", 503);
-            var json = json(free, paid, 60, 25_000, System::nanoTime);
-            assertThat(json.generate("system", "synthetic", List.of("why"))).containsEntry("why", "ok");
+            var json = json(free, paid, 100, 25_000, System::nanoTime);
+            assertThat(json.generate(LlmPurpose.COMPATIBILITY, "system", "synthetic", List.of("why"))).containsEntry("why", "ok");
             assertThat(server.count("free")).isEqualTo(1);
             assertThat(server.count("paid")).isEqualTo(1);
 
             server.status.put("free", 429);
-            unavailable(json(free, paid, 60, 25_000, System::nanoTime));
+            assertThat(json(free, paid, 100, 25_000, System::nanoTime)
+                    .generate(LlmPurpose.SAJU, "system", "synthetic", List.of("why"))).containsEntry("why", "ok");
             assertThat(server.count("free")).isEqualTo(2);
-            assertThat(server.count("paid")).isEqualTo(1);
+            assertThat(server.count("paid")).isEqualTo(2);
 
             server.status.put("free", 200);
             server.text = "not json";
-            unavailable(json(free, paid, 60, 25_000, System::nanoTime));
+            unavailable(json(free, paid, 100, 25_000, System::nanoTime));
             assertThat(server.count("free")).isEqualTo(3);
-            assertThat(server.count("paid")).isEqualTo(1);
+            assertThat(server.count("paid")).isEqualTo(2);
         }
     }
 
     @Test
-    void paidFailureAndExhaustedGlobalBudgetNeverCauseThirdCall() throws Exception {
+    void exhaustedFreeProjectsGoStraightToPaidOnce() throws Exception {
+        try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
+            var pool = new GeminiClientPool(List.of(endpoint("free", free, 15, 1)),
+                    endpoint("paid", paid, 5, 100), clock);
+            var json = new GeminiJson(pool, "model", 12_000, 25_000, System::nanoTime);
+            json.generate(LlmPurpose.SAJU, "system", "synthetic", List.of("why"));
+            assertThat(server.count("free")).isEqualTo(1);
+            assertThat(server.count("paid")).isZero();
+
+            json.generate(LlmPurpose.SAJU, "system", "synthetic", List.of("why"));
+            assertThat(server.count("free")).isEqualTo(1);
+            assertThat(server.count("paid")).isEqualTo(1);
+
+            server.status.put("paid", 429);
+            unavailable(json);
+            assertThat(server.count("free")).isEqualTo(1);
+            assertThat(server.count("paid")).isEqualTo(2);
+        }
+    }
+
+    @Test
+    void paidFailureAndExhaustedPaidBudgetNeverCauseThirdCall() throws Exception {
         try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
             server.status.put("free", 503);
             server.status.put("paid", 503);
-            unavailable(json(free, paid, 60, 25_000, System::nanoTime));
+            unavailable(json(free, paid, 100, 25_000, System::nanoTime));
             assertThat(server.count("free")).isEqualTo(1);
             assertThat(server.count("paid")).isEqualTo(1);
-            unavailable(json(free, paid, 1, 25_000, System::nanoTime));
+            unavailable(json(free, paid, 0, 25_000, System::nanoTime));
             assertThat(server.count("free")).isEqualTo(2);
             assertThat(server.count("paid")).isEqualTo(1);
         }
@@ -129,8 +173,8 @@ class GeminiRoutingTest {
     void unavailablePaidAndExpiredDeadlineDoNotSendFallback() throws Exception {
         try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
             server.status.put("free", 503);
-            unavailable(json(free, null, 60, 25_000, System::nanoTime));
-            unavailable(json(free, paid, 60, 25_000,
+            unavailable(json(free, null, 100, 25_000, System::nanoTime));
+            unavailable(json(free, paid, 100, 25_000,
                     () -> server.count("free") >= 2 ? 25_000_000_000L : 0));
             assertThat(server.count("free")).isEqualTo(2);
             assertThat(server.count("paid")).isZero();
@@ -138,17 +182,17 @@ class GeminiRoutingTest {
     }
 
     @Test
-    void sdkTimeoutEndsCallWithoutRetryOrPaidFallback() throws Exception {
+    void sdkTimeoutFallsBackToPaidOnce() throws Exception {
         try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
             server.delayMillis = 600;
             var pool = new GeminiClientPool(List.of(endpoint("free", free, 15, 100)),
-                    endpoint("paid", paid, 5, 100), 60, 1600, clock);
+                    endpoint("paid", paid, 5, 100), clock);
             var json = new GeminiJson(pool, "model", 150, 2000, System::nanoTime);
             long start = System.nanoTime();
             unavailable(json);
             assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(1500);
             assertThat(server.count("free")).isEqualTo(1);
-            assertThat(server.count("paid")).isZero();
+            assertThat(server.count("paid")).isEqualTo(1);
         }
     }
 
@@ -167,6 +211,23 @@ class GeminiRoutingTest {
                     assertThat(pool.acquireFree().alias).isEqualTo("free-2");
                     assertThat(pool.acquireFree().alias).isEqualTo("free-3");
                 });
+        runner.withPropertyValues("gemini.free-projects[0].api-key=k1", "gemini.free-projects[1].api-key=k2",
+                "gemini.free-projects[2].api-key=k3", "gemini.free-projects[3].api-key=k4",
+                "gemini.free-projects[4].api-key=k5", "gemini.free-projects[5].api-key=k6",
+                "gemini.paid-project.api-key=paid", "gemini.paid-project.max-per-day=2",
+                "gemini.paid-saju-reserve-per-day=1")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    var pool = context.getBean(GeminiClientPool.class);
+                    for (int i = 1; i <= 6; i++) assertThat(pool.acquireFree().alias).isEqualTo("free-" + i);
+                    assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNotNull();
+                    assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNull();
+                    assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNotNull();
+                });
+        runner.withPropertyValues("gemini.free-projects[0].api-key=k1", "gemini.free-projects[1].api-key=k2",
+                "gemini.free-projects[2].api-key=k3", "gemini.free-projects[3].api-key=k4",
+                "gemini.free-projects[4].api-key=k5", "gemini.free-projects[5].api-key=k6",
+                "gemini.free-projects[6].api-key=k7").run(context -> assertThat(context).hasFailed());
         runner.withPropertyValues("gemini.api-key=legacy").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(GeminiClientPool.class).acquireFree()).isNotNull();
@@ -179,15 +240,15 @@ class GeminiRoutingTest {
         return new GeminiClientPool.Endpoint(alias, client, rpm, rpd, clock);
     }
 
-    private GeminiJson json(Client free, Client paid, int totalRpm, int totalMillis,
+    private GeminiJson json(Client free, Client paid, int paidRpd, int totalMillis,
                             java.util.function.LongSupplier nanoTime) {
         var pool = new GeminiClientPool(List.of(endpoint("free", free, 15, 100)),
-                paid == null ? null : endpoint("paid", paid, 5, 100), totalRpm, 1600, clock);
+                paid == null ? null : endpoint("paid", paid, 5, paidRpd), clock);
         return new GeminiJson(pool, "model", 12_000, totalMillis, nanoTime);
     }
 
     private void unavailable(GeminiJson json) {
-        assertThatThrownBy(() -> json.generate("system", "synthetic", List.of("why")))
+        assertThatThrownBy(() -> json.generate(LlmPurpose.COMPATIBILITY, "system", "synthetic", List.of("why")))
                 .isInstanceOf(BusinessException.class).extracting("errorCode").isEqualTo(ErrorCode.LLM_UNAVAILABLE);
     }
 
@@ -228,6 +289,8 @@ class GeminiRoutingTest {
                     exchange.close();
                 }
             });
+            // 기본 실행기는 스레드 하나라 지연 응답 중 다음 요청을 받지 못한다. 대체 호출이 도착했는지 세려면 동시에 받아야 한다
+            server.setExecutor(Executors.newCachedThreadPool());
             server.start();
         }
 

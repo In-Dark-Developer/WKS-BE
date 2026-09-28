@@ -32,7 +32,7 @@ public class ReadingGenerator {
     }
 
     public Reading generate(SajuPillars pillars, Map<ReadingCategory, Grade> grades, Gender gender) {
-        return toReading(gemini.generate(SYSTEM_PROMPT, buildPrompt(pillars, grades, gender), FIELDS));
+        return toReading(gemini.generate(LlmPurpose.SAJU, SYSTEM_PROMPT, buildPrompt(pillars, grades, gender), FIELDS));
     }
 
     /** 프롬프트용 오행 이름. 시스템 프롬프트의 "나무·불·흙·쇠·물의 기운"과 맞춘다 */

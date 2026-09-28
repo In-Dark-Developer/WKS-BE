@@ -42,7 +42,7 @@ public class CompatibilityReasonGenerator {
     }
 
     private CompatibilityReason generateWithLlm(SajuPillars a, SajuPillars b, int score, String tier) {
-        Map<String, String> m = gemini.generate(SYSTEM_PROMPT, buildPrompt(a, b, score, tier), FIELDS);
+        Map<String, String> m = gemini.generate(LlmPurpose.COMPATIBILITY, SYSTEM_PROMPT, buildPrompt(a, b, score, tier), FIELDS);
         return new CompatibilityReason(m.get("why"), m.get("together"), m.get("conflict"));
     }
 

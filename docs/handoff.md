@@ -183,6 +183,31 @@
 
 ## 기록
 
+### 2026-09-29 (화) · hairyung2002 · saju/ Gemini 무료 6키·유료 전환 확대·사주 예약분 (이슈 없음) · Claude Code
+
+**한 일**
+- 무료 프로젝트 키 최대 3개 → **6개**(`GEMINI_FREE_KEY_4~6`, `_RPM_4~6`, `_RPD_4~6`)
+- 유료 전환 조건 확대: 무료 호출의 Google **503·429·IO 실패(타임아웃 포함, 운영 실패의 34%)**, 그리고 **무료 키 전부 사용 불가**(키마다 하루 500회 소진·쿨다운)면 유료 1회. 파싱 실패·4xx 는 전환 없음. 요청당 HTTP 최대 2회 유지. 시도당 타임아웃은 **12초 유지**(8초 안을 검토했으나 사주 해석이 가장 길어 정상 호출을 자를 수 있어 되돌림. 최악 12+12 = 약 24초, 전체 예산 25초 안). 배포 뒤 `purpose=SAJU` 의 `ms=` 로 조정
+- `GeminiJson.generate(LlmPurpose, …)`: 호출 파트(`SAJU`·`COMPATIBILITY`·`DATING`)를 받아 로그에 남긴다. 유료는 **사주 예약분**(`GEMINI_PAID_SAJU_RESERVE_RPD`, 기본 42)을 둔다 — 사주가 아닌 호출은 유료 잔량이 예약분보다 많을 때만 쓰고, 사주는 전부 쓸 수 있다(사용자 결정: 하루 2만 원 중 공용 1만3천 원, 남은 7천 원은 사주 전용)
+- 궁합지도 궁합 이유는 #131 대로 사전 생성본이 먼저라 그대로 두고 LLM 경로 호출 인자만 맞췄다. 유료는 사실상 사주·소개팅 이유가 쓴다
+- **앱 전체 한도(`GEMINI_MAX_PER_MINUTE`·`_PER_DAY`) 제거.** 프로젝트별 예산 합이 곧 상한이고, 유료 값을 올릴 때 같이 안 올리면 유료가 막히는 실수만 만든다. `.env` 에 남아 있어도 무시된다
+- `gemini ok` 로그에 `in=`·`out=`(입력·출력+사고 토큰) 추가. 단가가 입력 $0.30·출력 $2.50/1M(3.5 Flash-Lite, 2026-09-29 가격 페이지 확인)이라 파트별 호출 비용을 정확히 환산하려고
+
+**건드린 파일/패키지**
+- `saju/`: 신규 `LlmPurpose`, `GeminiJson`, `GeminiClientPool`, `ReadingGenerator`·`CompatibilityReasonGenerator`(호출 인자만)
+- `dating/DatingReasonGenerator`(호출 인자만), `common/config/GeminiProperties`
+- `application.yml`, `docker-compose.prod.yml`, `docs/architecture.md`, `docs/runbook-dev-server.md`
+- `saju/CallBudget`(`remainingToday`)
+- 테스트: `GeminiRoutingTest`(429·IO 전환, 무료 소진 직행, 사주 예약분, 키 6개/7개 거부), `DatingReasonGeneratorTest`, `CompatibilityReasonGeneratorTest`(인자만)
+
+**다음 사람이 알아야 할 것**
+- **금액 한도는 호출 수로 환산해 `.env` 에 넣는다.** 앱은 금액을 모른다. 기본 사주 예약 42 는 비율 자리값이지 7천 원 환산이 아니다. 보수적 추정(사주 1회 4,000토큰 전부 출력 단가, 1,400원/$ → 약 14원)으로 `GEMINI_PAID_RPD=1400`, `GEMINI_PAID_SAJU_RESERVE_RPD=500`. 배포 뒤 `gemini ok` 의 `in=`·`out=` 로 실제 회당 비용을 재서 조정
+- 무료가 다 떨어지면 **모든 요청이 유료로 가므로 `GEMINI_PAID_RPM`(기본 5)이 병목**이 된다. 축제 트래픽이면 올릴 것
+- 카운터는 메모리라 배포마다 0. 실제 비용 상한은 GCP 콘솔 유료 프로젝트의 일일 요청 쿼터로 건다
+
+**막힌 것 / 넘기는 것**
+- 운영 `.env` 에 `GEMINI_FREE_KEY_4~6`·`GEMINI_PAID_RPM`·`GEMINI_PAID_RPD`·`GEMINI_PAID_SAJU_RESERVE_RPD` 추가(dev 는 유료 키를 넣지 않는다 — 앱 카운터가 따로라 한도가 두 배가 된다), GCP 쿼터 설정 — 배포 담당
+
 ### 2026-09-29 (화) · 차은호 · saju/ 궁합 이유 사전 생성본 (#131) · Claude Code
 
 **한 일**

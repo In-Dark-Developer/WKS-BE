@@ -13,16 +13,16 @@ public record GeminiProperties(
         @DefaultValue("gemini-3.5-flash-lite") String model,
         @DefaultValue("12") int timeoutSeconds,
         @DefaultValue("25") int totalTimeoutSeconds,
-        @DefaultValue("50") int maxPerMinute,
-        @DefaultValue("1600") int maxPerDay,
         List<Project> freeProjects,
-        Project paidProject
+        Project paidProject,
+        // 유료 RPD 중 사주만 쓸 수 있게 남겨 두는 호출 수. 다른 파트는 유료 잔량이 이보다 많을 때만 쓴다
+        @DefaultValue("42") int paidSajuReservePerDay
 ) {
     public GeminiProperties {
         apiKey = apiKey == null ? "" : apiKey.trim();
         freeProjects = freeProjects == null ? List.of() : List.copyOf(freeProjects);
-        if (model == null || model.isBlank() || freeProjects.size() > 3 || timeoutSeconds < 1 || totalTimeoutSeconds < 1
-                || timeoutSeconds > 30 || totalTimeoutSeconds > 30 || maxPerMinute < 1 || maxPerDay < 1) {
+        if (model == null || model.isBlank() || freeProjects.size() > 6 || timeoutSeconds < 1 || totalTimeoutSeconds < 1
+                || timeoutSeconds > 30 || totalTimeoutSeconds > 30 || paidSajuReservePerDay < 0) {
             throw new IllegalArgumentException("Invalid Gemini limits");
         }
         Set<String> keys = new HashSet<>();
@@ -42,7 +42,7 @@ public record GeminiProperties(
 
     public List<Project> activeFreeProjects() {
         List<Project> active = freeProjects.stream().filter(Project::configured).toList();
-        return !active.isEmpty() || apiKey.isBlank() ? active : List.of(new Project(apiKey, 15, maxPerDay));
+        return !active.isEmpty() || apiKey.isBlank() ? active : List.of(new Project(apiKey, 15, 500));
     }
 
     @Override

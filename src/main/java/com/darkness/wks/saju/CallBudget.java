@@ -46,6 +46,12 @@ final class CallBudget {
         return true;
     }
 
+    /** 오늘(태평양 날짜) 남은 호출 수. 분당 한도는 보지 않는다 */
+    synchronized int remainingToday() {
+        available();
+        return perDay - dayCount;
+    }
+
     synchronized String status() {
         available();
         return "minute=" + calls.size() + "/" + perMinute + " day=" + dayCount + "/" + perDay;

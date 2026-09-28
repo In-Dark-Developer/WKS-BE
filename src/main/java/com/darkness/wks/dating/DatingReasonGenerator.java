@@ -2,6 +2,7 @@ package com.darkness.wks.dating;
 
 import com.darkness.wks.saju.Element;
 import com.darkness.wks.saju.GeminiJson;
+import com.darkness.wks.saju.LlmPurpose;
 import com.darkness.wks.saju.SajuPillars;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +24,7 @@ public class DatingReasonGenerator {
     }
 
     public String generate(SajuPillars viewer, SajuPillars candidate, int score, String tier) {
-        return gemini.generate(SYSTEM_PROMPT, buildPrompt(viewer, candidate, score, tier),
+        return gemini.generate(LlmPurpose.DATING, SYSTEM_PROMPT, buildPrompt(viewer, candidate, score, tier),
                 List.of("reason")).get("reason");
     }
 

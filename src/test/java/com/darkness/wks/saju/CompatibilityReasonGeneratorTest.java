@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -54,7 +55,7 @@ class CompatibilityReasonGeneratorTest {
         assertThat(generator.generate(fire, wood, 80, "찰떡", 0, Set.of())).isEqualTo(banked);
         verifyNoInteractions(gemini);
 
-        when(gemini.generate(anyString(), any(), anyList()))
+        when(gemini.generate(eq(LlmPurpose.COMPATIBILITY), anyString(), any(), anyList()))
                 .thenReturn(Map.of("why", "왜", "together", "만나면", "conflict", "싸우면"));
         assertThat(generator.generate(fire, wood, 70, "벗", 0, Set.of()))
                 .isEqualTo(new CompatibilityReason("왜", "만나면", "싸우면"));
