@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -31,10 +32,12 @@ public class CompatibilityReasonGenerator {
 
     /**
      * @param tier    관계 유형 한글(귀인·찰떡·벗·스침). compatibility 패키지 enum 을 saju 가 모르게 문자열로 받는다
-     * @param ordinal 공유자가 같은 조합을 몇 번째 여는지(0부터). 사전 생성본의 변형 회전에만 쓴다
+     * @param ordinal        공유자가 같은 조합을 몇 번째 여는지(0부터). 사전 생성본의 변형 회전에만 쓴다
+     * @param shownSentences 공유자가 다른 궁합에서 이미 본 문장. 겹치는 변형을 피한다
      */
-    public CompatibilityReason generate(SajuPillars a, SajuPillars b, int score, String tier, int ordinal) {
-        return bank.pick(CompatibilityReasonBank.key(a, b, tier), ordinal)
+    public CompatibilityReason generate(SajuPillars a, SajuPillars b, int score, String tier, int ordinal,
+                                        Set<String> shownSentences) {
+        return bank.pick(CompatibilityReasonBank.key(a, b, tier), ordinal, shownSentences)
                 .orElseGet(() -> generateWithLlm(a, b, score, tier));
     }
 

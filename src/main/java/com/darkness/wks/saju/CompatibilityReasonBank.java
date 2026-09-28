@@ -1,10 +1,13 @@
 package com.darkness.wks.saju;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -65,15 +68,51 @@ public class CompatibilityReasonBank {
      * 어디서 시작하든 연속 n번은 어느 답도 같은 글이 안 나온다 — 변형 수보다 같은 조합을 많이 볼 때만 겹친다.
      */
     public Optional<CompatibilityReason> pick(String key, int ordinal) {
+        return pick(key, ordinal, Set.of());
+    }
+
+    /**
+     * {@link #pick(String, int)} 에 더해, 답마다 회전 순서를 따라가되 {@code shownSentences}(공유자가 이미 본 문장)와 겹치는
+     * 문장이 있는 변형은 건너뛴다. LLM 이 첫 문장을 정형구로 쓰는 일이 잦아 변형이 달라도 문장이 겹치기 때문이다.
+     * 전부 겹치면 겹치는 문장이 가장 적은 것.
+     */
+    public Optional<CompatibilityReason> pick(String key, int ordinal, Set<String> shownSentences) {
         List<CompatibilityReason> list = variants.get(key);
         if (list == null || list.isEmpty()) {
             return Optional.empty();
         }
-        int n = list.size(), o = Math.max(ordinal, 0);
+        int o = Math.max(ordinal, 0);
         return Optional.of(new CompatibilityReason(
-                list.get(o % n).why(),
-                list.get((o + 1) % n).together(),
-                list.get((o + 2) % n).conflict()));
+                choose(list, o, CompatibilityReason::why, shownSentences),
+                choose(list, o + 1, CompatibilityReason::together, shownSentences),
+                choose(list, o + 2, CompatibilityReason::conflict, shownSentences)));
+    }
+
+    private static String choose(List<CompatibilityReason> list, int from, Function<CompatibilityReason, String> field,
+                                 Set<String> shown) {
+        int n = list.size();
+        String best = null;
+        long bestOverlap = Long.MAX_VALUE;
+        for (int j = 0; j < n; j++) {
+            String text = field.apply(list.get((from + j) % n));
+            long overlap = shown.isEmpty() ? 0 : sentences(text).stream().filter(shown::contains).count();
+            if (overlap < bestOverlap) {
+                best = text;
+                bestOverlap = overlap;
+                if (overlap == 0) break;
+            }
+        }
+        return best;
+    }
+
+    /** 마침표·물음표·느낌표 뒤에서 나눈 문장. 이미 보여준 글과의 겹침 판정에만 쓴다 */
+    public static Set<String> sentences(String text) {
+        Set<String> out = new HashSet<>();
+        if (text == null) return out;
+        for (String s : text.split("(?<=[.!?])\\s+")) {
+            if (!s.isBlank()) out.add(s.strip());
+        }
+        return out;
     }
 
     int size() {
