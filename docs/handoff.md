@@ -181,12 +181,13 @@
 
 ## 기록
 
-### 2026-09-29 (화) · hairyung2002 · saju/ Gemini 무료 6키·429 유료 전환·사주 유료 몫 (#이슈번호) · Claude Code
+### 2026-09-29 (화) · hairyung2002 · saju/ Gemini 무료 6키·유료 전환 확대·사주 예약분 (이슈 없음) · Claude Code
 
 **한 일**
 - 무료 프로젝트 키 최대 3개 → **6개**(`GEMINI_FREE_KEY_4~6`, `_RPM_4~6`, `_RPD_4~6`)
-- 유료 전환 조건 확대: 무료 호출의 Google **503·429**, 그리고 **무료 키 전부 사용 불가**(키마다 하루 500회 소진·쿨다운)면 유료 1회. IO·타임아웃·파싱 실패는 그대로 전환 없음. 요청당 HTTP 최대 2회 유지
-- `GeminiJson.generate(LlmPurpose, …)`: 호출 파트(`SAJU`·`COMPATIBILITY`·`DATING`)를 받아 로그에 남기고, 유료 대체는 파트별 하루 몫을 따로 본다. 현재 몫은 사주만 `GEMINI_PAID_SAJU_RPD`(기본 42 = 유료 120 × 7천 원/2만 원). 사주가 몫을 다 쓰면 사주만 유료가 막히고 궁합·소개팅은 유료 RPD 나머지로 계속 전환
+- 유료 전환 조건 확대: 무료 호출의 Google **503·429·IO 실패(타임아웃 포함, 운영 실패의 34%)**, 그리고 **무료 키 전부 사용 불가**(키마다 하루 500회 소진·쿨다운)면 유료 1회. 파싱 실패·4xx 는 전환 없음. 요청당 HTTP 최대 2회 유지. 시도당 기본 타임아웃 12초 → **8초**(무응답 뒤 유료까지 기다리는 시간 단축, 최악 약 16초)
+- `GeminiJson.generate(LlmPurpose, …)`: 호출 파트(`SAJU`·`COMPATIBILITY`·`DATING`)를 받아 로그에 남긴다. 유료는 **사주 예약분**(`GEMINI_PAID_SAJU_RESERVE_RPD`, 기본 42)을 둔다 — 사주가 아닌 호출은 유료 잔량이 예약분보다 많을 때만 쓰고, 사주는 전부 쓸 수 있다(사용자 결정: 하루 2만 원 중 공용 1만3천 원, 남은 7천 원은 사주 전용)
+- 궁합지도 궁합 이유는 #131 대로 사전 생성본이 먼저라 그대로 두고 LLM 경로 호출 인자만 맞췄다. 유료는 사실상 사주·소개팅 이유가 쓴다
 - **앱 전체 한도(`GEMINI_MAX_PER_MINUTE`·`_PER_DAY`) 제거.** 프로젝트별 예산 합이 곧 상한이고, 유료 값을 올릴 때 같이 안 올리면 유료가 막히는 실수만 만든다. `.env` 에 남아 있어도 무시된다
 - `gemini ok` 로그에 `in=`·`out=`(입력·출력+사고 토큰) 추가. 단가가 입력 $0.30·출력 $2.50/1M(3.5 Flash-Lite, 2026-09-29 가격 페이지 확인)이라 파트별 호출 비용을 정확히 환산하려고
 
@@ -194,15 +195,45 @@
 - `saju/`: 신규 `LlmPurpose`, `GeminiJson`, `GeminiClientPool`, `ReadingGenerator`·`CompatibilityReasonGenerator`(호출 인자만)
 - `dating/DatingReasonGenerator`(호출 인자만), `common/config/GeminiProperties`
 - `application.yml`, `docker-compose.prod.yml`, `docs/architecture.md`, `docs/runbook-dev-server.md`
-- 테스트: `GeminiRoutingTest`(429 전환·무료 소진 직행·사주 몫·키 6개/7개 거부), `DatingReasonGeneratorTest`
+- `saju/CallBudget`(`remainingToday`)
+- 테스트: `GeminiRoutingTest`(429·IO 전환, 무료 소진 직행, 사주 예약분, 키 6개/7개 거부), `DatingReasonGeneratorTest`, `CompatibilityReasonGeneratorTest`(인자만)
 
 **다음 사람이 알아야 할 것**
-- **금액 한도는 호출 수로 환산해 `.env` 에 넣는다.** 앱은 금액을 모른다. 기본 사주 몫 42 는 비율 자리값이지 7천 원 환산이 아니다
+- **금액 한도는 호출 수로 환산해 `.env` 에 넣는다.** 앱은 금액을 모른다. 기본 사주 예약 42 는 비율 자리값이지 7천 원 환산이 아니다. 보수적 추정(사주 1회 4,000토큰 전부 출력 단가, 1,400원/$ → 약 14원)으로 `GEMINI_PAID_RPD=1400`, `GEMINI_PAID_SAJU_RESERVE_RPD=500`. 배포 뒤 `gemini ok` 의 `in=`·`out=` 로 실제 회당 비용을 재서 조정
 - 무료가 다 떨어지면 **모든 요청이 유료로 가므로 `GEMINI_PAID_RPM`(기본 5)이 병목**이 된다. 축제 트래픽이면 올릴 것
 - 카운터는 메모리라 배포마다 0. 실제 비용 상한은 GCP 콘솔 유료 프로젝트의 일일 요청 쿼터로 건다
 
 **막힌 것 / 넘기는 것**
-- 운영·dev `.env` 에 `GEMINI_FREE_KEY_4~6`·`GEMINI_PAID_RPD`·`GEMINI_PAID_SAJU_RPD` 등 추가, GCP 쿼터 설정 — 배포 담당
+- 운영 `.env` 에 `GEMINI_FREE_KEY_4~6`·`GEMINI_PAID_RPM`·`GEMINI_PAID_RPD`·`GEMINI_PAID_SAJU_RESERVE_RPD` 추가(dev 는 유료 키를 넣지 않는다 — 앱 카운터가 따로라 한도가 두 배가 된다), GCP 쿼터 설정 — 배포 담당
+
+### 2026-09-29 (화) · 차은호 · saju/ 궁합 이유 사전 생성본 (#131) · Claude Code
+
+**한 일**
+- 궁합 상세 이유를 실시간 LLM 대신 **사전 생성본**에서 고른다. 프롬프트 입력이 (기운, 많은 기운) 쌍과 유형뿐이라 조합이 무순서 325 × 유형 4 = **1,300개**로 유한. 같은 프롬프트·모델(`gemini-3.5-flash-lite`)로 Gemini Batch API 가 변형(찰떡·벗 6, 귀인·스침 3 = 5,850건)을 썼다. 비용 약 $3.2(배치 50%).
+- 검사: 합쇼체·A/B·"유형"·"점수"·사주 용어·팔자 글자·빈 필드 자동 검출 → 5,850 중 43건 걸러 재생성. 180자 초과 변형 제외 후 최종 리소스 `src/main/resources/compatibility-reasons.json`(약 5.6MB, 조합 1,300 전부, 변형 약 5,680).
+- `saju/CompatibilityReasonBank` 신규: 조합 키(A/B 무순서, 많은 기운 동점이면 오행 순서 첫 것), 공유자 id 로 정한 시작 자리부터 변형 회전(0번 변형만 몰리지 않게), 세 답은 한 칸씩 어긋난 변형에서. 공유자가 이미 본 문장과 겹치는 변형은 건너뜀(문장 단위 회피). `CompatibilityReasonGenerator.generate(..., ordinal)`: 리소스 적중이면 LLM 안 부름, 없으면 기존 LLM.
+- `compatibility/CompatibilityReasonService`(최선우): 공유자(origin)가 같은 조합을 몇 번째 여는지 세어 `ordinal` 로 넘김. 저장·캐시·동시성 로직 그대로. API·DB 스키마 변경 없음.
+- 재생성 스크립트 `scripts/compatibility-reason-bank/`(generate.py·collect.py·README).
+
+**건드린 파일/패키지**
+- `saju/`: `CompatibilityReasonBank`(신규), `CompatibilityReasonGenerator`
+- `compatibility/CompatibilityReasonService`, 테스트 3개, `resources/compatibility-reasons.json`, `scripts/compatibility-reason-bank/`
+- `architecture.md` 궁합 이유 절, `api-spec.md` reason 설명, `backend-requirements.md` FR-CP-11
+
+**다음 사람이 알아야 할 것**
+- **프롬프트(`compatibility-reason-system.txt`)를 바꾸면 리소스를 다시 만들어야** 반영된다. 절차는 스크립트 README. 유료 키 필요, 10분·$3.
+- 같은 조합 = 같은 글 풀. LLM 이 첫 문장을 정형구로 자주 써서(전체 문장의 12%가 2회 이상 등장, "…서로를 누르는 상극의 흐름이에요" 54회) 답 단위보다 **문장 단위** 겹침이 문제였다. 서비스가 공유자의 기존 `reason_*` 문장을 모아 넘기고 은행이 겹치지 않는 변형을 고른다. 시뮬레이션(문장 단위): 친구 5명 0.2%, 10명 0.8%, 20명 4%, 30명 12%. 회피 없이는 10명 16%, 20명 50%. 더 낮추려면 프롬프트에 첫 문장 정형구 금지를 넣고 재생성(`generate.py`, 약 $3). 기존 DB 캐시는 그대로 두었다.
+- 유효성 검사는 정규식이라 완벽하지 않다. 직접 읽은 10건은 상생·상극 방향·기운 이름 전부 맞고 어색한 문장 없음. **합쇼체 혼용("~랍니다")이 변형의 22%에 섞여 있다** — 실시간 LLM 도 같은 비율이라 '현재 품질 그대로'로 두었다. 같은 조합의 변형끼리 첫 문장이 같은 경우가 있다(894문장). 걸러내려면 `collect.py` 의 BAN 에 `답니다|랍니다` 를 넣고 부족분을 재생성한다(약 1,850건, $1).
+- 근거: 27~28일 nginx 에서 `GET /api/compatibilities/{id}/reason` 173건 중 504 38·503 4·499 28 = 40% 실패. 어제 21시부터 Google 무료 티어 503이 5시간 넘게 지속(무료 3키 0/36 성공, 유료 20/20).
+
+**막힌 것 / 넘기는 것**
+- 소개팅 이유(100조합)·사주 해석은 실시간 LLM 그대로. 소개팅은 같은 방식 가능(500건, $0.2). 사주는 조합이 커서 불가 → 유료 fallback 필요.
+
+**문서 변경**
+- 위 세 문서 + 이 항목.
+
+**프론트에 알려야 할 것**
+- 궁합 상세 첫 열람이 즉시 응답으로 바뀜(5~10초 → 0). 응답 필드·에러코드 변경 없음.
 
 ### 2026-09-28 (월) · 차은호 · saju/ Gemini 무료 3프로젝트 분산·503 유료 전환 (#127) · Codex → Claude Code
 
