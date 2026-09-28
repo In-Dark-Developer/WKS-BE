@@ -181,6 +181,35 @@
 
 ## 기록
 
+### 2026-09-29 (화) · 차은호 · saju/ 궁합 이유 사전 생성본 (#131) · Claude Code
+
+**한 일**
+- 궁합 상세 이유를 실시간 LLM 대신 **사전 생성본**에서 고른다. 프롬프트 입력이 (기운, 많은 기운) 쌍과 유형뿐이라 조합이 무순서 325 × 유형 4 = **1,300개**로 유한. 같은 프롬프트·모델(`gemini-3.5-flash-lite`)로 Gemini Batch API 가 변형(찰떡·벗 6, 귀인·스침 3 = 5,850건)을 썼다. 비용 약 $3.2(배치 50%).
+- 검사: 합쇼체·A/B·"유형"·"점수"·사주 용어·팔자 글자·빈 필드 자동 검출 → 5,850 중 43건 걸러 재생성. 180자 초과 변형 제외 후 최종 리소스 `src/main/resources/compatibility-reasons.json`(약 5.6MB, 조합 1,300 전부, 변형 약 5,680).
+- `saju/CompatibilityReasonBank` 신규: 조합 키(A/B 무순서, 많은 기운 동점이면 오행 순서 첫 것), 공유자 id 로 정한 시작 자리부터 변형 회전 + 세 답 필드 섞기(0번 변형만 몰리지 않게). `CompatibilityReasonGenerator.generate(..., ordinal)`: 리소스 적중이면 LLM 안 부름, 없으면 기존 LLM.
+- `compatibility/CompatibilityReasonService`(최선우): 공유자(origin)가 같은 조합을 몇 번째 여는지 세어 `ordinal` 로 넘김. 저장·캐시·동시성 로직 그대로. API·DB 스키마 변경 없음.
+- 재생성 스크립트 `scripts/compatibility-reason-bank/`(generate.py·collect.py·README).
+
+**건드린 파일/패키지**
+- `saju/`: `CompatibilityReasonBank`(신규), `CompatibilityReasonGenerator`
+- `compatibility/CompatibilityReasonService`, 테스트 3개, `resources/compatibility-reasons.json`, `scripts/compatibility-reason-bank/`
+- `architecture.md` 궁합 이유 절, `api-spec.md` reason 설명, `backend-requirements.md` FR-CP-11
+
+**다음 사람이 알아야 할 것**
+- **프롬프트(`compatibility-reason-system.txt`)를 바꾸면 리소스를 다시 만들어야** 반영된다. 절차는 스크립트 README. 유료 키 필요, 10분·$3.
+- 같은 조합 = 같은 글 풀. 친구 20명 봐도 토씨까지 같은 글 볼 확률 0.1%(회전+필드 섞기). 기존 DB 캐시(`reason_*`)는 그대로 두었다.
+- 유효성 검사는 정규식이라 완벽하지 않다. 직접 읽은 10건은 상생·상극 방향·기운 이름 전부 맞고 어색한 문장 없음. **합쇼체 혼용("~랍니다")이 변형의 22%에 섞여 있다** — 실시간 LLM 도 같은 비율이라 '현재 품질 그대로'로 두었다. 같은 조합의 변형끼리 첫 문장이 같은 경우가 있다(894문장). 걸러내려면 `collect.py` 의 BAN 에 `답니다|랍니다` 를 넣고 부족분을 재생성한다(약 1,850건, $1).
+- 근거: 27~28일 nginx 에서 `GET /api/compatibilities/{id}/reason` 173건 중 504 38·503 4·499 28 = 40% 실패. 어제 21시부터 Google 무료 티어 503이 5시간 넘게 지속(무료 3키 0/36 성공, 유료 20/20).
+
+**막힌 것 / 넘기는 것**
+- 소개팅 이유(100조합)·사주 해석은 실시간 LLM 그대로. 소개팅은 같은 방식 가능(500건, $0.2). 사주는 조합이 커서 불가 → 유료 fallback 필요.
+
+**문서 변경**
+- 위 세 문서 + 이 항목.
+
+**프론트에 알려야 할 것**
+- 궁합 상세 첫 열람이 즉시 응답으로 바뀜(5~10초 → 0). 응답 필드·에러코드 변경 없음.
+
 ### 2026-09-29 (화) · (이름) · compatibility/·wallet/ 친구 등록 실 "1명당 3" → "5명당 3" · Claude Code
 
 **한 일**

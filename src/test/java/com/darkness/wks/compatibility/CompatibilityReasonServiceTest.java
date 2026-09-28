@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,13 +65,31 @@ class CompatibilityReasonServiceTest {
     void generatesOnceAndSavesWhenAbsent() {
         Compatibility c = compatibility(7L);
         when(compatibilityRepository.findByIdWithResults(7L)).thenReturn(Optional.of(c));
-        when(generator.generate(any(), any(), anyInt(), anyString())).thenReturn(REASON);
+        when(generator.generate(any(), any(), anyInt(), anyString(), anyInt())).thenReturn(REASON);
         when(compatibilityRepository.saveReasonIfAbsent(7L, "왜", "만나면", "싸우면")).thenReturn(1);
 
         CompatibilityReasonResponse r = service.getReason(7L);
 
         assertThat(r).isEqualTo(new CompatibilityReasonResponse("왜", "만나면", "싸우면"));
-        verify(generator).generate(any(), any(), eq(92), eq("귀인"));
+        verify(generator).generate(any(), any(), eq(92), eq("귀인"), eq(0));
+    }
+
+    @Test
+    void ordinalCountsEarlierSameCombinationOfSameOrigin() {
+        Compatibility c = compatibility(7L);
+        Compatibility earlierSame = compatibility(3L);
+        Compatibility laterSame = compatibility(9L);
+        Compatibility earlierOtherTier = compatibility(2L);
+        ReflectionTestUtils.setField(earlierOtherTier, "tier", CompatibilityTier.BEOT);
+        when(compatibilityRepository.findByIdWithResults(7L)).thenReturn(Optional.of(c));
+        when(compatibilityRepository.findAllByOriginIdWithResults(c.getOrigin().getId()))
+                .thenReturn(List.of(earlierOtherTier, earlierSame, c, laterSame));
+        when(generator.generate(any(), any(), anyInt(), anyString(), anyInt())).thenReturn(REASON);
+        when(compatibilityRepository.saveReasonIfAbsent(any(), any(), any(), any())).thenReturn(1);
+
+        service.getReason(7L);
+
+        verify(generator).generate(any(), any(), eq(92), eq("귀인"), eq(1));
     }
 
     @Test
@@ -81,7 +100,7 @@ class CompatibilityReasonServiceTest {
         ReflectionTestUtils.setField(stored, "reasonTogether", "먼저");
         ReflectionTestUtils.setField(stored, "reasonConflict", "먼저");
         when(compatibilityRepository.findByIdWithResults(7L)).thenReturn(Optional.of(c)).thenReturn(Optional.of(stored));
-        when(generator.generate(any(), any(), anyInt(), anyString())).thenReturn(REASON);
+        when(generator.generate(any(), any(), anyInt(), anyString(), anyInt())).thenReturn(REASON);
         when(compatibilityRepository.saveReasonIfAbsent(7L, "왜", "만나면", "싸우면")).thenReturn(0);
 
         CompatibilityReasonResponse r = service.getReason(7L);
