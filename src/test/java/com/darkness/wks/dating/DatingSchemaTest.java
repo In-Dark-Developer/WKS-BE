@@ -326,8 +326,16 @@ class DatingSchemaTest {
         var accepted = requestService.accept(recipient.getMemberId(), sent.requestId());
         assertThat(accepted.status()).isEqualTo(DatingRequestStatus.ACCEPTED);
         assertThat(accepted.contactValue()).isEqualTo(sender.getContactValue());
-        assertThat(requestService.list(sender.getMemberId(), "sent").get(0).contactValue())
-                .isEqualTo(recipient.getContactValue());
+        when(photoService.originalUrl(any())).thenReturn("https://example.com/original.jpg");
+        var acceptedSent = requestService.list(sender.getMemberId(), "sent").get(0);
+        assertThat(acceptedSent.contactValue()).isEqualTo(recipient.getContactValue());
+        assertThat(acceptedSent.counterpart().fields().photo().value())
+                .isEqualTo("https://example.com/original.jpg");
+        assertThat(acceptedSent.counterpart().fields().name().value()).isEqualTo(recipient.getName());
+        assertThat(acceptedSent.counterpart().fields().department().value()).isEqualTo(recipient.getDepartment());
+        assertThat(acceptedSent.counterpart().fields().reason().locked()).isFalse();
+        assertThat(recommendationRepository.findActiveWithCandidate(sender.getMemberId(), recipient.getId())
+                .orElseThrow().isReasonUnlocked()).isFalse();
         assertThat(recommendationService.getCurrent(sender.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).contains(recipient.getId(), anotherRecipient.getId());
         assertThat(recommendationService.getCurrent(anotherViewer.getMemberId()).candidates())
@@ -416,6 +424,37 @@ class DatingSchemaTest {
         assertThat(received.counterpart().fields().reason().value()).isEqualTo("받은 사람 이유");
         verify(reasonGenerator, times(1)).generate(any(), any(), anyInt(), anyString());
         requestRepository.deleteById(request.requestId()); // 커밋된 행이라 다른 테스트의 count() 에 잡힌다
+    }
+
+    @Test
+    void acceptedRequestGetsFreeSenderReasonAfterCommit() throws Exception {
+        DatingProfile sender = profile(1020007L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(1020008L, Gender.FEMALE, "계해", "임술", "신유");
+        DatingRecommendation recommendation = recommendationRepository.saveAndFlush(
+                new DatingRecommendation(sender.getMemberId(), recipient, 82));
+        when(reasonGenerator.generate(any(), any(), anyInt(), anyString())).thenAnswer(invocation ->
+                invocation.<com.darkness.wks.saju.SajuPillars>getArgument(0).dayPillar().equals("병인")
+                        ? "보낸 사람 이유" : "받은 사람 이유");
+
+        var request = requestService.send(sender.getMemberId(), recipient.getId());
+        recommendation.deactivate();
+        requestService.accept(recipient.getMemberId(), request.requestId());
+        for (int i = 0; i < 50; i++) {
+            String reason = jdbcTemplate.queryForObject(
+                    "SELECT reason_content FROM dating_recommendation WHERE id = ?", String.class,
+                    recommendation.getId());
+            if (reason != null) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+
+        var sent = requestService.list(sender.getMemberId(), "sent").get(0);
+        assertThat(sent.counterpart().fields().reason().locked()).isFalse();
+        assertThat(sent.counterpart().fields().reason().value()).isEqualTo("보낸 사람 이유");
+        assertThat(recommendationRepository.findById(recommendation.getId()).orElseThrow().isReasonUnlocked())
+                .isFalse();
+        requestRepository.deleteById(request.requestId());
     }
 
     @Test

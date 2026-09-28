@@ -24,15 +24,17 @@ public record DatingRequestListResponse(
                                                  DatingRecommendation recommendation, String age,
                                                  String blurredPhotoUrl, String originalPhotoUrl) {
         boolean received = request.getRecipient().getMemberId().equals(viewerMemberId);
+        boolean accepted = request.getStatus() == DatingRequestStatus.ACCEPTED;
+        boolean freeToView = received || accepted;
         DatingProfile other = received ? request.getSender() : request.getRecipient();
         DatingRequestResponse base = DatingRequestResponse.from(request, viewerMemberId);
-        LockedField photo = field(received || recommendation.isPhotoUnlocked(), 10, originalPhotoUrl);
-        LockedField name = field(received || recommendation.isNameUnlocked(), 7, other.getName());
-        LockedField department = field(received || recommendation.isDepartmentUnlocked(), 5,
+        LockedField photo = field(freeToView || recommendation.isPhotoUnlocked(), 10, originalPhotoUrl);
+        LockedField name = field(freeToView || recommendation.isNameUnlocked(), 7, other.getName());
+        LockedField department = field(freeToView || recommendation.isDepartmentUnlocked(), 5,
                 other.getDepartment());
-        // 받은 목록은 받은 사람 시점 문장(요청 행에 캐시, 무료). 보낸 목록은 카드와 같은 해금 상태·문장 (#123)
+        // 받은 목록은 받은 사람 시점 문장. 보낸 목록은 수락 후 무료로, 그전에는 카드 해금 상태대로 보여준다.
         LockedField reason = received ? LockedField.unlocked(request.getRecipientReason())
-                : field(recommendation.isReasonUnlocked(), 3, recommendation.getReasonContent());
+                : field(freeToView || recommendation.isReasonUnlocked(), 3, recommendation.getReasonContent());
         Counterpart counterpart = new Counterpart(recommendation.getScore(), age, other.getMbti(), other.getBio(),
                 blurredPhotoUrl, new ProfileFields(photo, name, department, reason));
         return new DatingRequestListResponse(base.requestId(), base.candidateId(), base.status(),
@@ -48,7 +50,7 @@ public record DatingRequestListResponse(
                               String blurredPhotoUrl, ProfileFields fields) {
     }
 
-    /** @param reason 받은 목록에서 {@code value} 가 {@code null} 이면 아직 생성 전이다 — 잠시 후 다시 조회하면 된다 */
+    /** @param reason 받은 목록 또는 수락된 보낸 목록에서 {@code value} 가 {@code null} 이면 아직 생성 전이다 */
     public record ProfileFields(LockedField photo, LockedField name, LockedField department, LockedField reason) {
     }
 }

@@ -19,6 +19,7 @@ import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -148,6 +149,38 @@ class DatingReasonServiceTest {
         syncService().fillRecipientReasonAsync(request.getId());
 
         verifyNoInteractions(generator, resultRepository);
+    }
+
+    @Test
+    void acceptedRequestGeneratesSenderReasonAfterRecommendationDeactivation() {
+        DatingRequest request = request();
+        request.accept(Instant.now());
+        DatingRecommendation recommendation = new DatingRecommendation(1L, request.getRecipient(), 82);
+        recommendation.deactivate();
+        ReflectionTestUtils.setField(recommendation, "id", 7L);
+        when(requestRepository.findWithProfiles(request.getId())).thenReturn(Optional.of(request));
+        when(recommendationRepository.findForRequestPairs(List.of(1L), List.of(request.getRecipient().getId())))
+                .thenReturn(List.of(recommendation));
+        when(resultRepository.findByMemberId(1L)).thenReturn(Optional.of(result(Gender.MALE, "병인")));
+        when(resultRepository.findByMemberId(2L)).thenReturn(Optional.of(result(Gender.FEMALE, "기유")));
+        when(generator.generate(argThat(viewer -> viewer.dayPillar().equals("병인")),
+                argThat(candidate -> candidate.dayPillar().equals("기유")), eq(82), eq("찰떡")))
+                .thenReturn("보낸 사람 이유");
+        when(recommendationRepository.saveReasonIfAbsent(7L, "보낸 사람 이유")).thenReturn(1);
+
+        syncService().fillSenderReasonAsync(request.getId());
+
+        verify(recommendationRepository).saveReasonIfAbsent(7L, "보낸 사람 이유");
+    }
+
+    @Test
+    void pendingRequestDoesNotGenerateFreeSenderReason() {
+        DatingRequest request = request();
+        when(requestRepository.findWithProfiles(request.getId())).thenReturn(Optional.of(request));
+
+        syncService().fillSenderReasonAsync(request.getId());
+
+        verifyNoInteractions(recommendationRepository, resultRepository, generator);
     }
 
     /** 보낸 사람 member 1, 받은 사람 member 2 */

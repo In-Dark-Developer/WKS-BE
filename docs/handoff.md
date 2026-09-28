@@ -116,6 +116,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-28 | `GET /api/dating/requests?box=sent`에서 `ACCEPTED` 요청은 사진·이름·학과·궁합 까닭을 실 차감 없이 모두 `locked:false`로 반환한다. 궁합 까닭은 수락 후 비동기 생성이라 잠시 `value:null`일 수 있으며 목록 재조회가 재시도한다. `PENDING`·`REJECTED`·`CANCELLED`는 기존 해금 상태 유지. 필드 형식 변경 없음. `api-spec.md` §11.1 | ❌ |
 | 2026-09-28 | **[축제 사이트 유입 보상, 프론트 대응 필수]** `?ref=FESTIVAL` 로 들어온 사람에게 계정당 1회 10실. ① 비로그인이면 `ref` 를 보관했다가 `POST /api/auth/kakao` 의 `ref` 로 전달 → 응답 `rewardGranted` 가 채워짐 ② 이미 로그인 상태면 `POST /api/wallet/partner-rewards {ref}` 신규 호출. 이미 받았으면 둘 다 `rewardGranted: null`(에러 아님). `api-spec.md` §9·§12 | ❌ |
 | 2026-09-28 | 에러 응답 `error` 에 `traceId`(8자리 hex) 추가 — api-spec §1 에 원래 있던 필드. 그리고 깨진 JSON·없는 enum 값·잘못된 시각 형식·경로 id 형식 오류·잘못된 Content-Type 이 **500 `INTERNAL_ERROR` 대신 400 `INVALID_INPUT`** 으로 나간다. 형식 변경 없음 | ❌ |
 | 2026-09-27 | `POST /api/signups`·`POST /api/signups/resend` — `resultId` 가 있고 계정에 연결 안 된 신청이면 **인증 메일 대신 재신청 매직링크**를 보낸다. 요청·응답 필드 변경 없음, `message` 문구만 바뀜. 결과 없는 신청은 기존 인증 메일. `api-spec.md` §5 | ❌ |
@@ -179,6 +180,30 @@
 ---
 
 ## 기록
+
+### 2026-09-28 (월) · 최선우 · dating/ 수락 후 보낸 요청 정보 공개 · Codex
+
+**한 일**
+- 수락된 보낸 요청 목록에서 사진·이름·학과·궁합 까닭을 실 차감 없이 공개한다. 잠긴 필드를 응답에 넣지 않는 기존 원칙은 수락 전 상태에 유지한다.
+- 수락 커밋 뒤 보낸 사람 시점 궁합 까닭을 비동기로 생성해 추천 이력에 캐싱한다. 리롤로 추천이 비활성화된 뒤에도 생성 가능하며, 실패하면 보낸 목록 조회에서 재시도한다.
+- PostgreSQL Testcontainers와 모킹된 LLM으로 수락 전 잠금, 수락 후 공개·비동기 생성, 재화 해금 플래그 미변경을 검증했다. 관련 테스트 통과.
+
+**건드린 파일/패키지**
+- `dating/` 요청 목록 DTO·서비스, 궁합 까닭 서비스 및 테스트
+- `docs/plan.md`, `docs/architecture.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- `ACCEPTED` 보낸 목록의 `reason.locked=false`여도 LLM 생성 중·실패 시 `value=null`이다. 현재 Gemini 한도 초과 로그가 있어 실제 서버에서 이 상태가 지속될 수 있다.
+- 요청 목록에서만 무료 공개하며 추천 카드의 기존 유료 해금 플래그와 실 원장은 바꾸지 않는다.
+
+**막힌 것 / 넘기는 것**
+- 실제 서버에 반영하려면 코드 리뷰·PR·배포가 필요하다. Gemini 한도 문제는 별도 조치가 필요하다.
+
+**문서 변경**
+- `docs/plan.md`, `docs/architecture.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 보낸 요청이 `ACCEPTED`가 되면 `counterpart.fields` 네 항목을 다시 읽어 표시한다. `reason.value=null`이면 잠시 후 목록을 재조회한다.
 
 ### 2026-09-28 (월) · (이름) · compatibility/·member/ 친구 등록 실 — 중복 인물 차단·로그인 후 소급 · Claude Code
 
