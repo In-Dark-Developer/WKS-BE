@@ -26,6 +26,10 @@ def wait_and_download(api_key, batch):
         time.sleep(60)
 
 
+def first_sentence(text):
+    return re.split(r"(?<=[.!?])\s", text)[0]
+
+
 def problems(key, fields):
     _, a, b, _ = key.split("|")
     (ea, ma), (eb, mb) = a.split(":"), b.split(":")
@@ -61,7 +65,11 @@ if __name__ == "__main__":
             stats.update(p.split(":")[1] for p in bad); retry.append(requests[key]); continue
         combo = "|".join(key.split("|")[:3])
         bank.setdefault(combo, [])
-        if fields not in bank[combo]: bank[combo].append(fields)
+        # 같은 조합 안에서 어느 답이든 첫 문장이 같은 변형은 겹쳐 보이므로 버린다
+        firsts = {(f, first_sentence(fields[f])) for f in FIELDS}
+        if fields in bank[combo] or any(firsts & {(f, first_sentence(v[f])) for f in FIELDS} for v in bank[combo]):
+            stats["dup-first-sentence"] += 1; continue
+        bank[combo].append(fields)
         stats["ok"] += 1
     json.dump(dict(sorted(bank.items())), open(RESOURCE, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     open(os.path.join(out, "retry.jsonl"), "w", encoding="utf-8").write("".join(retry))

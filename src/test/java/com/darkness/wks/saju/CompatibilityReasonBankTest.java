@@ -23,17 +23,25 @@ class CompatibilityReasonBankTest {
     }
 
     @Test
-    void rotationMixesFieldsAcrossVariantsAndNeverRepeatsWithinVariantCount() {
+    void anyWindowOfVariantCountViewsNeverRepeatsAField() {
         List<CompatibilityReason> v = List.of(r(0), r(1), r(2));
         CompatibilityReasonBank bank = new CompatibilityReasonBank(Map.of("k", v));
 
         assertThat(bank.pick("k", 0)).contains(new CompatibilityReason("why0", "together1", "conflict2"));
-        assertThat(bank.pick("k", 1)).contains(new CompatibilityReason("why1", "together2", "conflict0"));
-        assertThat(bank.pick("k", 2)).contains(new CompatibilityReason("why2", "together0", "conflict1"));
-        // 변형 수를 넘으면 자리를 밀어 새 조합
-        assertThat(bank.pick("k", 3)).contains(new CompatibilityReason("why0", "together2", "conflict1"));
+        assertThat(bank.pick("k", 4)).contains(new CompatibilityReason("why1", "together2", "conflict0"));
+        for (int start = 0; start < 10; start++) {
+            for (int f = 0; f < 3; f++) {
+                int field = f;
+                assertThat(java.util.stream.IntStream.range(start, start + 3)
+                        .mapToObj(o -> field(bank.pick("k", o).orElseThrow(), field)).distinct().count()).isEqualTo(3);
+            }
+        }
         assertThat(bank.pick("k", -1)).isEqualTo(bank.pick("k", 0));
         assertThat(bank.pick("missing", 0)).isEmpty();
+    }
+
+    private static String field(CompatibilityReason r, int i) {
+        return i == 0 ? r.why() : i == 1 ? r.together() : r.conflict();
     }
 
     @Test

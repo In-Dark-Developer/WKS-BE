@@ -34,13 +34,16 @@ def prompt(tier, score, ea, ma, eb, mb):
             f"두 기운의 관계: {rel}")
 
 
-def requests():
+def requests(existing=None):
+    """existing: 조합 → 이미 있는 변형 수. 주면 부족분만 만든다(--fill)."""
     tuples = [(e, m) for e in range(5) for m in range(5)]
     for tier, score, nv in TIERS:
         for i, (ea, ma) in enumerate(tuples):
             for (eb, mb) in tuples[i:]:
-                for v in range(nv):
-                    key = f"{tier}|{PLAIN[ea]}:{PLAIN[ma]}|{PLAIN[eb]}:{PLAIN[mb]}|{v}"
+                combo = f"{tier}|{PLAIN[ea]}:{PLAIN[ma]}|{PLAIN[eb]}:{PLAIN[mb]}"
+                have = (existing or {}).get(combo, 0)
+                for v in range(have, nv):
+                    key = f"{combo}|{v}"
                     yield {"key": key, "request": {
                         "systemInstruction": {"parts": [{"text": SYSTEM}]},
                         "contents": [{"role": "user", "parts": [{"text": prompt(tier, score, ea, ma, eb, mb)}]}],
@@ -71,6 +74,12 @@ if __name__ == "__main__":
     api_key = os.environ["GEMINI_PAID_KEY"]
     if "--retry" in sys.argv:
         lines = open(sys.argv[sys.argv.index("--retry") + 1], encoding="utf-8").read().splitlines()
+    elif "--fill" in sys.argv:  # 기존 리소스의 부족분만. 걸러질 몫을 감안해 1.3배 뽑는다
+        resource = os.path.join(ROOT, "src/main/resources/compatibility-reasons.json")
+        existing = {k: len(v) for k, v in json.load(open(resource, encoding="utf-8")).items()}
+        base = list(requests(existing))
+        extra = list(requests({k: max(0, n - 1) for k, n in existing.items()}))[:len(base) // 3]
+        lines = [json.dumps(r, ensure_ascii=False) for r in base + extra]
     else:
         lines = [json.dumps(r, ensure_ascii=False) for r in requests()]
     data = ("\n".join(lines) + "\n").encode()
