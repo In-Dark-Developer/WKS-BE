@@ -116,6 +116,8 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-29 | **리롤 비용 5실 → 20실** (하루 1회 무료는 그대로). 응답 `rerollCost` 가 무료분을 다 쓰면 `20` 으로 온다 — 버튼 문구를 하드코딩했다면 `rerollCost` 값으로 표시. 잔액 20 미만이면 402. `api-spec.md` §10.4·§10.4.1·§12 | ❌ |
+| 2026-09-29 | 궁합지도 친구 등록 보상 **1명당 3실 → 서로 다른 친구 5명마다 3실**. API 형식 변경 없음, 안내 문구만 수정. `api-spec.md` §12 | ❌ |
 | 2026-09-28 | `GET /api/dating/requests?box=sent`에서 `ACCEPTED` 요청은 사진·이름·학과·궁합 까닭을 실 차감 없이 모두 `locked:false`로 반환한다. 궁합 까닭은 수락 후 비동기 생성이라 잠시 `value:null`일 수 있으며 목록 재조회가 재시도한다. `PENDING`·`REJECTED`·`CANCELLED`는 기존 해금 상태 유지. 필드 형식 변경 없음. `api-spec.md` §11.1 | ❌ |
 | 2026-09-28 | **[축제 사이트 유입 보상, 프론트 대응 필수]** `?ref=FESTIVAL` 로 들어온 사람에게 계정당 1회 10실. ① 비로그인이면 `ref` 를 보관했다가 `POST /api/auth/kakao` 의 `ref` 로 전달 → 응답 `rewardGranted` 가 채워짐 ② 이미 로그인 상태면 `POST /api/wallet/partner-rewards {ref}` 신규 호출. 이미 받았으면 둘 다 `rewardGranted: null`(에러 아님). `api-spec.md` §9·§12 | ❌ |
 | 2026-09-28 | 에러 응답 `error` 에 `traceId`(8자리 hex) 추가 — api-spec §1 에 원래 있던 필드. 그리고 깨진 JSON·없는 enum 값·잘못된 시각 형식·경로 id 형식 오류·잘못된 Content-Type 이 **500 `INTERNAL_ERROR` 대신 400 `INVALID_INPUT`** 으로 나간다. 형식 변경 없음 | ❌ |
@@ -209,6 +211,28 @@
 
 **프론트에 알려야 할 것**
 - 궁합 상세 첫 열람이 즉시 응답으로 바뀜(5~10초 → 0). 응답 필드·에러코드 변경 없음.
+
+### 2026-09-29 (화) · (이름) · dating/ 리롤 비용 5실 → 20실 · Claude Code
+
+**한 일**
+- 유료 리롤 비용을 **회당 20실**로 변경(사용자 결정). 하루(KST) 1회 무료는 그대로
+- `DatingRecommendationService.REROLL_COST` 상수와 Swagger 설명만 바꿨다. 로직·원장 형식은 그대로
+
+**건드린 파일/패키지**
+- `dating/` — `DatingRecommendationService`, `DatingController`(Swagger 문구), `dto/DatingRecommendationResponse`(주석)
+- 테스트: `DatingSchemaTest` 리롤 비용 기대값 5 → 20
+
+**다음 사람이 알아야 할 것**
+- 오늘 이미 5실로 유료 리롤한 원장 행은 그대로다(회수·추가 차감 없음). 다음 유료 리롤부터 20실
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §10.4·§10.4.1·§12, `plan.md` §1.4·§8.4·TBD-6 메모
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-29 첫 줄
 
 ### 2026-09-29 (화) · (이름) · compatibility/·wallet/ 친구 등록 실 "1명당 3" → "5명당 3" · Claude Code
 
