@@ -30,6 +30,11 @@ server:
     whitelabel:
       enabled: false
 
+logging:
+  pattern:
+    # 에러 응답의 traceId(TraceIdFilter)로 그 요청의 로그만 골라낼 수 있게 레벨 옆에 붙인다
+    level: "%5p [%X{traceId:-}]"
+
 management:
   endpoints:
     web:
@@ -48,14 +53,48 @@ springdoc:
     path: /swagger-ui.html
 
 gemini:
-  timeout-seconds: 30
-  # 호출 총량 상한 (#64). 무료 한도 실측(90 RPM·2,000 RPD 이상 통과)의 안전값. AI Studio 한도 확인 후 조정
-  max-per-minute: ${GEMINI_MAX_PER_MINUTE:60}
-  max-per-day: ${GEMINI_MAX_PER_DAY:1600}
+  model: gemini-3.5-flash-lite
+  timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:12}
+  total-timeout-seconds: ${GEMINI_TOTAL_TIMEOUT_SECONDS:25}
+  # 각각 다른 프로젝트의 키 하나씩. 모두 비어 있으면 기존 gemini.api-key 사용.
+  # 무료 실측 한도(2026-09-28 429 메시지): 15 RPM, 500 RPD/프로젝트. 앱 상한도 같은 값으로 둔다.
+  free-projects:
+    - api-key: ${GEMINI_FREE_KEY_1:}
+      max-per-minute: ${GEMINI_FREE_RPM_1:15}
+      max-per-day: ${GEMINI_FREE_RPD_1:500}
+    - api-key: ${GEMINI_FREE_KEY_2:}
+      max-per-minute: ${GEMINI_FREE_RPM_2:15}
+      max-per-day: ${GEMINI_FREE_RPD_2:500}
+    - api-key: ${GEMINI_FREE_KEY_3:}
+      max-per-minute: ${GEMINI_FREE_RPM_3:15}
+      max-per-day: ${GEMINI_FREE_RPD_3:500}
+    - api-key: ${GEMINI_FREE_KEY_4:}
+      max-per-minute: ${GEMINI_FREE_RPM_4:15}
+      max-per-day: ${GEMINI_FREE_RPD_4:500}
+    - api-key: ${GEMINI_FREE_KEY_5:}
+      max-per-minute: ${GEMINI_FREE_RPM_5:15}
+      max-per-day: ${GEMINI_FREE_RPD_5:500}
+    - api-key: ${GEMINI_FREE_KEY_6:}
+      max-per-minute: ${GEMINI_FREE_RPM_6:15}
+      max-per-day: ${GEMINI_FREE_RPD_6:500}
+  paid-project:
+    api-key: ${GEMINI_PAID_KEY:}
+    max-per-minute: ${GEMINI_PAID_RPM:5}
+    # 운영 로그 기준 Google 503은 시도의 약 7%. 무료 1,500/일 전부 쓰면 유료 약 105/일 → 여유 있게 120.
+    max-per-day: ${GEMINI_PAID_RPD:120}
+  # 유료 RPD 중 사주만 쓸 수 있게 남겨 두는 호출 수. 다른 파트는 유료 잔량이 이보다 많을 때만 쓰고, 사주는 전부 쓸 수 있다.
+  # 예: 하루 2만 원 중 7천 원 사주 예약. 기본 42 는 금액 환산이 아니라 유료 120 에 7천/2만 비율을 곱한 자리값이다.
+  # 앱은 금액을 모르므로 운영 .env 에 단가로 환산한 호출 수를 넣는다
+  paid-saju-reserve-per-day: ${GEMINI_PAID_SAJU_RESERVE_RPD:42}
 
 app:
   mail:
     from: ${MAIL_FROM:noreply@wks.local}
+    # 기본 계정(spring.mail.*) 실패 시 전환할 보조 계정. 호스트·포트는 기본 계정과 같다 (common/mail/MailConfig)
+    secondary:
+      username: ${MAIL_SECONDARY_USERNAME:}
+      password: ${MAIL_SECONDARY_PASSWORD:}
+      from: ${MAIL_SECONDARY_FROM:}
   backend:
     base-url: ${BACKEND_BASE_URL:http://localhost:8080}
   frontend:
@@ -63,6 +102,9 @@ app:
     dating-verify-redirect-url: ${DATING_VERIFY_REDIRECT_URL:http://localhost:3000/dating/verify}
     # 재신청 초대 메일이 가리키는 프론트 페이지. 백엔드를 거치지 않는다 — 토큰은 클릭 시점에 소비되지 않는다
     reapply-url: ${REAPPLY_URL:http://localhost:3000/dating/reapply}
+  partner:
+    # 제휴처 유입 보상. "코드:금액:표시이름" 을 콤마로 나열. 계정당 코드별 1회 (wallet/PartnerRewardService)
+    rewards: ${PARTNER_REWARDS:FESTIVAL:10:동국대 축제}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   signup:

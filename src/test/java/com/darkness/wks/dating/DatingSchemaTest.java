@@ -39,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -183,6 +184,7 @@ class DatingSchemaTest {
         assertThat(first).allSatisfy(card -> {
             assertThat(card.blurredPhotoUrl()).isEqualTo("https://example.com/blurred.png");
             assertThat(card.fields().photo().locked()).isTrue();
+            assertThat(card.age()).isEqualTo("00년생");
         });
         assertThat(recommendationService.getCurrent(viewer.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).containsExactlyElementsOf(
@@ -324,8 +326,16 @@ class DatingSchemaTest {
         var accepted = requestService.accept(recipient.getMemberId(), sent.requestId());
         assertThat(accepted.status()).isEqualTo(DatingRequestStatus.ACCEPTED);
         assertThat(accepted.contactValue()).isEqualTo(sender.getContactValue());
-        assertThat(requestService.list(sender.getMemberId(), "sent").get(0).contactValue())
-                .isEqualTo(recipient.getContactValue());
+        when(photoService.originalUrl(any())).thenReturn("https://example.com/original.jpg");
+        var acceptedSent = requestService.list(sender.getMemberId(), "sent").get(0);
+        assertThat(acceptedSent.contactValue()).isEqualTo(recipient.getContactValue());
+        assertThat(acceptedSent.counterpart().fields().photo().value())
+                .isEqualTo("https://example.com/original.jpg");
+        assertThat(acceptedSent.counterpart().fields().name().value()).isEqualTo(recipient.getName());
+        assertThat(acceptedSent.counterpart().fields().department().value()).isEqualTo(recipient.getDepartment());
+        assertThat(acceptedSent.counterpart().fields().reason().locked()).isFalse();
+        assertThat(recommendationRepository.findActiveWithCandidate(sender.getMemberId(), recipient.getId())
+                .orElseThrow().isReasonUnlocked()).isFalse();
         assertThat(recommendationService.getCurrent(sender.getMemberId()).candidates())
                 .extracting(card -> card.candidateId()).contains(recipient.getId(), anotherRecipient.getId());
         assertThat(recommendationService.getCurrent(anotherViewer.getMemberId()).candidates())
@@ -351,6 +361,7 @@ class DatingSchemaTest {
         var sent = requestService.list(sender.getMemberId(), "sent").get(0);
         assertThat(sent.requestId()).isEqualTo(request.requestId());
         assertThat(sent.counterpart().score()).isEqualTo(83);
+        assertThat(sent.counterpart().age()).isEqualTo("00년생");
         assertThat(sent.counterpart().mbti()).isEqualTo(recipient.getMbti());
         assertThat(sent.counterpart().bio()).isEqualTo(recipient.getBio());
         assertThat(sent.counterpart().blurredPhotoUrl()).isEqualTo("https://example.com/blurred.png");
@@ -359,10 +370,15 @@ class DatingSchemaTest {
         assertThat(sent.counterpart().fields().photo().value()).isNull();
         assertThat(sent.counterpart().fields().name().value()).isNull();
         assertThat(sent.counterpart().fields().department().value()).isNull();
+        assertThat(sent.counterpart().fields().reason().locked()).isTrue();
+        assertThat(sent.counterpart().fields().reason().cost()).isEqualTo(3);
         assertThat(sent.contactValue()).isNull();
         verify(photoService, never()).originalUrl(any());
 
         var received = requestService.list(recipient.getMemberId(), "received").get(0);
+        // 트랜잭션이 커밋되지 않아 받은 사람 시점 문장은 아직 없다 — 생성은 아래 receivedRequestGetsRecipientReasonAfterCommit
+        assertThat(received.counterpart().fields().reason().locked()).isFalse();
+        assertThat(received.counterpart().fields().reason().value()).isNull();
         assertThat(received.candidateId()).isEqualTo(sender.getId());
         assertThat(received.counterpart().score()).isEqualTo(83);
         assertThat(received.counterpart().fields().photo().locked()).isFalse();
@@ -379,9 +395,66 @@ class DatingSchemaTest {
                         .cookie(new Cookie("wks_token", jwtProvider.issue(recipient.getMemberId()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].counterpart.score").value(83))
+                .andExpect(jsonPath("$.data[0].counterpart.age").value("00년생"))
+                .andExpect(jsonPath("$.data[0].counterpart.birthDate").doesNotExist())
                 .andExpect(jsonPath("$.data[0].counterpart.fields.photo.value")
                         .value("https://example.com/original.jpg"))
                 .andExpect(jsonPath("$.data[0].counterpart.fields.photo.objectKey").doesNotExist());
+    }
+
+    /** 커밋 뒤 별도 스레드가 받은 사람 시점 문장을 만든다 (#123). 카드의 문장(보낸 사람 시점)과는 별개다 */
+    @Test
+    void receivedRequestGetsRecipientReasonAfterCommit() throws Exception {
+        DatingProfile sender = profile(1020005L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(1020006L, Gender.FEMALE, "계해", "임술", "신유");
+        recommendationRepository.saveAndFlush(new DatingRecommendation(sender.getMemberId(), recipient, 91));
+        when(reasonGenerator.generate(any(), any(), anyInt(), anyString())).thenReturn("받은 사람 이유");
+        when(photoService.thumbnailUrl(any())).thenReturn("https://example.com/blurred.png");
+        when(photoService.originalUrl(any())).thenReturn("https://example.com/original.jpg");
+
+        var request = requestService.send(sender.getMemberId(), recipient.getId());
+
+        verify(reasonGenerator, timeout(5000)).generate(
+                org.mockito.ArgumentMatchers.argThat(viewer -> viewer.dayPillar().equals("신유")),
+                org.mockito.ArgumentMatchers.argThat(candidate -> candidate.dayPillar().equals("병인")),
+                org.mockito.ArgumentMatchers.eq(91), org.mockito.ArgumentMatchers.eq("귀인"));
+        awaitRecipientReason(request.requestId());
+        var received = requestService.list(recipient.getMemberId(), "received").get(0);
+        assertThat(received.counterpart().fields().reason().locked()).isFalse();
+        assertThat(received.counterpart().fields().reason().value()).isEqualTo("받은 사람 이유");
+        verify(reasonGenerator, times(1)).generate(any(), any(), anyInt(), anyString());
+        requestRepository.deleteById(request.requestId()); // 커밋된 행이라 다른 테스트의 count() 에 잡힌다
+    }
+
+    @Test
+    void acceptedRequestGetsFreeSenderReasonAfterCommit() throws Exception {
+        DatingProfile sender = profile(1020007L, Gender.MALE, "갑자", "을축", "병인");
+        DatingProfile recipient = profile(1020008L, Gender.FEMALE, "계해", "임술", "신유");
+        DatingRecommendation recommendation = recommendationRepository.saveAndFlush(
+                new DatingRecommendation(sender.getMemberId(), recipient, 82));
+        when(reasonGenerator.generate(any(), any(), anyInt(), anyString())).thenAnswer(invocation ->
+                invocation.<com.darkness.wks.saju.SajuPillars>getArgument(0).dayPillar().equals("병인")
+                        ? "보낸 사람 이유" : "받은 사람 이유");
+
+        var request = requestService.send(sender.getMemberId(), recipient.getId());
+        recommendation.deactivate();
+        requestService.accept(recipient.getMemberId(), request.requestId());
+        for (int i = 0; i < 50; i++) {
+            String reason = jdbcTemplate.queryForObject(
+                    "SELECT reason_content FROM dating_recommendation WHERE id = ?", String.class,
+                    recommendation.getId());
+            if (reason != null) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+
+        var sent = requestService.list(sender.getMemberId(), "sent").get(0);
+        assertThat(sent.counterpart().fields().reason().locked()).isFalse();
+        assertThat(sent.counterpart().fields().reason().value()).isEqualTo("보낸 사람 이유");
+        assertThat(recommendationRepository.findById(recommendation.getId()).orElseThrow().isReasonUnlocked())
+                .isFalse();
+        requestRepository.deleteById(request.requestId());
     }
 
     @Test
@@ -529,7 +602,7 @@ class DatingSchemaTest {
 
     @Test
     @Transactional
-    void rerollIsFreeOncePerDayThenCostsFiveAndNeverRepeatsCandidates() throws Exception {
+    void rerollIsFreeOncePerDayThenCostsTwentyAndNeverRepeatsCandidates() throws Exception {
         DatingProfile viewer = profile(1100001L, Gender.MALE, "갑자", "을축", "병인");
         for (long i = 2; i <= 10; i++) {
             profile(1100000L + i, Gender.FEMALE, "계해", "임술", "신유");
@@ -537,15 +610,15 @@ class DatingSchemaTest {
         var initial = recommendationService.getCurrent(viewer.getMemberId());
         assertThat(initial.rerollCost()).isZero();
         walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
-                viewer.getMemberId().toString(), 5);
+                viewer.getMemberId().toString(), 20);
 
         var free = recommendationService.reroll(viewer.getMemberId());
-        assertThat(free.threadBalance()).isEqualTo(5);
-        assertThat(free.rerollCost()).isEqualTo(5);
+        assertThat(free.threadBalance()).isEqualTo(20);
+        assertThat(free.rerollCost()).isEqualTo(20);
         assertThat(free.candidates()).isNotEmpty();
         assertThat(ids(free.candidates())).doesNotContainAnyElementsOf(ids(initial.candidates()));
         assertThat(activeIds(viewer)).containsExactlyInAnyOrderElementsOf(ids(free.candidates()));
-        assertThat(recommendationService.getCurrent(viewer.getMemberId()).rerollCost()).isEqualTo(5);
+        assertThat(recommendationService.getCurrent(viewer.getMemberId()).rerollCost()).isEqualTo(20);
 
         var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
         mvc.perform(post("/api/dating/recommendations/reroll")).andExpect(status().isUnauthorized());
@@ -553,7 +626,7 @@ class DatingSchemaTest {
                         .cookie(new Cookie("wks_token", jwtProvider.issue(viewer.getMemberId()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.threadBalance").value(0))
-                .andExpect(jsonPath("$.data.rerollCost").value(5));
+                .andExpect(jsonPath("$.data.rerollCost").value(20));
         assertThat(activeIds(viewer)).doesNotContainAnyElementsOf(ids(initial.candidates()))
                 .doesNotContainAnyElementsOf(ids(free.candidates()));
         assertThat(recommendationRepository.findAllByViewerMemberId(viewer.getMemberId()))
@@ -618,6 +691,17 @@ class DatingSchemaTest {
     private static java.util.List<UUID> ids(
             java.util.List<com.darkness.wks.dating.dto.DatingRecommendationResponse.CandidateCard> cards) {
         return cards.stream().map(card -> card.candidateId()).toList();
+    }
+
+    private void awaitRecipientReason(UUID requestId) throws InterruptedException {
+        for (int i = 0; i < 50; i++) {
+            if (jdbcTemplate.queryForObject("SELECT recipient_reason FROM dating_request WHERE id = ?",
+                    String.class, requestId) != null) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("recipient_reason not written within 5s");
     }
 
     private DatingProfile profile(Long kakaoId, Gender gender, String year, String month, String day) {

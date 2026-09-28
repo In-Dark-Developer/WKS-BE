@@ -2,7 +2,18 @@ package com.darkness.wks.saju;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 /** Gemini 는 호출하지 않는다 (TR-E-01). 프롬프트 조립만 검증 — 성별·닉네임·생년월일이 없고 오행 관계를 코드가 정하는지 */
 class CompatibilityReasonGeneratorTest {
@@ -30,5 +41,23 @@ class CompatibilityReasonGeneratorTest {
         assertThat(CompatibilityReasonGenerator.buildPrompt(wood, fire, 80, "찰떡")).contains("나무가 불을 살린다(상생)");
         assertThat(CompatibilityReasonGenerator.buildPrompt(fire, wood, 80, "찰떡")).contains("나무가 불을 살린다(상생)");
         assertThat(CompatibilityReasonGenerator.buildPrompt(wood, wood, 70, "벗")).contains("두 기운의 관계: 같은 기운");
+    }
+
+    @Test
+    void bankHitSkipsLlmAndMissFallsBackToLlm() {
+        GeminiJson gemini = mock(GeminiJson.class);
+        SajuPillars wood = new SajuPillars("갑인", "갑인", "갑인", "갑인");
+        SajuPillars fire = new SajuPillars("병오", "병오", "병오", "병오");
+        CompatibilityReason banked = new CompatibilityReason("은행 왜", "은행 만나면", "은행 싸우면");
+        CompatibilityReasonGenerator generator = new CompatibilityReasonGenerator(gemini,
+                new CompatibilityReasonBank(Map.of("찰떡|나무:나무|불:불", List.of(banked))));
+
+        assertThat(generator.generate(fire, wood, 80, "찰떡", 0, Set.of())).isEqualTo(banked);
+        verifyNoInteractions(gemini);
+
+        when(gemini.generate(eq(LlmPurpose.COMPATIBILITY), anyString(), any(), anyList()))
+                .thenReturn(Map.of("why", "왜", "together", "만나면", "conflict", "싸우면"));
+        assertThat(generator.generate(fire, wood, 70, "벗", 0, Set.of()))
+                .isEqualTo(new CompatibilityReason("왜", "만나면", "싸우면"));
     }
 }

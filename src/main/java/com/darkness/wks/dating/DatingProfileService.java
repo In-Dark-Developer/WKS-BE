@@ -51,7 +51,9 @@ public class DatingProfileService {
         this.emailCodeService = emailCodeService;
     }
 
-    @Transactional
+    // 트랜잭션으로 묶지 않는다. S3 확인·원본 다운로드·블러 생성·업로드가 트랜잭션 안에 있으면 그동안 DB 커넥션을
+    // 붙잡는다. 검사는 각 조회의 짧은 트랜잭션으로, 저장은 saveAndFlush 한 번으로 끝낸다 — 중복 등록은 UNIQUE 가 막는다
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public DatingProfileResponse create(Long memberId, DatingProfileRequest request) {
         if (profileRepository.existsByMemberId(memberId)) {
             throw new BusinessException(ErrorCode.DATING_PROFILE_CONFLICT);
@@ -70,13 +72,14 @@ public class DatingProfileService {
         DatingProfile profile = new DatingProfile(memberId, normalize(request.email()),
                 request.name().trim(), request.contactMethod(), request.contactValue().trim(),
                 request.department().trim(), request.mbti(), request.bio().trim(), photo);
+        // 코드 인증을 위에서 확인했으므로 인증된 상태로 한 번에 저장한다(저장 뒤에 바꾸면 트랜잭션 밖이라 반영되지 않는다)
+        profile.markVerified(Instant.now());
         DatingProfile saved;
         try {
             saved = profileRepository.saveAndFlush(profile);
         } catch (DataIntegrityViolationException exception) {
             throw new BusinessException(ErrorCode.DATING_PROFILE_CONFLICT);
         }
-        saved.markVerified(Instant.now());
         return DatingProfileResponse.from(saved);
     }
 

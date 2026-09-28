@@ -240,6 +240,43 @@ class SignupReapplyFlowTest {
         mvc().perform(get("/api/dating/profile/me")).andExpect(status().isUnauthorized());
     }
 
+    /**
+     * 신청·재발송은 트랜잭션 없이 돈다(SMTP 동안 커넥션을 쥐지 않으려고). 메일이 실패해도 신청은 커밋돼 남고
+     * 실패한 초대는 지워지며, 재발송은 트랜잭션 밖에서도 결과 연결 여부를 읽어 새 초대를 보낸다.
+     */
+    @Test
+    void signupSurvivesMailFailureAndResendSendsNewInvite() throws Exception {
+        stubMimeMessage();
+        org.mockito.Mockito.doThrow(new org.springframework.mail.MailSendException("smtp down"))
+                .when(mailSender).send(any(MimeMessage.class));
+        Result result = result(null);
+        String email = "tx-" + UUID.randomUUID() + "@gmail.com";
+
+        mvc().perform(post("/api/signups").contentType("application/json").content("""
+                        {"email":"%s","resultId":"%s","gender":"MALE","preferGender":"FEMALE"}
+                        """.formatted(email, result.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.mailSent").value(false));
+
+        Signup saved = signupRepository.findWithResultByEmail(email).orElseThrow();
+        assertThat(reapplyService.findTargets()).extracting(SignupReapplyService.ReapplyTarget::signupId)
+                .contains(saved.getId()); // 실패한 초대는 지워져 다시 대상이 된다
+
+        org.mockito.Mockito.doNothing().when(mailSender).send(any(MimeMessage.class));
+        mvc().perform(post("/api/signups/resend").contentType("application/json")
+                        .content("{\"email\":\"%s\"}".formatted(email)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.mailSent").value(true));
+        assertThat(reapplyService.findTargets()).extracting(SignupReapplyService.ReapplyTarget::signupId)
+                .doesNotContain(saved.getId());
+
+        mvc().perform(post("/api/signups").contentType("application/json").content("""
+                        {"email":"%s","gender":"MALE","preferGender":"FEMALE"}
+                        """.formatted(email)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("DUPLICATE_SIGNUP"));
+    }
+
     @Test
     void inviteMailPointsToFrontendReapplyPage() throws Exception {
         stubMimeMessage();

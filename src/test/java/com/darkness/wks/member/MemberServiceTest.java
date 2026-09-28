@@ -2,6 +2,7 @@ package com.darkness.wks.member;
 
 import com.darkness.wks.common.Gender;
 import com.darkness.wks.member.entity.Member;
+import com.darkness.wks.result.ResultLinkedEvent;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.wallet.WalletService;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
@@ -38,6 +40,8 @@ class MemberServiceTest {
     private MemberRaceOps raceOps;
     @Mock
     private WalletService walletService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private MemberService memberService;
@@ -92,6 +96,19 @@ class MemberServiceTest {
 
         assertThat(result.restoredResultId()).isNull();
         verify(raceOps).linkResultIfUnowned(RESULT_ID, 1L);
+        verify(eventPublisher, never()).publishEvent(any(Object.class)); // 연결 실패(목 기본값 false)면 소급 없음
+    }
+
+    @Test
+    void 브라우저_결과가_연결되면_친구_보상_소급_이벤트를_낸다() {
+        Member existing = memberWithId(1L);
+        when(memberRepository.findByKakaoId(KAKAO_ID)).thenReturn(Optional.of(existing));
+        when(resultRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+        when(raceOps.linkResultIfUnowned(RESULT_ID, 1L)).thenReturn(true);
+
+        memberService.loginAndLink(KAKAO_ID, RESULT_ID.toString());
+
+        verify(eventPublisher).publishEvent(new ResultLinkedEvent(RESULT_ID, 1L));
     }
 
     @Test

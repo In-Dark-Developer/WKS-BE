@@ -29,11 +29,14 @@ public class DatingUnlockService {
     private final DatingReasonService reasonService;
 
     /**
-     * 고른 필드를 한 번에 해금한다. 중복 필드는 한 번으로 친다(EnumSet). {@code REASON} 생성이 실패하면
-     * 차감은 이미 커밋된 뒤라 {@code LLM_UNAVAILABLE} 이 그대로 나가고, 다시 호출하면 차감 없이 값만 온다.
+     * 고른 필드를 한 번에 해금한다. 중복 필드는 한 번으로 친다(EnumSet). {@code REASON} 은 차감보다
+     * **먼저** 생성한다 — 차감을 커밋한 뒤 LLM 이 실패하면 실만 빠지고 값은 못 받는 것으로 보인다(#121).
+     * 생성 결과는 추천행마다 한 번만 캐시되므로 차감 없이 생성만 되는 경우도 LLM 호출은 추천행당 최대 1회다.
      */
     public DatingUnlockResponse unlock(Long viewerMemberId, UUID candidateId, Collection<DatingUnlockField> requested) {
         Set<DatingUnlockField> fields = EnumSet.copyOf(requested);
+        String reason = fields.contains(DatingUnlockField.REASON)
+                ? reasonService.getOrCreate(viewerMemberId, candidateId) : null;
         DatingProfile candidate = chargeService.chargeAndMarkUnlocked(viewerMemberId, candidateId, fields);
         Map<String, String> values = new LinkedHashMap<>();
         for (DatingUnlockField field : fields) {
@@ -41,7 +44,7 @@ public class DatingUnlockService {
                 case PHOTO -> photoService.originalUrl(candidate.getPhoto());
                 case NAME -> candidate.getName();
                 case DEPARTMENT -> candidate.getDepartment();
-                case REASON -> reasonService.getOrCreate(viewerMemberId, candidateId);
+                case REASON -> reason;
             });
         }
         return new DatingUnlockResponse(values, walletService.getBalance(viewerMemberId));

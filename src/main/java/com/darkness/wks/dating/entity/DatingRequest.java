@@ -46,6 +46,10 @@ public class DatingRequest {
     @Column(name = "responded_at")
     private Instant respondedAt;
 
+    // 받은 사람 기준 궁합 이유 (#123). 요청 커밋 뒤 별도 스레드에서 한 번 생성한다. 생성 전·실패 시 null
+    @Column(name = "recipient_reason", columnDefinition = "text")
+    private String recipientReason;
+
     public DatingRequest(DatingProfile sender, DatingProfile recipient) {
         this.id = UUID.randomUUID();
         this.sender = sender;

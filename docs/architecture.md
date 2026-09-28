@@ -150,6 +150,7 @@ dating  →  result·compatibility·member·wallet   허용
 dating  →  signup    금지 (2026-09-26 에 초대 토큰 검증용으로 열었다가 2026-09-27 초대가 학교메일 인증을 대신하지 않게 바뀌며 다시 닫았다)
 signup  →  dating    금지 (캠페인 대상 조회도 signup·result 쪽만 본다)
 compatibility  →  wallet   허용 (친구 궁합 등록 시 공유자에게 실 +3)
+member  →  compatibility  없음 — 로그인으로 결과가 연결되면 member 가 `result.ResultLinkedEvent` 를 내고 compatibility 가 받아 친구 보상을 소급 지급한다(2026-09-28, 새 의존 없이 둘 다 이미 의존하는 result 에 이벤트를 둔다)
 wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 ```
 
@@ -401,7 +402,7 @@ CREATE TABLE signup_reapply_invite (
 - **`name`·`phone` 컬럼은 없다. 추가하지 마라**
 - **`member` 에 프로필 컬럼(닉네임·이메일·이름·프로필 사진)을 추가하지 마라.** 로그인 식별자는 `kakao_id` 하나다
 - **한 계정에 결과를 둘 이상 연결하지 마라.** `result.member_id` 는 계정당 1개(부분 unique)다. 병합은 V2 (plan §1.1)
-- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = compatibility id, `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
+- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = 친구의 팔자 네 기둥·성별 SHA-256 앞 16바이트(`p:`+32hex — 같은 사람 한 번만, 원문 팔자는 사실상 생년월일이라 해시. 2026-09-28 전 행은 compatibility id), `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
 
 ---
 
@@ -433,13 +434,14 @@ CreateResultRequest
 
 - **등록 시가 아니라 처음 열어볼 때 생성**한다 (`GET /api/compatibilities/{id}/reason`, `CompatibilityReasonService`). 공유가 몰릴 때 등록 즉시 생성하면 429 로 죽는다
 - 생성 결과는 `compatibility.reason_*` 세 컬럼(V13)에 캐싱하고, 재조회는 LLM 호출 0회다. 조합은 A↔B 무순서로 한 행이라 **두 사람이 같은 글을 본다**
-- 세 질문("왜 귀인인가"·"둘이 만나게 된다면"·"둘이 싸움이 난다면")을 **한 번의 호출**로 생성한다 (FR-GM-02). `saju/CompatibilityReasonGenerator` + `prompts/compatibility-reason-system.txt`
+- **사전 생성본이 먼저다 (#131, 2026-09-29)**. 프롬프트 입력이 (기운, 많은 기운) 쌍과 관계 유형뿐이라 조합이 무순서 325 × 유형 4 = 1,300개로 유한하다. 같은 프롬프트·모델로 Gemini Batch 가 미리 쓴 변형(찰떡·벗 6개, 귀인·스침 3개)을 `resources/compatibility-reasons.json`(`saju/CompatibilityReasonBank`)에 두고, 첫 열람 때 여기서 골라 `reason_*` 에 저장한다. 실시간 LLM 은 리소스에 없는 조합에서만 부른다(현재 0개). 변형은 공유자(origin) id 로 정한 시작 자리에서 같은 조합을 몇 번째 여는지만큼 회전하고(0번 변형만 몰리지 않게), 세 답은 한 칸씩 어긋난 변형에서 뽑되, 공유자가 다른 궁합에서 이미 읽은 문장(`reason_*`)과 겹치는 변형은 건너뛴다 — 사전 생성본이 첫 문장을 정형구로 쓰는 일이 잦아서다. 시뮬레이션으로 친구 10명을 봐도 어느 한 문장이라도 같은 문장을 만날 확률 0.8%, 20명 4%. 재생성 절차는 `scripts/compatibility-reason-bank/README.md`. 프롬프트를 바꾸면 리소스도 다시 만든다
+- 세 질문("왜 귀인인가"·"둘이 만나게 된다면"·"둘이 싸움이 난다면")을 **한 번의 호출**로 생성한다 (FR-GM-02). `saju/CompatibilityReasonGenerator` + `prompts/compatibility-reason-system.txt` (사전 생성도 같은 프롬프트로 한 요청에 세 답)
 - 실패하면 `LLM_UNAVAILABLE` 503. 프론트는 해당 영역만 미노출하고 재시도할 수 있다. 화면 전체를 에러로 만들지 않는다
-- 프롬프트에는 팔자·점수·관계유형과 코드가 정한 오행 사실(두 기운·상생/상극)만 넣는다. **성별은 넣지 않는다** — 성별을 고려한 글은 소개팅 쪽이 따로 만든다. 호출은 `saju/GeminiJson` 의 `CallBudget` 하나에 사주 해석과 함께 집계된다
+- 프롬프트에는 팔자·점수·관계유형과 코드가 정한 오행 사실(두 기운·상생/상극)만 넣는다. **성별은 넣지 않는다** — 성별을 고려한 글은 소개팅 쪽이 따로 만든다. 호출은 `saju/GeminiJson`의 프로젝트별·전체 `CallBudget`에 사주 해석과 함께 집계된다
 - 동시에 처음 열면 LLM 을 두 번 부를 수 있지만 저장은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 되고, 진 쪽은 저장된 글을 다시 읽는다. 잠금은 LLM 30초 동안 DB 연결을 잡아 두므로 쓰지 않는다
 - 서비스 메서드에 트랜잭션을 걸지 않는다. 같은 이유
 - 프롬프트를 바꾸면 기존 캐시는 옛 글로 남는다. 다시 만들려면 `UPDATE compatibility SET reason_why = NULL, reason_together = NULL, reason_conflict = NULL` (버전 컬럼은 두지 않았다)
-- 소개팅 "궁합 까닭"은 친구 궁합과 다른 문구다. 첫 REASON 해금 성공 시 생성하고 `dating_recommendation.reason_content`(V18)에 캐싱한다. 추천 조회에서는 LLM을 호출하지 않는다
+- 소개팅 "궁합 까닭"은 친구 궁합과 다른 문구다. 첫 REASON 해금 성공 시 생성하고 `dating_recommendation.reason_content`(V18)에 캐싱한다. 해금 전 보낸 요청이 수락되면 같은 캐시에 비동기로 무료 생성하며, 실패하면 보낸 요청 목록 조회에서 재시도한다. 추천 조회에서는 LLM을 호출하지 않는다
 
 ### 시간·지역 모름
 
@@ -456,14 +458,16 @@ CreateResultRequest
 
 ### LLM 연동 — Gemini Flash 무료 티어
 
-SDK: `com.google.genai:google-genai` (Gemini Developer API).
-API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
-모델 `gemini-3.5-flash-lite` (설정 `gemini.model`), 타임아웃 30초 (`gemini.timeout-seconds`).
-`gemini-2.5-flash` 는 2026-09 기준 신규 키에 404 ("no longer available to new users").
-모델별 무료 한도가 크게 다르다: `gemini-3.6-flash` 는 하루 20건, `gemini-3.5-flash-lite` 는 하루 2,000건 이상 실측(2026-09-13, 1토큰 요청). 실제 크기 요청(약 2,100토큰/건)으로도 분당 90건·20만 토큰까지 429 없음 (2026-09-16, p95 5.8초). 그래서 lite 를 기본으로 쓴다.
-3.x 는 `thinkingBudget` 을 거부하므로 `thinkingLevel: MINIMAL` 로 사고 토큰을 줄인다.
+SDK: `com.google.genai:google-genai` (Gemini Developer API), 모델 `gemini-3.5-flash-lite`.
+무료 프로젝트 키 최대 6개를 `GEMINI_FREE_KEY_1`~`_6`으로 받아 가용한 프로젝트만 라운드 로빈으로 선택한다. 모두 비어 있으면 기존 `GOOGLE_API_KEY`를 사용한다. **프로젝트마다 키 하나**이며 프로젝트 ID는 받지 않는다. 같은 프로젝트 키 여러 개는 한도를 공유하므로 별개 항목으로 등록하지 않는다.
 
-**호출 총량 상한** (`saju/CallBudget`, #64): 분당 `gemini.max-per-minute`(기본 60)·일일 `gemini.max-per-day`(기본 1,600) 넘으면 Gemini 를 부르지 않고 `LLM_UNAVAILABLE`. 무료 한도는 키가 아니라 **프로젝트 단위**이고 **태평양 자정에 리셋**(KST 16:00, 서머타임 땐 17:00)이라 일일 창도 그 기준. 재시도도 한도를 쓰니 시도마다 센다. 같은 입력 재사용(#62)은 카운트 안 함. 메모리 카운터라 재시작하면 0 부터. IP 제한은 축제장 NAT 때문에 좁게 못 잡아서 총량으로 지킨다 (nginx `limit_req` 는 폭주 차단용으로 넓게, 곽도윤).
+**장애 처리 (#127, 2026-09-28 / 2026-09-29 변경)**: SDK 내부 재시도는 `attempts(1)`로 끈다. 무료 호출이 Google 원본 **503·429·IO 실패(타임아웃 포함)**로 실패하거나 **무료 키가 모두 쓸 수 없으면**(하루 한도·쿨다운·비활성) `GEMINI_PAID_KEY`로 1회 전환한다(최대 HTTP 2회, 유료 실패는 재시도 없음). 파싱 실패·4xx 는 즉시 `LLM_UNAVAILABLE` 503. 유료 비용은 유료 RPD와 **사주 예약분**(`GEMINI_PAID_SAJU_RESERVE_RPD`)이 막는다 — 호출 파트(`LlmPurpose`)가 사주가 아니면 유료 잔량이 예약분보다 많을 때만 쓴다. 하루 2만 원 중 공용 1만3천 원을 다 쓰면 남은 7천 원은 사주만 쓰고, 사주는 공용분도 쓴다. 금액은 호출 수로 환산해 넣는다. 궁합지도 궁합 이유는 사전 생성본이 먼저라(#131) 사실상 유료를 쓰지 않는다. 모델 자체 과부하는 유료 전환도 실패할 수 있다. 시도당 기본 12초(성공 p95 6.4초는 사주·궁합이 섞인 값이고 최대 17초가 있었다. 가장 긴 사주 해석을 자르면 정상 호출이 유료로 넘어가거나 실패하므로 8초로 줄이지 않았다 — `purpose=SAJU` 로그의 `ms=` 를 보고 조정. 무응답 뒤 유료 전환까지 최악 약 24초), LLM 단계 전체 예산 25초이며 각 호출에 남은 시간을 전달한다. `MINIMAL` 사고 설정은 유지한다.
+
+**예산·쿨다운**: 무료 프로젝트별 기본 15 RPM, 500 RPD(2026-09-28 운영 429 메시지의 실제 한도) / 유료 기본 5 RPM, 120 RPD, 그중 사주 예약 42. 앱 전체 한도는 두지 않는다(2026-09-29 제거) — 프로젝트별 예산의 합이 곧 상한이고, 따로 두면 유료 값을 올릴 때 같이 안 올려 유료가 막히는 설정 실수만 생긴다. 운영 31시간 로그 102회 시도: 성공 49%, IO 실패 34%, 429 10%, Google 503 7%. 당시 유료 전환은 이 7%만 대상이었고, 2026-09-29부터 IO 실패(34%)·429(10%)·무료 소진도 포함한다. 분당 예산은 최근 60초, 일일 예산은 `America/Los_Angeles` 자정에 리셋한다(PDT: KST 16시, PST: KST 17시). 선택·예산 예약만 동기화하며 HTTP 호출 동안 락을 잡지 않는다. SDK 자체 시도를 끄므로 실패한 호출·유료 대체도 예산에 반영된다.
+
+Google 503이면 해당 프로젝트를 30초, 429면 최소 60초 제외한다. SDK 메시지의 구조화된 RetryInfo/QuotaFailure를 해석할 수 있으면 더 긴 재시도 시간/일일 리셋까지 기다린다. 401·403은 설정 수정·재시작 전까지 제외한다. 모든 무료 프로젝트가 제한되면 빠르게 실패한다. 카운터·쿨다운은 프로세스 메모리라 재시작 시 초기화되며 dev·운영·다른 도구의 호출을 합산하지 못한다. 프로젝트를 분리하거나 예산을 나눠야 한다.
+
+소개팅 요청 이유(받은 사람 문장, 수락 후 보낸 사람 문장)의 비동기 생성은 `dating/DatingReasonService`가 요청·방향별로 진행 중 중복을 막고, 실패/작업 제출 거절 뒤 60초 쿨다운을 둔다. 이후 실제 목록 조회가 있을 때 재시도한다. 새로고침 자체로 호출량이 반복 소진되는 것을 막는다. 키 설정·한도 변경 절차는 `runbook-dev-server.md`의 Gemini 설정 절을 따른다.
 
 > SDK 2.0.0부터 Java 17 이상이 필수다. 우리는 Java 17이라 문제없다.
 

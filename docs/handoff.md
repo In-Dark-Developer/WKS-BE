@@ -22,7 +22,7 @@
 | 배포 상태 | ✅ 2026-09-26: `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버, 둘 다 EC2 에서 동작. `dev` 의 로그인·소개팅 커밋은 아직 `main` 미릴리즈 — **릴리즈 전에 아래 "막혀 있는 것"의 운영 `.env` 항목부터** |
 | 개발 서버 (`api-dev.threadoffate.site`) | ✅ 2026-09-26 기동(`wks_dev` DB, Flyway V18). **단 `SPRING_PROFILES_ACTIVE: dev` 수정이 `dev` 에 머지되기 전에 누가 `dev` 에 push 하면 다시 죽는다** — 아래 2026-09-26 인프라 기록 |
 | `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
-| Flyway 최신 버전 | V23 (`dev` 기준, 2026-09-27 로컬 확인). V12는 폐기(아래 예약 표) |
+| Flyway 최신 버전 | V24 (`dev` 기준, 2026-09-28 확인). V25 는 #123 PR 대기. V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
 | 실(재화) | ✅ 원장·자동지급 3종·소개팅 해금 `dev` 머지 완료(#97). 🔧 2026-09-27 리롤 구현(TBD-6 종료, 미커밋). 🔧 2026-09-27 해금을 여러 필드 묶음 요청으로 변경(전체 해금 포함, 미커밋). 제휴처 보상(`PARTNER`)은 미구현 |
 | api-spec 프론트 전달 | ❌ 미전달 |
@@ -56,6 +56,7 @@
 
 | 번호  | 예약자 | 내용 | 상태 |
 |-----|---|---|---|
+| V25 | 차은호 | #123 `dating_request` 에 `recipient_reason TEXT` (받은 사람 기준 궁합 이유 캐시) | PR |
 | V24 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
 | V23 | 최선우 | #100 소개팅 요청 `CANCELLED` 상태 및 취소 후 재요청 허용을 위한 부분 UNIQUE 인덱스 | dev 머지 완료 (PR #101) |
 | V22 | 곽도윤 | `signup_reapply_invite` (기존 사전신청자 재신청 초대 토큰, TTL 48시간). **축제 후 버려도 되는 1회성 캠페인 테이블** | dev 머지 완료 (#97) |
@@ -115,8 +116,15 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-29 | **리롤 비용 5실 → 20실** (하루 1회 무료는 그대로). 응답 `rerollCost` 가 무료분을 다 쓰면 `20` 으로 온다 — 버튼 문구를 하드코딩했다면 `rerollCost` 값으로 표시. 잔액 20 미만이면 402. `api-spec.md` §10.4·§10.4.1·§12 | ❌ |
+| 2026-09-29 | 궁합지도 친구 등록 보상 **1명당 3실 → 서로 다른 친구 5명마다 3실**. API 형식 변경 없음, 안내 문구만 수정. `api-spec.md` §12 | ❌ |
+| 2026-09-28 | `GET /api/dating/requests?box=sent`에서 `ACCEPTED` 요청은 사진·이름·학과·궁합 까닭을 실 차감 없이 모두 `locked:false`로 반환한다. 궁합 까닭은 수락 후 비동기 생성이라 잠시 `value:null`일 수 있으며 목록 재조회가 재시도한다. `PENDING`·`REJECTED`·`CANCELLED`는 기존 해금 상태 유지. 필드 형식 변경 없음. `api-spec.md` §11.1 | ❌ |
+| 2026-09-28 | **[축제 사이트 유입 보상, 프론트 대응 필수]** `?ref=FESTIVAL` 로 들어온 사람에게 계정당 1회 10실. ① 비로그인이면 `ref` 를 보관했다가 `POST /api/auth/kakao` 의 `ref` 로 전달 → 응답 `rewardGranted` 가 채워짐 ② 이미 로그인 상태면 `POST /api/wallet/partner-rewards {ref}` 신규 호출. 이미 받았으면 둘 다 `rewardGranted: null`(에러 아님). `api-spec.md` §9·§12 | ❌ |
+| 2026-09-28 | 에러 응답 `error` 에 `traceId`(8자리 hex) 추가 — api-spec §1 에 원래 있던 필드. 그리고 깨진 JSON·없는 enum 값·잘못된 시각 형식·경로 id 형식 오류·잘못된 Content-Type 이 **500 `INTERNAL_ERROR` 대신 400 `INVALID_INPUT`** 으로 나간다. 형식 변경 없음 | ❌ |
 | 2026-09-27 | `POST /api/signups`·`POST /api/signups/resend` — `resultId` 가 있고 계정에 연결 안 된 신청이면 **인증 메일 대신 재신청 매직링크**를 보낸다. 요청·응답 필드 변경 없음, `message` 문구만 바뀜. 결과 없는 신청은 기존 인증 메일. `api-spec.md` §5 | ❌ |
 | 2026-09-27 | `GET /api/me` 의 `hasDatingProfile` 이 이제 실제 값이다(그동안 항상 `false`). 소개팅 프로필 등록(=학교메일 인증 완료 신청자)이면 `true`. 형식 변경 없음. `api-spec.md` §9 | ❌ |
+| 2026-09-28 | #123 `GET /api/dating/requests?box=received`·`?box=sent` 의 `counterpart.fields` 에 `reason` 추가. 받은 목록은 **받은 사람 기준** 문장, 무료, 항상 `locked:false`. 요청 직후·생성 실패 시 `value:null` → 잠시 후 목록 재조회. 보낸 목록은 카드와 같은 해금 상태. `api-spec.md` §11.1 | ❌ |
+| 2026-09-28 | #121 `POST /api/dating/candidates/{candidateId}/unlock` 에 `REASON` 포함 시 503 `LLM_UNAVAILABLE` 이면 **고른 필드 전부 차감·해금되지 않는다**(이유를 먼저 만들고 차감). "잠시 후 다시 시도" 안내. 요청·응답 형식 변경 없음. `api-spec.md` §10.5 | ❌ |
 | 2026-09-27 | **[해금 요청·응답 형식 변경, 프론트 대응 필수]** `POST /api/dating/candidates/{candidateId}/unlock` 요청 `{"field":"PHOTO"}` → `{"fields":["PHOTO","NAME"]}`(하나만 열어도 배열), 응답 `field`·`value` → `values: {"PHOTO": "...", "NAME": "..."}` + `balance`. 네 개 전부 = 전체 해금(25, 이미 연 필드는 빠짐). 잔액 부족 402면 **아무 필드도 안 열린다.** `api-spec.md` §10.5 | ❌ |
 | 2026-09-27 | **[리롤 신규]** `POST /api/dating/recommendations/reroll` — 현재 카드 3장을 전부 새 후보로 교체. 하루(KST) 1회 무료, 이후 5실. 응답 `candidates`·`rerollCost`·`threadBalance`. 새 후보 없으면 409 `DATING_NO_MORE_CANDIDATES`(차감 없음), 잔액 부족 402. `GET /api/dating/recommendations` 에 `rerollCost` 필드 추가. **연타 방지는 프론트 몫.** `api-spec.md` §10.4·§10.4.1 | ❌ |
 | 2026-09-27 | **[재신청 흐름 변경, 프론트 대응 필수]** 재신청 초대 링크는 **학교메일 인증을 대신하지 않는다.** `/dating/reapply` 흐름: `GET /api/signups/reapply`(폼 채움·`resultId`) → `POST /api/auth/kakao` 에 `resultId`(결과 연결) → **코드 인증(§10.7)** → 사진 → `POST /api/dating/profile`. 즉 로그인 뒤는 일반 신청과 동일. `reapplyToken` 은 서버가 무시(폐기 예정, 안 보내도 됨). 응답의 `email` 은 사전신청 주소라 학교메일이 아닐 수 있음 — 학교 이메일 칸에 그대로 채우지 말 것. 카카오 로그인 왕복 동안 `resultId` 보관 필수. `api-spec.md` §5 | ❌ |
@@ -174,6 +182,432 @@
 ---
 
 ## 기록
+
+### 2026-09-29 (화) · hairyung2002 · saju/ Gemini 무료 6키·유료 전환 확대·사주 예약분 (이슈 없음) · Claude Code
+
+**한 일**
+- 무료 프로젝트 키 최대 3개 → **6개**(`GEMINI_FREE_KEY_4~6`, `_RPM_4~6`, `_RPD_4~6`)
+- 유료 전환 조건 확대: 무료 호출의 Google **503·429·IO 실패(타임아웃 포함, 운영 실패의 34%)**, 그리고 **무료 키 전부 사용 불가**(키마다 하루 500회 소진·쿨다운)면 유료 1회. 파싱 실패·4xx 는 전환 없음. 요청당 HTTP 최대 2회 유지. 시도당 타임아웃은 **12초 유지**(8초 안을 검토했으나 사주 해석이 가장 길어 정상 호출을 자를 수 있어 되돌림. 최악 12+12 = 약 24초, 전체 예산 25초 안). 배포 뒤 `purpose=SAJU` 의 `ms=` 로 조정
+- `GeminiJson.generate(LlmPurpose, …)`: 호출 파트(`SAJU`·`COMPATIBILITY`·`DATING`)를 받아 로그에 남긴다. 유료는 **사주 예약분**(`GEMINI_PAID_SAJU_RESERVE_RPD`, 기본 42)을 둔다 — 사주가 아닌 호출은 유료 잔량이 예약분보다 많을 때만 쓰고, 사주는 전부 쓸 수 있다(사용자 결정: 하루 2만 원 중 공용 1만3천 원, 남은 7천 원은 사주 전용)
+- 궁합지도 궁합 이유는 #131 대로 사전 생성본이 먼저라 그대로 두고 LLM 경로 호출 인자만 맞췄다. 유료는 사실상 사주·소개팅 이유가 쓴다
+- **앱 전체 한도(`GEMINI_MAX_PER_MINUTE`·`_PER_DAY`) 제거.** 프로젝트별 예산 합이 곧 상한이고, 유료 값을 올릴 때 같이 안 올리면 유료가 막히는 실수만 만든다. `.env` 에 남아 있어도 무시된다
+- `gemini ok` 로그에 `in=`·`out=`(입력·출력+사고 토큰) 추가. 단가가 입력 $0.30·출력 $2.50/1M(3.5 Flash-Lite, 2026-09-29 가격 페이지 확인)이라 파트별 호출 비용을 정확히 환산하려고
+
+**건드린 파일/패키지**
+- `saju/`: 신규 `LlmPurpose`, `GeminiJson`, `GeminiClientPool`, `ReadingGenerator`·`CompatibilityReasonGenerator`(호출 인자만)
+- `dating/DatingReasonGenerator`(호출 인자만), `common/config/GeminiProperties`
+- `application.yml`, `docker-compose.prod.yml`, `docs/architecture.md`, `docs/runbook-dev-server.md`
+- `saju/CallBudget`(`remainingToday`)
+- 테스트: `GeminiRoutingTest`(429·IO 전환, 무료 소진 직행, 사주 예약분, 키 6개/7개 거부), `DatingReasonGeneratorTest`, `CompatibilityReasonGeneratorTest`(인자만)
+
+**다음 사람이 알아야 할 것**
+- **금액 한도는 호출 수로 환산해 `.env` 에 넣는다.** 앱은 금액을 모른다. 기본 사주 예약 42 는 비율 자리값이지 7천 원 환산이 아니다. 보수적 추정(사주 1회 4,000토큰 전부 출력 단가, 1,400원/$ → 약 14원)으로 `GEMINI_PAID_RPD=1400`, `GEMINI_PAID_SAJU_RESERVE_RPD=500`. 배포 뒤 `gemini ok` 의 `in=`·`out=` 로 실제 회당 비용을 재서 조정
+- 무료가 다 떨어지면 **모든 요청이 유료로 가므로 `GEMINI_PAID_RPM`(기본 5)이 병목**이 된다. 축제 트래픽이면 올릴 것
+- 카운터는 메모리라 배포마다 0. 실제 비용 상한은 GCP 콘솔 유료 프로젝트의 일일 요청 쿼터로 건다
+
+**막힌 것 / 넘기는 것**
+- 운영 `.env` 에 `GEMINI_FREE_KEY_4~6`·`GEMINI_PAID_RPM`·`GEMINI_PAID_RPD`·`GEMINI_PAID_SAJU_RESERVE_RPD` 추가(dev 는 유료 키를 넣지 않는다 — 앱 카운터가 따로라 한도가 두 배가 된다), GCP 쿼터 설정 — 배포 담당
+
+### 2026-09-29 (화) · 차은호 · saju/ 궁합 이유 사전 생성본 (#131) · Claude Code
+
+**한 일**
+- 궁합 상세 이유를 실시간 LLM 대신 **사전 생성본**에서 고른다. 프롬프트 입력이 (기운, 많은 기운) 쌍과 유형뿐이라 조합이 무순서 325 × 유형 4 = **1,300개**로 유한. 같은 프롬프트·모델(`gemini-3.5-flash-lite`)로 Gemini Batch API 가 변형(찰떡·벗 6, 귀인·스침 3 = 5,850건)을 썼다. 비용 약 $3.2(배치 50%).
+- 검사: 합쇼체·A/B·"유형"·"점수"·사주 용어·팔자 글자·빈 필드 자동 검출 → 5,850 중 43건 걸러 재생성. 180자 초과 변형 제외 후 최종 리소스 `src/main/resources/compatibility-reasons.json`(약 5.6MB, 조합 1,300 전부, 변형 약 5,680).
+- `saju/CompatibilityReasonBank` 신규: 조합 키(A/B 무순서, 많은 기운 동점이면 오행 순서 첫 것), 공유자 id 로 정한 시작 자리부터 변형 회전(0번 변형만 몰리지 않게), 세 답은 한 칸씩 어긋난 변형에서. 공유자가 이미 본 문장과 겹치는 변형은 건너뜀(문장 단위 회피). `CompatibilityReasonGenerator.generate(..., ordinal)`: 리소스 적중이면 LLM 안 부름, 없으면 기존 LLM.
+- `compatibility/CompatibilityReasonService`(최선우): 공유자(origin)가 같은 조합을 몇 번째 여는지 세어 `ordinal` 로 넘김. 저장·캐시·동시성 로직 그대로. API·DB 스키마 변경 없음.
+- 재생성 스크립트 `scripts/compatibility-reason-bank/`(generate.py·collect.py·README).
+
+**건드린 파일/패키지**
+- `saju/`: `CompatibilityReasonBank`(신규), `CompatibilityReasonGenerator`
+- `compatibility/CompatibilityReasonService`, 테스트 3개, `resources/compatibility-reasons.json`, `scripts/compatibility-reason-bank/`
+- `architecture.md` 궁합 이유 절, `api-spec.md` reason 설명, `backend-requirements.md` FR-CP-11
+
+**다음 사람이 알아야 할 것**
+- **프롬프트(`compatibility-reason-system.txt`)를 바꾸면 리소스를 다시 만들어야** 반영된다. 절차는 스크립트 README. 유료 키 필요, 10분·$3.
+- 같은 조합 = 같은 글 풀. LLM 이 첫 문장을 정형구로 자주 써서(전체 문장의 12%가 2회 이상 등장, "…서로를 누르는 상극의 흐름이에요" 54회) 답 단위보다 **문장 단위** 겹침이 문제였다. 서비스가 공유자의 기존 `reason_*` 문장을 모아 넘기고 은행이 겹치지 않는 변형을 고른다. 시뮬레이션(문장 단위): 친구 5명 0.2%, 10명 0.8%, 20명 4%, 30명 12%. 회피 없이는 10명 16%, 20명 50%. 더 낮추려면 프롬프트에 첫 문장 정형구 금지를 넣고 재생성(`generate.py`, 약 $3). 기존 DB 캐시는 그대로 두었다.
+- 유효성 검사는 정규식이라 완벽하지 않다. 직접 읽은 10건은 상생·상극 방향·기운 이름 전부 맞고 어색한 문장 없음. **합쇼체 혼용("~랍니다")이 변형의 22%에 섞여 있다** — 실시간 LLM 도 같은 비율이라 '현재 품질 그대로'로 두었다. 같은 조합의 변형끼리 첫 문장이 같은 경우가 있다(894문장). 걸러내려면 `collect.py` 의 BAN 에 `답니다|랍니다` 를 넣고 부족분을 재생성한다(약 1,850건, $1).
+- 근거: 27~28일 nginx 에서 `GET /api/compatibilities/{id}/reason` 173건 중 504 38·503 4·499 28 = 40% 실패. 어제 21시부터 Google 무료 티어 503이 5시간 넘게 지속(무료 3키 0/36 성공, 유료 20/20).
+
+**막힌 것 / 넘기는 것**
+- 소개팅 이유(100조합)·사주 해석은 실시간 LLM 그대로. 소개팅은 같은 방식 가능(500건, $0.2). 사주는 조합이 커서 불가 → 유료 fallback 필요.
+
+**문서 변경**
+- 위 세 문서 + 이 항목.
+
+**프론트에 알려야 할 것**
+- 궁합 상세 첫 열람이 즉시 응답으로 바뀜(5~10초 → 0). 응답 필드·에러코드 변경 없음.
+
+### 2026-09-29 (화) · (이름) · dating/ 리롤 비용 5실 → 20실 · Claude Code
+
+**한 일**
+- 유료 리롤 비용을 **회당 20실**로 변경(사용자 결정). 하루(KST) 1회 무료는 그대로
+- `DatingRecommendationService.REROLL_COST` 상수와 Swagger 설명만 바꿨다. 로직·원장 형식은 그대로
+
+**건드린 파일/패키지**
+- `dating/` — `DatingRecommendationService`, `DatingController`(Swagger 문구), `dto/DatingRecommendationResponse`(주석)
+- 테스트: `DatingSchemaTest` 리롤 비용 기대값 5 → 20
+
+**다음 사람이 알아야 할 것**
+- 오늘 이미 5실로 유료 리롤한 원장 행은 그대로다(회수·추가 차감 없음). 다음 유료 리롤부터 20실
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §10.4·§10.4.1·§12, `plan.md` §1.4·§8.4·TBD-6 메모
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-29 첫 줄
+
+### 2026-09-29 (화) · (이름) · compatibility/·wallet/ 친구 등록 실 "1명당 3" → "5명당 3" · Claude Code
+
+**한 일**
+- 궁합지도 친구 등록 보상을 **서로 다른 친구 5명마다 3실**로 변경(사용자 결정). 같은 사람 한 번만 세기·나 자신 제외·로그인 소급은 그대로
+- 친구마다 원장 `MAP_FRIEND` 행을 남기고 5·10·15번째 행만 `amount = 3`, 나머지는 `0`(리롤 무료분과 같은 방식).
+  `WalletService.creditEveryNth` 신규 — 회원 advisory lock 안에서 세므로 동시 등록이 같은 순번을 받지 않는다
+
+**건드린 파일/패키지**
+- `wallet/` — `WalletService.creditEveryNth`, `ThreadLedgerRepository.countByMemberIdAndReason`
+- `compatibility/` — `MapFriendRewardService`
+- 테스트: `MapFriendRewardFlowTest`(4명 0 → 5명 3, 소급 6명 → 3, 이어서 10명 → 6), `CompatibilityServiceTest`
+
+**다음 사람이 알아야 할 것**
+- 순번은 `MAP_FRIEND` 행 수로 센다. 2026-09-28 이전에 "1명당 3" 으로 받은 행도 1명으로 센다(이미 받은 실은 그대로, 회수 없음)
+- 소급 지급은 궁합 등록 순서와 무관하게 행 수로만 세므로 총액은 같다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `plan.md` §1.4·§5.8, `api-spec.md` §12 표
+
+**프론트에 알려야 할 것**
+- API 형식 변경 없음. 화면 안내 문구가 "친구 1명당 실 3개" 라면 "친구 5명마다 실 3개" 로 바꿔야 한다
+
+### 2026-09-28 (월) · 차은호 · saju/ Gemini 무료 3프로젝트 분산·503 유료 전환 (#127) · Codex → Claude Code
+
+**한 일**
+- 무료 프로젝트 키 3개(`GEMINI_FREE_KEY_1~3`)를 가용한 것만 라운드 로빈으로 쓰고, **Google 원본 503일 때만** `GEMINI_PAID_KEY`로 1회 전환한다. 429·IO·파싱 실패·예산 소진은 전환 없이 즉시 `LLM_UNAVAILABLE`. 요청당 HTTP 최대 2회.
+- SDK 내부 재시도(기본 5회)를 `attempts(1)`로 끊어 모든 시도가 앱 예산에 잡히게 했다. 시도당 12초·LLM 단계 전체 25초. 프로젝트별 15 RPM/1,600 RPD + 유료 5/100 + 전체 60/1,600. 503은 30초, 429는 60초(RetryInfo 있으면 그 이상), 401·403은 재시작 전까지 해당 프로젝트 제외.
+- `CallBudget`을 정각 리셋에서 최근 60초 슬라이딩으로 바꿨다. 일일 창은 그대로 태평양 자정.
+- 소개팅 이유 비동기 생성(받은 사람 문장, #128의 수락 후 보낸 사람 문장 둘 다)에 요청·방향별 60초 실패 쿨다운. 새로고침이 LLM을 반복 호출하지 않는다.
+- 기존 단일 `GOOGLE_API_KEY`는 무료 키가 모두 비어 있을 때만 fallback. dev·prod yml에서 선택값으로 바꿨다.
+- 전체 테스트 315개 통과(1 skipped = GeminiSmokeTest, 키 없음). Testcontainers 포함. 단, 로컬에 JDK 17이 없어 **JDK 21 + `--release 17`**로 돌렸다. CI(JDK 17)가 초록인지 머지 전 확인.
+- **운영 로그 실측(wks-app 31시간, 시도 102회)**: 성공 49%(50), `GenAiIOException` 34%(35), 429 10%(10), Google 503 7%(7). 성공 지연 p50 5.1초·p95 6.4초·max 17초, 호출당 평균 2,425 토큰. 피크 4회/분. dev 로그 429 메시지의 실제 무료 한도는 **500 RPD/프로젝트**(`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit 500). 9/13 실측 2,000+는 더 이상 유효하지 않다.
+- 실측에 맞춰 기본값 조정: 무료 RPD 1,600→**500**, 유료 RPD 100→**120**(503 7% × 무료 1,500/일 ≈ 105에 여유), 전체 RPM 60→**50**(= 15×3 + 5). 시도당 12초는 p95 6.4초의 약 2배라 유지.
+- **유료 예상 비용**: 단가 입력 $0.30·출력 $2.50 /1M 토큰 → 호출당 약 $0.0015. 평시(503 7%) 하루 ≤120회 ≈ **$0.2/일**, 축제 3일 ≈ $0.5. 503이 100%인 스파이크가 하루 내내 이어져 유료 상한 120회를 다 써도 상한은 $0.2/일이다. 유료 RPD를 1,500까지 열어도 $2.3/일.
+- **로컬 실호출 스모크(무료 키 2개, 23:36~23:39 KST)**: 7건 전부 Google 503 `This model is currently experiencing high demand`. 라우팅은 설계대로 동작 — free-1 → free-2 순환, 503 후 30초 제외, 제외 중 요청은 14ms에 즉시 503(`gemini pool unavailable. kind=free`), 유료 미설정이라 전환 없음. 같은 시각 `gemini-3.1-flash-lite`도 503, `gemini-3.5-flash`는 20초 타임아웃 → 무료 티어 전반의 Google 측 과부하. 운영 IO 실패 34%도 같은 원인일 가능성이 크다.
+
+**건드린 파일/패키지**
+- `saju/`: `GeminiJson`, `CallBudget`, 신규 `GeminiClientPool`
+- `common/config/`: `GeminiConfig`, 신규 `GeminiProperties` (팀 공유 완료 후 수정)
+- `dating/DatingReasonService`, `DatingRequestService`(주석만)
+- `application.yml`, `application-dev.yml`, `application-prod.yml`, `docker-compose.prod.yml`
+- 테스트: 신규 `GeminiRoutingTest`(로컬 HTTP 서버로 실제 SDK 경로 검증), `CallBudgetTest`, `DatingReasonServiceTest`
+
+**다음 사람이 알아야 할 것**
+- 키 위치: dev `/opt/wks-dev/.env`, 운영 `/opt/wks/.env`, 로컬 `application-local.yml`의 `gemini.free-projects[].api-key`. 절차는 `runbook-dev-server.md` 마지막 절. `.env` 바꾸면 `restart`가 아니라 `up -d --force-recreate`.
+- **프로젝트마다 다른 키 하나.** 같은 프로젝트 키를 여러 칸에 넣으면 15 RPM×3으로 잘못 계산한다. 앱은 동일 문자열만 거부한다.
+- 유료 키 비우면 유료 전환 없음(현재 그렇게 운영 예정). 카운터·쿨다운은 프로세스 메모리 — 재시작 시 0, dev·운영이 프로젝트를 공유하면 합산 안 됨.
+- 무료 RPD 기본 1,600은 앱 안전 상한이지 Google 실제 할당량이 아니다. 유료 5/100, 시도당 12초는 미실측 제안값. 실제 Gemini 호출은 이 작업에서 한 번도 하지 않았다.
+- 전체 25초 예산은 새 시도 시작 여부만 정한다. 이미 받은 정상 응답은 늦어도 반환한다.
+- 503 비율은 시간대에 따라 7%에서 100%까지 널뛴다. **유료 키가 없으면 스파이크 동안 결과 생성이 전부 실패한다.** 유료 프로젝트가 무료 과부하에서 우선 처리되는지는 미확인(유료 키 미보유). 키를 받으면 스파이크 시각에 유료 1회 호출로 확인할 것.
+- 기동 검증 `Duplicate Gemini key configuration`은 같은 키 문자열이 두 칸에 들어간 경우다. 로컬 스모크에서 실제로 걸렸다(1번·3번 동일).
+
+**막힌 것 / 넘기는 것**
+- `.env.prod.example`에 실제 `GOOGLE_API_KEY` 값이 dev 브랜치에 아직 남아 있다(로컬 `feat/123` 커밋 f62b9d4에서만 제거됨). 별도 PR로 지우고 그 키는 폐기 권장.
+- 배포 후 dev 로그에서 `gemini ok project=free-1/2/3`, `gemini fallback`, nginx 504 잔존 여부 확인 필요.
+- 유료 프로젝트 키 준비·결제 설정은 팀 결정 대기. 위 비용 추정 기준 하루 $0.2 수준.
+
+**문서 변경**
+- `architecture.md` LLM 연동 절 전면 갱신, `api-spec.md` `LLM_UNAVAILABLE` 설명·궁합 이유 30초→25초·소개팅 이유 60초 쿨다운, `backend-requirements.md` FR-GM-05, `runbook-dev-server.md` Gemini 설정 절 추가. 별도 계획 문서(`gemini-routing-plan.md`)는 architecture에 흡수해 두지 않았다.
+
+**프론트에 알려야 할 것**
+- 에러코드·필드 변경 없음. 소개팅 목록 `reason.value`가 `null`이면 60초 뒤 재조회해야 재생성이 걸린다(그 안의 재조회는 호출 안 함).
+
+### 2026-09-28 (월) · 최선우 · dating/ 수락 후 보낸 요청 정보 공개 · Codex
+
+**한 일**
+- 수락된 보낸 요청 목록에서 사진·이름·학과·궁합 까닭을 실 차감 없이 공개한다. 잠긴 필드를 응답에 넣지 않는 기존 원칙은 수락 전 상태에 유지한다.
+- 수락 커밋 뒤 보낸 사람 시점 궁합 까닭을 비동기로 생성해 추천 이력에 캐싱한다. 리롤로 추천이 비활성화된 뒤에도 생성 가능하며, 실패하면 보낸 목록 조회에서 재시도한다.
+- PostgreSQL Testcontainers와 모킹된 LLM으로 수락 전 잠금, 수락 후 공개·비동기 생성, 재화 해금 플래그 미변경을 검증했다. 관련 테스트 통과.
+
+**건드린 파일/패키지**
+- `dating/` 요청 목록 DTO·서비스, 궁합 까닭 서비스 및 테스트
+- `docs/plan.md`, `docs/architecture.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**다음 사람이 알아야 할 것**
+- `ACCEPTED` 보낸 목록의 `reason.locked=false`여도 LLM 생성 중·실패 시 `value=null`이다. 현재 Gemini 한도 초과 로그가 있어 실제 서버에서 이 상태가 지속될 수 있다.
+- 요청 목록에서만 무료 공개하며 추천 카드의 기존 유료 해금 플래그와 실 원장은 바꾸지 않는다.
+
+**막힌 것 / 넘기는 것**
+- 실제 서버에 반영하려면 코드 리뷰·PR·배포가 필요하다. Gemini 한도 문제는 별도 조치가 필요하다.
+
+**문서 변경**
+- `docs/plan.md`, `docs/architecture.md`, `docs/api-spec.md`, `docs/backend-requirements.md`, `docs/handoff.md`
+
+**프론트에 알려야 할 것**
+- 보낸 요청이 `ACCEPTED`가 되면 `counterpart.fields` 네 항목을 다시 읽어 표시한다. `reason.value=null`이면 잠시 후 목록을 재조회한다.
+
+### 2026-09-28 (월) · (이름) · compatibility/·member/ 친구 등록 실 — 중복 인물 차단·로그인 후 소급 · Claude Code
+
+**한 일**
+- 친구 궁합 등록 실(+3)을 **같은 사람은 공유자당 한 번만** 준다(사용자 결정, 하루 상한은 없음). 익명 결과를 같은
+  생년월일로 반복 생성해 내 링크에 등록하면 실이 무한히 쌓이던 경로(QA)를 막는다. 공유자 자신과 같은 사람도 제외
+- 원장 `MAP_FRIEND` 의 `ref_id` 를 궁합 id → **친구 팔자 네 기둥·성별 해시**(`p:`+32hex)로 변경. 원문 팔자는 사실상 생년월일이라 해시
+- **소급 지급**: 로그인 전에 만든 결과가 로그인으로 계정에 연결되면(`MemberRaceOps.linkResultIfUnowned` 성공) 그동안
+  등록된 친구 몫을 같은 규칙으로 지급한다(사용자 결정). `result.ResultLinkedEvent` → `MapFriendRewardService` 동기 리스너
+
+**건드린 파일/패키지**
+- `compatibility/` — `MapFriendRewardService`(신규), `CompatibilityService`(지급 로직 이동), `CompatibilityRepository`(`findAllByOriginIdWithResults`)
+- `member/` — `MemberService`(이벤트 발행), `MemberRaceOps`(연결 성공 여부 반환)
+- `result/` — `ResultLinkedEvent`(신규, 레코드만)
+- 테스트: `MapFriendRewardFlowTest`(신규, Testcontainers), `CompatibilityServiceTest`, `MemberServiceTest`
+
+**다음 사람이 알아야 할 것**
+- `member → compatibility` 직접 의존은 만들지 않았다. 둘 다 이미 의존하는 `result` 에 이벤트를 둔다(architecture.md 의존 방향에 기록)
+- 소급은 로그인 트랜잭션 안에서 동기로 돈다 — 결과 연결과 지급이 함께 커밋된다. 친구가 수백 명이어도 로그인 1회에 한 번뿐
+- 이미 연결된 결과로 다시 로그인하면 연결이 일어나지 않아 소급도 다시 안 돈다(UNIQUE 로도 막힌다)
+- 2026-09-28 이전 지급 행은 `ref_id` 가 궁합 id 라, 그 전에 받은 친구가 결과를 새로 만들어 다시 등록하면 한 번 더 받을 수 있다(1회 한정, 감수)
+- 로그인 중 결과 생성(`POST /api/results` 쿠키 연결)은 새 결과라 등록된 친구가 없어 소급 대상이 아니다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `plan.md` §5.8·§9.4, `api-spec.md` §12 표, `architecture.md` 의존 방향·ref_id 규칙
+
+**프론트에 알려야 할 것**
+- API 형식 변경 없음. 같은 친구가 다시 등록되면 실이 안 늘어나고, 로그인하면 전에 등록된 친구 몫이 한꺼번에 들어온다(잔액은 `GET /api/me`)
+
+### 2026-09-28 (월) · (이름) · auth/·wallet/ 축제 사이트 유입 보상(PARTNER) · Claude Code
+
+**한 일**
+- 축제 사이트 링크(`?ref=FESTIVAL`)로 들어온 사람에게 **계정당 1회 10실**(사용자 결정: 가입 시점 무관, 로그인한 사람만)
+- 두 경로: 로그인 요청 `POST /api/auth/kakao` 의 `ref`(응답 `rewardGranted` 채움), 이미 로그인한 사람용
+  `POST /api/wallet/partner-rewards {ref}`(신규). 원장 `PARTNER`, `ref_id` = 코드라 UNIQUE 로 계정당 코드별 1회
+- 코드 목록은 설정 `app.partner.rewards`(env `PARTNER_REWARDS`, "코드:금액:표시이름" 콤마 나열). 기본값 `FESTIVAL:10:동국대 축제`
+
+**건드린 파일/패키지**
+- `wallet/` — `PartnerRewardService`(신규), `WalletController`, `LedgerReason`(주석), `dto/PartnerReward*`(신규)
+- `auth/` — `AuthService`, `dto/KakaoLoginResponse`(주석)
+- `application.yml`, `docker-compose.prod.yml`(`PARTNER_REWARDS`, 앱과 같은 기본값), `.env.*.example`(주석 예시)
+- 테스트: `PartnerRewardServiceTest`·`AuthServiceTest`(신규), `WalletServiceTest`(HTTP·실제 DB)
+
+**다음 사람이 알아야 할 것**
+- Flyway 없음 — `PARTNER` 는 V19 CHECK 에 이미 있었다
+- 설정 형식이 틀린 항목은 기동을 막지 않고 건너뛴다(에러 로그 `invalid app.partner.rewards entry`). .env 오타로 축제 중 앱이 죽지 않게
+- 코드는 URL 에 공개되는 값이라 누구나 한 번은 받을 수 있다. 계정당 1회라 가입 보너스와 같은 수준으로 봤다
+- 신규 회원이 축제 링크로 가입하면 가입 보너스 10 + 축제 10 = 20실
+
+**막힌 것 / 넘기는 것**
+- 표시 이름 "동국대 축제" 는 임시값. 바꾸려면 `.env` 의 `PARTNER_REWARDS` 만 고치면 된다
+
+**문서 변경**
+- `api-spec.md` §9(`ref`·`rewardGranted`), §12(표·`POST /api/wallet/partner-rewards` 신설), `plan.md` §1.4
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-28 첫 줄 참고
+
+### 2026-09-28 (월) · (이름) · result/·signup/·dating/·common/ QA 수정 (커넥션 풀·썸네일 회전·수락 메일·보조 메일 계정) · Claude Code
+
+**한 일**
+- **사주 생성 중 커넥션 점유 제거**: `ResultService.createResult` 가 트랜잭션 없이 Gemini 를 부르고, 저장만
+  `ResultSaver`(신규, 짧은 트랜잭션)에서 한다. 전에는 LLM 최대 30초 동안 커넥션(풀 10개)을 쥐어 새 결과가
+  몰리면 다른 API 까지 3초 뒤 500 이었다
+- **트랜잭션 안 외부 호출 제거**: 사전신청 `createSignup`·`resend`(SMTP·S3 확인), 소개팅 `DatingProfileService.create`
+  (S3 다운로드·블러·업로드)를 트랜잭션 밖으로. 저장은 각 리포지토리의 짧은 트랜잭션. 사전신청 동시 중복은
+  UNIQUE 위반을 `DUPLICATE_SIGNUP` 409 로 바꾼다(전에는 500)
+- **블러 썸네일 90° 누움 수정**: JPEG EXIF Orientation 을 직접 읽어(`JpegOrientation`, 라이브러리 추가 없음) 썸네일에 적용
+- **매칭 수락 메일**: 수락이 커밋되면 **보낸 사람** 학교 메일로 알림(요청 알림과 같은 비동기 구조). 연락처는 메일에 없다
+- **메일 보조 계정**: `common/mail/FailoverMailSender` — 기본 계정 발송 실패 시 보조 계정으로 재발송, 이후 1시간은
+  보조 계정으로 바로 보낸다. 보조 계정 env 가 비어 있으면 지금과 동일
+
+**건드린 파일/패키지**
+- `result/` — `ResultService`, `ResultSaver`(신규) · **최선우 담당 패키지, 리뷰 부탁**
+- `signup/` — `SignupService`, `SignupRepository`(`findByEmail` → `findWithResultByEmail`, result fetch join)
+- `dating/` — `DatingProfileService`, `DatingPhotoService`, `JpegOrientation`(신규), `DatingRequestNotifier`, `DatingRequestService`
+- `common/mail/` — `MailConfig`·`FailoverMailSender`(신규). Boot 기본 발송기 대신 이 빈이 `spring.mail.*` 로 기본 계정을 만든다
+- `application.yml`(`app.mail.secondary.*`), `docker-compose.prod.yml`, `.env.*.example` — `MAIL_SECONDARY_USERNAME`·`PASSWORD`·`FROM`
+- `docker-compose.prod.yml` — `GEMINI_MAX_PER_MINUTE`·`GEMINI_MAX_PER_DAY` 전달 추가(전에는 빠져 있어 운영 `.env` 값이 무시됐다)
+- 테스트: `ResultCreateFlowTest`(신규, Testcontainers — 해석이 트랜잭션 밖인지), `SignupReapplyFlowTest`(메일 실패·재발송·중복),
+  `JpegOrientationTest`(신규), `DatingRequestNotifierTest`, `FailoverMailSenderTest`(신규)
+
+**다음 사람이 알아야 할 것**
+- 사전신청은 이제 메일 발송 전에 신청이 커밋된다. 메일이 실패해도 신청은 남고 `mailSent:false`(원래 계약과 같다)
+- 사주 생성은 같은 입력 동시 제출이면 둘 다 LLM 을 부를 수 있다(전과 같음, `CallBudget` 이 총량을 막는다)
+- 보조 메일 계정도 지메일이면 앱 비밀번호가 필요하다. `MAIL_SECONDARY_FROM` 을 비우면 계정 주소를 발신자로 쓴다
+- 썸네일 회전은 새로 등록하는 프로필부터 적용된다. 이미 만든 썸네일은 다시 만들지 않는다
+
+**막힌 것 / 넘기는 것**
+- 운영 EC2 `.env` 에 보조 메일 계정 값을 넣어야 전환이 동작한다
+
+**문서 변경**
+- `api-spec.md` §11 (수락 시 메일), `plan.md` §12
+
+**프론트에 알려야 할 것**
+- API 형식 변경 없음. 원하면 "수락되면 상대에게 메일이 간다" 안내 문구
+
+### 2026-09-28 (월) · (이름) · common/ 입력 파싱 오류 400 처리 + 에러 응답 traceId · Claude Code
+
+**한 일**
+- 자체 QA 에서 잘못된 입력이 500 으로 나가는 것을 확인했다(`gender:"XYZ"`, `birthTime:"25:99"`, 깨진 JSON,
+  `GET /api/compatibilities/abc/reason` 전부 500). `GlobalExceptionHandler` 에 `HttpMessageNotReadableException`·
+  `MethodArgumentTypeMismatchException`·`HttpMediaTypeNotSupportedException` → `INVALID_INPUT` 400 핸들러 추가
+- 요청마다 8자리 traceId 를 MDC 에 넣는 `common/trace/TraceIdFilter` 추가. 에러 응답 `error.traceId` 와 로그 레벨 옆
+  `[traceId]` 에 같은 값이 찍힌다(`application.yml` `logging.pattern.level`)
+
+**건드린 파일/패키지**
+- `common/` — `exception/GlobalExceptionHandler`, `response/ErrorResponse`, `trace/TraceIdFilter`(신규)
+- `application.yml` — `logging.pattern.level`
+- 테스트: `GlobalExceptionHandlerTest`
+
+**다음 사람이 알아야 할 것**
+- 파싱 실패 로그에는 예외 **타입만** 남긴다. Jackson 메시지에 입력값(생년월일 등)이 그대로 실리기 때문이다
+- 소개팅 해금 `fields:["FOO"]` 도 이제 api-spec §10.5 대로 400 이다(전에는 500)
+- 사용자가 traceId 를 알려주면 `docker logs <app> | grep <traceId>` 로 그 요청 로그만 볼 수 있다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- 없음 (api-spec §1 의 `traceId` 가 이제 실제로 나간다)
+
+**프론트에 알려야 할 것**
+- 에러 응답에 `error.traceId` 가 생겼다. 오류 화면에 작게 보여 주면 문의 대응이 쉬워진다. 입력 형식 오류는 500 대신 400 `INVALID_INPUT`
+
+### 2026-09-28 (월) · 차은호 · dating/ 받은 요청 목록에 받은 사람 기준 궁합 이유 (#123) · Claude Code
+
+**한 일**
+- 프론트 "나에게 요청한 사람" 카드에서 궁합 이유만 블러로 보이던 원인: 받은 요청 목록 API 에 `reason` 필드 자체가 없었다(기획·계약 둘 다 없던 항목). 처음엔 해금 API 버그로 의심했으나 dev DB 에 "해금됐는데 이유 null" 행은 0건
+- `dating_request.recipient_reason` (V25) 에 **받은 사람 기준** 문장을 요청당 1회 캐시. 추천 행의 `reason_content` 는 보낸 사람 시점 문장이라 재사용 불가
+- 생성은 요청 커밋 뒤 `applicationTaskExecutor` 에서 (`DatingReasonService.onRequestSent`, `DatingRequestNotifier` 와 같은 AFTER_COMMIT 패턴). 요청 응답·트랜잭션을 LLM 이 붙잡지 않는다. 실패는 로그만 남기고 받은 목록 조회 때 다시 시도(`fillRecipientReasonAsync`, 같은 요청은 `inFlight` 로 중복 호출 방지)
+- 응답 `counterpart.fields.reason` 추가. 받은 목록 `locked:false`(생성 전 `value:null`), 보낸 목록은 카드와 같은 해금 상태
+
+**건드린 파일/패키지**
+- `dating/DatingReasonService.java`(생성자에 `DatingRequestRepository`·`TaskExecutor` 추가), `DatingRequestService.java`, `DatingRequestRepository.java`, `entity/DatingRequest.java`, `dto/DatingRequestListResponse.java`
+- `db/migration/V25__add_dating_request_recipient_reason.sql`
+- 테스트: `DatingReasonServiceTest`(받은 사람이 viewer 자리, 실패 삼킴, 캐시), `DatingSchemaTest.receivedRequestGetsRecipientReasonAfterCommit`
+
+**다음 사람이 알아야 할 것**
+- 프롬프트는 그대로다. viewer·candidate 자리만 바꿔 넣는다 — 문장의 "당신" 이 받은 사람이 된다
+- 점수는 보낸 사람 추천 때 저장한 값(`counterpart.score` 와 동일). 받은 사람 → 보낸 사람 방향 추천 행은 없을 수 있어 그쪽 점수는 안 본다
+- `DatingSchemaTest` 의 `@Transactional` 테스트가 받은 목록을 조회하면 별도 스레드가 미커밋 요청을 못 찾아 `dating recipient reason failed ... NoSuchElementException` 경고를 남긴다. 테스트 노이즈일 뿐 실패는 아니다
+- LLM 호출 1회/요청 추가. `CallBudget`(1,600/일) 은 공용이라 요청 수가 급증하면 사주·카드 이유와 한도를 나눠 쓴다
+- 어젯밤(9/28 01:39 KST) dev `member` 가 전부 지워진 흔적(id 1~16 소실, 17부터 재생성). 옛 쿠키가 FK 위반 500 을 냈다. 누가·왜 지웠는지 미확인
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §11.1 (`reason` 필드, 받은 사람 기준 설명)
+- `handoff.md` V25 예약, 프론트 공지 표
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-28 #123 행. 받은 목록 `reason.value` 가 `null` 이면 "생성 중" 처리 후 재조회
+
+### 2026-09-28 (월) · 차은호 · dating/ REASON 해금 순서 변경 (이유 생성 → 차감) · Claude Code
+
+**한 일**
+- `DatingUnlockService.unlock` 에서 `REASON` 을 고르면 **궁합 이유를 먼저 생성하고 성공한 뒤 차감**하도록 순서를 바꿨다(#121).
+  전에는 차감 커밋 뒤 LLM 을 불러서, 실패하면 실만 빠지고 값은 못 받는 것으로 보였다
+- 테스트 추가: 생성 실패(`LLM_UNAVAILABLE`)면 `chargeService`·`walletService` 를 건드리지 않는다
+
+**건드린 파일/패키지**
+- `dating/` — `DatingUnlockService` (곽도윤 패키지, 순서 변경만. 사전 공유 없이 진행했으니 리뷰 부탁)
+- 테스트: `DatingUnlockServiceTest`
+
+**다음 사람이 알아야 할 것**
+- 차감 안 하고 이유만 만들어지는 경우(생성 성공 → 잔액 부족 402)가 생긴다. 이유는 추천행마다 한 번 캐시라 LLM 호출은 추천행당 최대 1회. 다음 해금 때 캐시 그대로 씀
+- 트랜잭션 구조는 그대로. LLM 호출은 여전히 차감 트랜잭션 밖(#94 이유)
+- `CallBudget`(분 60·일 1,600)은 사주·친구 궁합·소개팅이 공유한다. 축제 트래픽으로 소진되면 소개팅 이유도 503. 여유 있는지 `gemini.max-per-day` 확인 필요
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `api-spec.md` §10.5 REASON 실패 시 동작
+
+**프론트에 알려야 할 것**
+- `unlock` 에서 503 `LLM_UNAVAILABLE` 이면 **아무것도 차감·해금되지 않는다.** "잠시 후 다시 시도" 안내만 하면 된다 (전에는 재요청 시 무료라는 설명이었음)
+
+### 2026-09-28 (월) · 차은호 · dating/ 소개팅 궁합 까닭 프롬프트 5문장으로 개선 (#119) · Claude Code
+
+**한 일**
+- `prompts/dating-reason-system.txt` 재작성. 2~3문장·120자 → 5문장·200자 이내
+- 문장 순서 고정: 함께 있는 장면 → 기운 관계로 까닭 → 상대가 어떤 사람으로 다가오는지 → 유형별 핵심 → 마무리(작은 행동 / 스침은 넘길 방법)
+- 친구 궁합 프롬프트의 규칙 이식: 범용 문장 금지, 사주 용어·팔자 글자 금지, 단정/가능성 어미 구분, 같은 어미 연속 금지
+- 호칭 고정: 상대 "이 사람", 사용자 생략 또는 "당신". 연인 단정("사귀면", "커플") 금지
+- PR #120 (base `dev`). 코드·스키마 변경 없음
+
+**건드린 파일/패키지**
+- `src/main/resources/prompts/dating-reason-system.txt` 만
+
+**다음 사람이 알아야 할 것**
+- 이미 캐시된 `dating_recommendation.reason_content` 는 새 프롬프트로 다시 생성되지 않는다. 축제 전 새 톤으로 통일하려면 dev DB 의 해당 컬럼을 NULL 로 비우면 다음 해금 API 호출 때 다시 만든다
+- 실제 출력 톤은 dev 서버에서 해금 한 번 눌러 보고 다듬는 게 빠르다
+
+**막힌 것 / 넘기는 것**
+- 소개팅 카드 UI 가 200자를 감당하는지 프론트 확인 필요
+
+**문서 변경**
+- 없음
+
+**프론트에 알려야 할 것**
+- `reason.value` 길이가 최대 200자 안팎으로 늘어난다 (기존 120자)
+
+### 2026-09-27 (일) · 곽도윤 · dating/ 추천 카드·요청 목록에 나이(age) 기본 공개 · Claude Code
+
+**한 일**
+- 추천 카드(`candidates[].age`)와 요청 목록(`counterpart.age`)에 상대의 나이를 `"00년생"` 문자열로 넣었다.
+  기본 공개, 서버가 만든다(사용자 결정). 2000년생 → `"00년생"`, 1998년생 → `"98년생"`
+- `dating_profile` 에는 생년월일이 없어서 `result.member_id` 로 연결된 `Result.birthDate` 에서 만든다
+  (`BirthYearLabel`). 카드·목록마다 `findAllByMemberIdIn` 한 번으로 불러온다(N+1 없음)
+
+**건드린 파일/패키지**
+- `dating/` — `BirthYearLabel`(신규), `DatingRecommendationService`, `DatingRequestService`(`ResultRepository` 주입), DTO 2개
+- 테스트: `BirthYearLabelTest`, `DatingSchemaTest` — 카드·목록의 `age`, JSON 에 `birthDate` 없음
+
+**다음 사람이 알아야 할 것**
+- 필드 이름은 `age` 지만 값은 숫자가 아니라 `"00년생"` 문자열이다(프론트 표시용, 사용자 결정)
+- 연도만 쓰므로 생년월일을 역산할 수 없다. 생년월일·시간 원본은 응답에 싣지 않는다
+- 결과가 연결되지 않은 예외 상황이면 `age` 는 `null`
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `plan.md` §7.2 공개 범위 표, `api-spec.md` §10.4·§11
+
+**프론트에 알려야 할 것**
+- 추천 카드·리롤·요청 목록 응답에 `age`(문자열, nullable, 예: `"00년생"`) 필드 추가. 그대로 표시하면 된다. 기존 필드는 그대로
+
+### 2026-09-27 (일) · 곽도윤 · dating/ 소개팅 요청 받으면 알림 메일 · Claude Code
+
+**한 일**
+- `POST /api/dating/requests` 로 요청이 **커밋되면** 받는 사람의 학교 메일(`dating_profile.email`)로 알림 메일을
+  보낸다(사용자 결정). 수락·거절·취소 알림은 없다
+- `DatingRequestService.send` 가 이벤트를 발행하고 `DatingRequestNotifier` 가 `AFTER_COMMIT` 에서 받아 Boot 기본
+  `applicationTaskExecutor` 로 비동기 발송한다. 롤백된 요청(충돌)에는 메일이 안 나가고, SMTP 지연이 응답을 붙잡지 않는다
+- 메일에는 보낸 사람 정보를 넣지 않는다 — 잠긴 필드가 메일로 새지 않게 "신청이 왔다"는 사실만 알린다
+
+**건드린 파일/패키지**
+- `dating/` — `DatingRequestNotifier`(신규), `DatingRequestService`(이벤트 발행)
+- 테스트: `DatingRequestNotifierTest` — 수신자·제목, 발송 실패 시 예외 삼킴
+
+**다음 사람이 알아야 할 것**
+- 발송 실패는 로그(`requestId`, 예외 타입)만 남고 재시도하지 않는다. 예외 메시지는 수신 주소가 실릴 수 있어 남기지 않는다
+- 비동기라 앱 종료 직전 요청의 메일은 유실될 수 있다(축제 규모에서 감수)
+- 취소 → 재요청을 반복하면 그때마다 메일이 간다. 발송 한도 문제가 보이면 쿨다운을 붙일 것
+
+**막힌 것 / 넘기는 것**
+- 메일에 프론트 "받은 신청함" 링크가 없다 — 프론트 경로가 확정되면 `app.frontend.*` 설정 + `docker-compose.prod.yml` 에 추가
+
+**문서 변경**
+- `plan.md` §12 결정 메모, `api-spec.md` §11 요청 생성 설명
+
+**프론트에 알려야 할 것**
+- 없음 (API 형식 변경 없음. 원하면 "요청이 가면 상대에게 메일이 간다"는 안내 문구 정도)
 
 ### 2026-09-27 (일) · 곽도윤 · signup/ 새 사전신청에도 인증 메일 대신 매직링크 발송 · Claude Code
 

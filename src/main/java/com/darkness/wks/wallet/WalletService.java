@@ -55,6 +55,24 @@ public class WalletService {
     }
 
     /**
+     * 같은 사유가 {@code every} 번째 기록될 때마다 {@code amount} 를 지급하고, 그 외에는 {@code amount = 0} 행으로
+     * 횟수만 남긴다(리롤 무료분과 같은 방식 — 원장만으로 "몇 번째인가"와 "왜 이때 들어왔나"를 답할 수 있다).
+     * 회원 잠금 안에서 세므로 동시 요청이 같은 순번을 받지 않는다. {@code ref_id} 가 이미 있으면 세지 않는다.
+     *
+     * @return 이번 호출로 기록됐으면 true (지급액이 0 이어도)
+     */
+    @Transactional
+    public boolean creditEveryNth(Long memberId, LedgerReason reason, String refId, int every, int amount) {
+        ledgerRepository.lockMember(memberId);
+        if (ledgerRepository.existsByMemberIdAndReasonAndRefId(memberId, reason, refId)) {
+            return false;
+        }
+        long nth = ledgerRepository.countByMemberIdAndReason(memberId, reason) + 1;
+        ledgerRepository.save(new ThreadLedger(memberId, nth % every == 0 ? amount : 0, reason, refId));
+        return true;
+    }
+
+    /**
      * 실을 차감한다. 잔액이 모자라면 {@link ErrorCode#INSUFFICIENT_THREAD}. {@code ref_id} 가 이미
      * 쓰였으면(이미 차감됨) 다시 차감하지 않고 조용히 반환한다 — 호출부(해금)는 그 전에 이미 해금
      * 여부를 플래그로 확인하지만, 여기서도 한 번 더 막는다(방어적 이중 확인).

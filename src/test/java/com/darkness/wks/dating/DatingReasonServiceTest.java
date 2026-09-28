@@ -7,6 +7,7 @@ import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
 import com.darkness.wks.dating.entity.DatingRecommendation;
+import com.darkness.wks.dating.entity.DatingRequest;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import org.junit.jupiter.api.Test;
@@ -14,9 +15,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -35,6 +41,9 @@ class DatingReasonServiceTest {
     DatingRecommendationRepository recommendationRepository;
 
     @Mock
+    DatingRequestRepository requestRepository;
+
+    @Mock
     ResultRepository resultRepository;
 
     @Mock
@@ -42,6 +51,11 @@ class DatingReasonServiceTest {
 
     @InjectMocks
     DatingReasonService service;
+
+    private DatingReasonService syncService() {
+        return new DatingReasonService(recommendationRepository, requestRepository, resultRepository, generator,
+                new SyncTaskExecutor());
+    }
 
     @Test
     void cachedReasonSkipsGeneration() {
@@ -92,6 +106,130 @@ class DatingReasonServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.DATING_PROFILE_NOT_FOUND);
         verifyNoInteractions(resultRepository, generator);
+    }
+
+    @Test
+    void recipientReasonPutsRecipientInViewerSeat() {
+        DatingRequest request = request();
+        when(requestRepository.findWithProfiles(request.getId())).thenReturn(Optional.of(request));
+        when(recommendationRepository.findForRequestPairs(List.of(1L), List.of(request.getRecipient().getId())))
+                .thenReturn(List.of(new DatingRecommendation(1L, request.getRecipient(), 91)));
+        when(resultRepository.findByMemberId(1L)).thenReturn(Optional.of(result(Gender.MALE, "병인")));
+        when(resultRepository.findByMemberId(2L)).thenReturn(Optional.of(result(Gender.FEMALE, "기유")));
+        when(generator.generate(argThat(viewer -> viewer.dayPillar().equals("기유")),
+                argThat(candidate -> candidate.dayPillar().equals("병인")), eq(91), eq("귀인")))
+                .thenReturn("받은 사람 이유");
+
+        syncService().fillRecipientReasonAsync(request.getId());
+
+        verify(requestRepository).saveRecipientReasonIfAbsent(request.getId(), "받은 사람 이유");
+    }
+
+    @Test
+    void recipientReasonFailureIsLoggedNotThrown() {
+        DatingRequest request = request();
+        when(requestRepository.findWithProfiles(request.getId())).thenReturn(Optional.of(request));
+        when(recommendationRepository.findForRequestPairs(any(), any()))
+                .thenReturn(List.of(new DatingRecommendation(1L, request.getRecipient(), 70)));
+        when(resultRepository.findByMemberId(any())).thenReturn(Optional.of(result(Gender.MALE, "병인")));
+        when(generator.generate(any(), any(), eq(70), eq("벗")))
+                .thenThrow(new BusinessException(ErrorCode.LLM_UNAVAILABLE));
+
+        syncService().fillRecipientReasonAsync(request.getId());
+
+        verify(requestRepository, never()).saveRecipientReasonIfAbsent(any(), any());
+    }
+
+    @Test
+    void cachedRecipientReasonSkipsGeneration() {
+        DatingRequest request = request();
+        ReflectionTestUtils.setField(request, "recipientReason", "이미 있음");
+        when(requestRepository.findWithProfiles(request.getId())).thenReturn(Optional.of(request));
+
+        syncService().fillRecipientReasonAsync(request.getId());
+
+        verifyNoInteractions(generator, resultRepository);
+    }
+
+    @Test
+    void acceptedRequestGeneratesSenderReasonAfterRecommendationDeactivation() {
+        DatingRequest request = request();
+        request.accept(Instant.now());
+        DatingRecommendation recommendation = new DatingRecommendation(1L, request.getRecipient(), 82);
+        recommendation.deactivate();
+        ReflectionTestUtils.setField(recommendation, "id", 7L);
+        when(requestRepository.findWithProfiles(request.getId())).thenReturn(Optional.of(request));
+        when(recommendationRepository.findForRequestPairs(List.of(1L), List.of(request.getRecipient().getId())))
+                .thenReturn(List.of(recommendation));
+        when(resultRepository.findByMemberId(1L)).thenReturn(Optional.of(result(Gender.MALE, "병인")));
+        when(resultRepository.findByMemberId(2L)).thenReturn(Optional.of(result(Gender.FEMALE, "기유")));
+        when(generator.generate(argThat(viewer -> viewer.dayPillar().equals("병인")),
+                argThat(candidate -> candidate.dayPillar().equals("기유")), eq(82), eq("찰떡")))
+                .thenReturn("보낸 사람 이유");
+        when(recommendationRepository.saveReasonIfAbsent(7L, "보낸 사람 이유")).thenReturn(1);
+
+        syncService().fillSenderReasonAsync(request.getId());
+
+        verify(recommendationRepository).saveReasonIfAbsent(7L, "보낸 사람 이유");
+    }
+
+    @Test
+    void pendingRequestDoesNotGenerateFreeSenderReason() {
+        DatingRequest request = request();
+        when(requestRepository.findWithProfiles(request.getId())).thenReturn(Optional.of(request));
+
+        syncService().fillSenderReasonAsync(request.getId());
+
+        verifyNoInteractions(recommendationRepository, resultRepository, generator);
+    }
+
+    @Test
+    void recipientFailuresWaitSixtySecondsBeforeRetry() {
+        UUID requestId = UUID.randomUUID();
+        java.time.Clock clock = org.mockito.Mockito.mock(java.time.Clock.class);
+        java.time.Instant now = java.time.Instant.parse("2026-09-28T00:00:00Z");
+        when(clock.instant()).thenReturn(now);
+        when(requestRepository.findWithProfiles(requestId)).thenReturn(Optional.empty());
+        DatingReasonService limited = new DatingReasonService(recommendationRepository, requestRepository,
+                resultRepository, generator, new SyncTaskExecutor(), clock);
+        limited.fillRecipientReasonAsync(requestId);
+        limited.fillRecipientReasonAsync(requestId);
+        when(clock.instant()).thenReturn(now.plusSeconds(59));
+        limited.fillRecipientReasonAsync(requestId);
+        verify(requestRepository).findWithProfiles(requestId);
+        when(clock.instant()).thenReturn(now.plusSeconds(60));
+        limited.fillRecipientReasonAsync(requestId);
+        verify(requestRepository, org.mockito.Mockito.times(2)).findWithProfiles(requestId);
+    }
+
+    @Test
+    void queuedWorkIsNotDuplicatedAndRejectedWorkCoolsDown() {
+        UUID requestId = UUID.randomUUID();
+        org.springframework.core.task.TaskExecutor executor = org.mockito.Mockito.mock(org.springframework.core.task.TaskExecutor.class);
+        DatingReasonService queued = new DatingReasonService(recommendationRepository, requestRepository,
+                resultRepository, generator, executor);
+        queued.fillRecipientReasonAsync(requestId);
+        queued.fillRecipientReasonAsync(requestId);
+        verify(executor).execute(any());
+        UUID rejected = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new java.util.concurrent.RejectedExecutionException()).when(executor).execute(any());
+        queued.fillRecipientReasonAsync(rejected);
+        queued.fillRecipientReasonAsync(rejected);
+        verify(executor, org.mockito.Mockito.times(2)).execute(any());
+    }
+
+    /** 보낸 사람 member 1, 받은 사람 member 2 */
+    private static DatingRequest request() {
+        DatingProfile sender = new DatingProfile(1L, "sender@example.com", "보낸이", ContactMethod.PHONE,
+                "01012345678", "학과", "ENFP", "소개", org.mockito.Mockito.mock(DatingPhoto.class));
+        DatingProfile recipient = new DatingProfile(2L, "recipient@example.com", "받은이", ContactMethod.PHONE,
+                "01087654321", "학과", "INTP", "소개", org.mockito.Mockito.mock(DatingPhoto.class));
+        return new DatingRequest(sender, recipient);
+    }
+
+    private static Result result(Gender gender, String dayPillar) {
+        return new Result("테스트", LocalDate.of(2002, 1, 1), null, null, gender,
+                "갑자", "을축", dayPillar, null);
     }
 
     private static DatingRecommendation recommendation() {

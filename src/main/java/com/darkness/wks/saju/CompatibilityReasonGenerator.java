@@ -5,10 +5,12 @@ import org.springframework.stereotype.Component;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 두 팔자 + 점수 + 관계 유형 → 궁합 상세 이유 세 답. Gemini 한 번 호출 (FR-CP-13).
+ * 두 팔자 + 점수 + 관계 유형 → 궁합 상세 이유 세 답. 사전 생성본({@link CompatibilityReasonBank})에서 고르고,
+ * 없는 조합만 Gemini 한 번 호출 (FR-CP-13).
  * <p>
  * 프롬프트에는 팔자·점수·관계 유형과 코드가 정한 오행 사실만 들어간다 (FR-CP-14).
  * 성별은 넣지 않는다 — 궁합 이유는 성별을 보지 않고, 성별을 고려한 글은 소개팅 쪽이 따로 만든다.
@@ -21,14 +23,26 @@ public class CompatibilityReasonGenerator {
     private static final String SYSTEM_PROMPT = GeminiJson.loadResource("prompts/compatibility-reason-system.txt");
 
     private final GeminiJson gemini;
+    private final CompatibilityReasonBank bank;
 
-    public CompatibilityReasonGenerator(GeminiJson gemini) {
+    public CompatibilityReasonGenerator(GeminiJson gemini, CompatibilityReasonBank bank) {
         this.gemini = gemini;
+        this.bank = bank;
     }
 
-    /** @param tier 관계 유형 한글(귀인·찰떡·벗·스침). compatibility 패키지 enum 을 saju 가 모르게 문자열로 받는다 */
-    public CompatibilityReason generate(SajuPillars a, SajuPillars b, int score, String tier) {
-        Map<String, String> m = gemini.generate(SYSTEM_PROMPT, buildPrompt(a, b, score, tier), FIELDS);
+    /**
+     * @param tier    관계 유형 한글(귀인·찰떡·벗·스침). compatibility 패키지 enum 을 saju 가 모르게 문자열로 받는다
+     * @param ordinal        공유자가 같은 조합을 몇 번째 여는지(0부터). 사전 생성본의 변형 회전에만 쓴다
+     * @param shownSentences 공유자가 다른 궁합에서 이미 본 문장. 겹치는 변형을 피한다
+     */
+    public CompatibilityReason generate(SajuPillars a, SajuPillars b, int score, String tier, int ordinal,
+                                        Set<String> shownSentences) {
+        return bank.pick(CompatibilityReasonBank.key(a, b, tier), ordinal, shownSentences)
+                .orElseGet(() -> generateWithLlm(a, b, score, tier));
+    }
+
+    private CompatibilityReason generateWithLlm(SajuPillars a, SajuPillars b, int score, String tier) {
+        Map<String, String> m = gemini.generate(LlmPurpose.COMPATIBILITY, SYSTEM_PROMPT, buildPrompt(a, b, score, tier), FIELDS);
         return new CompatibilityReason(m.get("why"), m.get("together"), m.get("conflict"));
     }
 
