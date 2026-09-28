@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * @param rerollCost 지금 리롤하면 드는 실. 오늘(KST) 무료 리롤이 남았으면 0 — 프론트가 버튼에 "무료"/"5실"을
+ * @param rerollCost 지금 리롤하면 드는 실. 오늘(KST) 무료 리롤이 남았으면 0 — 프론트가 버튼에 "무료"/"20실"을
  *                   표시하는 데 쓴다
  */
 public record DatingRecommendationResponse(List<CandidateCard> candidates, int rerollCost) {

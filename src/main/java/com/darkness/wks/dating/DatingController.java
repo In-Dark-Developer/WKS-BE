@@ -226,14 +226,14 @@ public class DatingController {
 
     @Operation(summary = "후보 리롤", description = """
             현재 카드를 전부 내리고 한 번도 안 나온 후보로 최대 3명을 새로 뽑는다. 해금·요청 중인 카드도
-            내려간다(보낸 요청은 요청 목록에서 계속 보인다). KST 날짜 기준 하루 1회 무료, 이후 회당 5실.
+            내려간다(보낸 요청은 요청 목록에서 계속 보인다). KST 날짜 기준 하루 1회 무료, 이후 회당 20실.
             새 후보가 한 명도 없으면 차감 없이 409. 새 후보가 1~2명이면 그 수만큼만 오고 비용은 같다.
             """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "리롤 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHENTICATED — 로그인 쿠키 없음·만료·위조",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description = "INSUFFICIENT_THREAD — 무료분을 다 썼고 잔액이 5실 미만. 카드는 그대로",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description = "INSUFFICIENT_THREAD — 무료분을 다 썼고 잔액이 20실 미만. 카드는 그대로",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "DATING_NOT_VERIFIED — 학교 이메일 인증 전",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),

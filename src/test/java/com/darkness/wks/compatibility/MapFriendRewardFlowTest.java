@@ -78,41 +78,50 @@ class MapFriendRewardFlowTest {
     }
 
     @Test
-    void samePersonRegisteredTwicePaysOnceAndSelfPaysNothing() {
+    void everyFifthDistinctFriendPaysThreeAndDuplicatesOrSelfDoNotCount() {
         long memberId = memberRepository.saveAndFlush(new Member(kakaoId())).getId();
         Result origin = result("갑자", Gender.MALE, memberId);
 
-        register(origin, result("을축", Gender.FEMALE, null));
-        // 같은 팔자·성별로 결과를 새로 만들어 다시 등록 — 궁합은 새로 생기지만 실은 안 나간다
+        register(origin, result("을축", Gender.FEMALE, null));                    // 1명
+        // 같은 팔자·성별로 결과를 새로 만들어 다시 등록 — 궁합은 새로 생기지만 세지 않는다
         register(origin, result("을축", Gender.FEMALE, null));
         // 같은 팔자라도 성별이 다르면 다른 사람
-        register(origin, result("을축", Gender.MALE, null));
-        // 공유자 자신과 같은 사람(내 결과를 새로 만들어 내 링크에 등록)
+        register(origin, result("을축", Gender.MALE, null));                      // 2명
+        // 공유자 자신과 같은 사람(내 결과를 새로 만들어 내 링크에 등록)은 세지 않는다
         register(origin, result("갑자", Gender.MALE, null));
+        register(origin, result("병인", Gender.FEMALE, null));                    // 3명
+        register(origin, result("정묘", Gender.FEMALE, null));                    // 4명
+        assertThat(walletService.getBalance(memberId)).isZero();
 
-        assertThat(walletService.getBalance(memberId)).isEqualTo(6);
+        register(origin, result("무진", Gender.FEMALE, null));                    // 5명 → +3
+        assertThat(walletService.getBalance(memberId)).isEqualTo(3);
     }
 
     @Test
-    void friendsRegisteredBeforeLoginArePaidWhenResultIsLinked() {
+    void friendsRegisteredBeforeLoginCountWhenResultIsLinked() {
         Result origin = result("병인", Gender.FEMALE, null);
-        register(origin, result("정묘", Gender.MALE, null));
-        register(origin, result("무진", Gender.MALE, null));
-        register(origin, result("무진", Gender.MALE, null)); // 같은 사람 — 소급에서도 한 번만
+        for (String day : new String[]{"정묘", "무진", "기사", "경오", "신미", "임신"}) { // 6명
+            register(origin, result(day, Gender.MALE, null));
+        }
+        register(origin, result("무진", Gender.MALE, null)); // 같은 사람 — 소급에서도 한 번만 센다
 
         MemberService.LoginResult login = memberService.loginAndLink(kakaoId(), origin.getId().toString());
         long memberId = login.member().getId();
 
-        assertThat(walletService.getBalance(memberId)).isEqualTo(SIGNUP_BONUS + 6);
+        assertThat(walletService.getBalance(memberId)).isEqualTo(SIGNUP_BONUS + 3); // 6명 중 5번째에 +3
 
-        // 연결 뒤 새 친구는 즉시 지급, 이미 받은 사람은 다시 안 준다
-        register(origin, result("기사", Gender.MALE, null));
+        // 연결 뒤 새 친구는 이어서 센다. 이미 센 사람은 다시 세지 않는다
+        for (String day : new String[]{"계유", "갑술", "을해"}) { // 7·8·9명
+            register(origin, result(day, Gender.MALE, null));
+        }
         register(origin, result("정묘", Gender.MALE, null));
-        assertThat(walletService.getBalance(memberId)).isEqualTo(SIGNUP_BONUS + 9);
+        assertThat(walletService.getBalance(memberId)).isEqualTo(SIGNUP_BONUS + 3);
+        register(origin, result("병자", Gender.MALE, null)); // 10명 → +3
+        assertThat(walletService.getBalance(memberId)).isEqualTo(SIGNUP_BONUS + 6);
 
         // 다시 로그인해도(이미 연결된 결과) 소급이 두 번 되지 않는다
         memberService.loginAndLink(memberRepository.findById(memberId).orElseThrow().getKakaoId(),
                 origin.getId().toString());
-        assertThat(walletService.getBalance(memberId)).isEqualTo(SIGNUP_BONUS + 9);
+        assertThat(walletService.getBalance(memberId)).isEqualTo(SIGNUP_BONUS + 6);
     }
 }

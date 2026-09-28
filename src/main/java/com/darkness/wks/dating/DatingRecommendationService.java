@@ -34,10 +34,10 @@ import java.util.stream.IntStream;
 public class DatingRecommendationService {
 
     private static final int CARD_COUNT = 3;
-    // TBD-6 종료 (2026-09-27): KST 날짜 기준 하루 1회 무료, 이후 회당 5실. 출석 체크와 같은 날짜 기준이다.
+    // TBD-6 종료 (2026-09-27): KST 날짜 기준 하루 1회 무료, 이후 회당 20실(2026-09-29, 5실에서 변경). 출석 체크와 같은 날짜 기준이다.
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final int FREE_REROLLS_PER_DAY = 1;
-    private static final int REROLL_COST = 5;
+    private static final int REROLL_COST = 20;
 
     private final EntityManager entityManager;
     private final DatingProfileRepository profileRepository;

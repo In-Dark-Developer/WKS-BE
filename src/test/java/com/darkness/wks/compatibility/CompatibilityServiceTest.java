@@ -103,7 +103,8 @@ class CompatibilityServiceTest {
                 origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()));
 
         // ref_id 는 궁합 id 가 아니라 친구의 팔자·성별 해시 — 같은 사람이 결과를 새로 만들어 다시 등록해도 한 번만
-        verify(walletService).credit(42L, LedgerReason.MAP_FRIEND, MapFriendRewardService.personKey(guest), 3);
+        // 친구 5명마다 3실 — 몇 번째인지는 원장이 센다
+        verify(walletService).creditEveryNth(42L, LedgerReason.MAP_FRIEND, MapFriendRewardService.personKey(guest), 5, 3);
     }
 
     @Test

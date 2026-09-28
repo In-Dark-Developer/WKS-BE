@@ -602,7 +602,7 @@ class DatingSchemaTest {
 
     @Test
     @Transactional
-    void rerollIsFreeOncePerDayThenCostsFiveAndNeverRepeatsCandidates() throws Exception {
+    void rerollIsFreeOncePerDayThenCostsTwentyAndNeverRepeatsCandidates() throws Exception {
         DatingProfile viewer = profile(1100001L, Gender.MALE, "갑자", "을축", "병인");
         for (long i = 2; i <= 10; i++) {
             profile(1100000L + i, Gender.FEMALE, "계해", "임술", "신유");
@@ -610,15 +610,15 @@ class DatingSchemaTest {
         var initial = recommendationService.getCurrent(viewer.getMemberId());
         assertThat(initial.rerollCost()).isZero();
         walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
-                viewer.getMemberId().toString(), 5);
+                viewer.getMemberId().toString(), 20);
 
         var free = recommendationService.reroll(viewer.getMemberId());
-        assertThat(free.threadBalance()).isEqualTo(5);
-        assertThat(free.rerollCost()).isEqualTo(5);
+        assertThat(free.threadBalance()).isEqualTo(20);
+        assertThat(free.rerollCost()).isEqualTo(20);
         assertThat(free.candidates()).isNotEmpty();
         assertThat(ids(free.candidates())).doesNotContainAnyElementsOf(ids(initial.candidates()));
         assertThat(activeIds(viewer)).containsExactlyInAnyOrderElementsOf(ids(free.candidates()));
-        assertThat(recommendationService.getCurrent(viewer.getMemberId()).rerollCost()).isEqualTo(5);
+        assertThat(recommendationService.getCurrent(viewer.getMemberId()).rerollCost()).isEqualTo(20);
 
         var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
         mvc.perform(post("/api/dating/recommendations/reroll")).andExpect(status().isUnauthorized());
@@ -626,7 +626,7 @@ class DatingSchemaTest {
                         .cookie(new Cookie("wks_token", jwtProvider.issue(viewer.getMemberId()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.threadBalance").value(0))
-                .andExpect(jsonPath("$.data.rerollCost").value(5));
+                .andExpect(jsonPath("$.data.rerollCost").value(20));
         assertThat(activeIds(viewer)).doesNotContainAnyElementsOf(ids(initial.candidates()))
                 .doesNotContainAnyElementsOf(ids(free.candidates()));
         assertThat(recommendationRepository.findAllByViewerMemberId(viewer.getMemberId()))
