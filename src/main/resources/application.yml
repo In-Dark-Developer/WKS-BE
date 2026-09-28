@@ -54,7 +54,7 @@ springdoc:
 
 gemini:
   model: gemini-3.5-flash-lite
-  timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:8}
+  timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:12}
   total-timeout-seconds: ${GEMINI_TOTAL_TIMEOUT_SECONDS:25}
   # 각각 다른 프로젝트의 키 하나씩. 모두 비어 있으면 기존 gemini.api-key 사용.
   # 무료 실측 한도(2026-09-28 429 메시지): 15 RPM, 500 RPD/프로젝트. 앱 상한도 같은 값으로 둔다.
