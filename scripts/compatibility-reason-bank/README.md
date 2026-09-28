@@ -1,7 +1,7 @@
 # 궁합 이유 사전 생성 (#131)
 
 `src/main/resources/compatibility-reasons.json` 을 다시 만드는 절차. 프롬프트(`prompts/compatibility-reason-system.txt`)나
-변형 수를 바꿀 때만 돌린다. 유료 Gemini 키가 필요하고 Batch API(실시간의 50%)로 5,850건 ≈ $3 든다.
+변형 수를 바꿀 때만 돌린다. 유료 Gemini 키가 필요하고 Batch API(실시간의 50%)로 전체 5,850건 ≈ $3.2 든다.
 
 ```bash
 export GEMINI_PAID_KEY=<유료 키>          # 채팅·커밋에 넣지 않는다
@@ -9,8 +9,9 @@ python3 scripts/compatibility-reason-bank/generate.py out/   # JSONL 생성 + �
 python3 scripts/compatibility-reason-bank/collect.py out/    # 완료 대기·다운로드·검사·리소스 갱신
 ```
 
-- 조합: 무순서 (기운, 많은 기운) 쌍 325 × 유형 4 = 1,300. 변형은 찰떡·벗 6, 귀인·스침 3.
+- 조합: 무순서 (기운, 많은 기운) 쌍 325 × 유형 4 = 1,300. 변형은 찰떡·벗 6, 귀인·스침 3 (친구 20명을 봐도 어느 답이든 같은 글을 볼 확률 0.5%).
+- 변형만 늘릴 때는 `TIERS` 의 수를 올리고 `generate.py out/ --fill` — 기존 리소스의 부족분(+30%)만 제출한다. 8/8/4/4 면 약 3,800건·$2 로 30명까지 0%.
 - 프롬프트는 `CompatibilityReasonGenerator.buildPrompt` 와 같은 형식. 팔자 글자는 기운·많은 기운에 맞춘 대표 팔자,
   점수는 유형 대표값(95·82·68·45). 글에는 둘 다 안 쓰게 프롬프트가 막는다.
-- `collect.py` 는 합쇼체·A/B·"유형"·"점수"·사주 용어·팔자 글자·빈 필드를 걸러내고, 걸린 키는 `out/retry.jsonl` 로 남긴다.
+- `collect.py` 는 합쇼체·A/B·"유형"·"점수"·사주 용어·팔자 글자·빈 필드와 같은 조합 안 첫 문장 중복을 걸러내고, 걸린 키는 `out/retry.jsonl` 로 남긴다.
   `generate.py --retry out/retry.jsonl` 로 그 키만 다시 제출한 뒤 `collect.py` 를 한 번 더 돌리면 기존 리소스에 합쳐진다.

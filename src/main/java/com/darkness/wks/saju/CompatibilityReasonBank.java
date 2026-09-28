@@ -61,19 +61,19 @@ public class CompatibilityReasonBank {
     }
 
     /**
-     * 같은 조합을 n번째 여는 사람에게 n번째 글. 세 답은 서로 다른 변형에서 섞어 뽑아 겹침을 더 줄인다
-     * (변형 3개면 답 조합 27가지). ordinal 이 변형 수를 넘으면 자리를 한 칸씩 밀어 다른 조합을 만든다.
+     * 같은 조합을 n번째 여는 사람에게 n번째 글. 세 답은 한 칸씩 어긋난 변형에서 뽑아 한 요청의 세 답이 통째로 같은 변형이 되지 않게 한다.
+     * 어디서 시작하든 연속 n번은 어느 답도 같은 글이 안 나온다 — 변형 수보다 같은 조합을 많이 볼 때만 겹친다.
      */
     public Optional<CompatibilityReason> pick(String key, int ordinal) {
         List<CompatibilityReason> list = variants.get(key);
         if (list == null || list.isEmpty()) {
             return Optional.empty();
         }
-        int n = list.size(), o = Math.max(ordinal, 0), shift = o / n;
+        int n = list.size(), o = Math.max(ordinal, 0);
         return Optional.of(new CompatibilityReason(
                 list.get(o % n).why(),
-                list.get((o + shift + 1) % n).together(),
-                list.get((o + 2 * shift + 2) % n).conflict()));
+                list.get((o + 1) % n).together(),
+                list.get((o + 2) % n).conflict()));
     }
 
     int size() {
