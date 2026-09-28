@@ -94,12 +94,20 @@ class GeminiRoutingTest {
         var paid = endpoint("paid", null, 5, 3);
         var pool = new GeminiClientPool(List.of(), paid, Map.of(LlmPurpose.SAJU, 1), clock);
         assertThat(pool.acquirePaid(LlmPurpose.DATING)).isSameAs(paid);
-        assertThat(pool.acquirePaid(LlmPurpose.COMPATIBILITY)).isSameAs(paid);
+        assertThat(pool.acquirePaid(LlmPurpose.DATING)).isSameAs(paid);
         assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNull(); // 남은 1회는 사주 예약분
         assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isSameAs(paid);
         assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNull();
         clock.now = Instant.parse("2026-09-29T07:00:00Z"); // 태평양 자정 뒤 다시 찬다
         assertThat(pool.acquirePaid(LlmPurpose.DATING)).isSameAs(paid);
+    }
+
+    @Test
+    void compatibilityNeverUsesPaidBecauseTheBankCoversIt() {
+        var paid = endpoint("paid", null, 5, 100);
+        var pool = new GeminiClientPool(List.of(), paid, clock);
+        assertThat(pool.acquirePaid(LlmPurpose.COMPATIBILITY)).isNull();
+        assertThat(paid.budget.status()).contains("day=0/100");
     }
 
     @Test
@@ -116,7 +124,7 @@ class GeminiRoutingTest {
         try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
             server.status.put("free", 503);
             var json = json(free, paid, 100, 25_000, System::nanoTime);
-            assertThat(json.generate(LlmPurpose.COMPATIBILITY, "system", "synthetic", List.of("why"))).containsEntry("why", "ok");
+            assertThat(json.generate(LlmPurpose.DATING, "system", "synthetic", List.of("why"))).containsEntry("why", "ok");
             assertThat(server.count("free")).isEqualTo(1);
             assertThat(server.count("paid")).isEqualTo(1);
 
@@ -248,7 +256,7 @@ class GeminiRoutingTest {
     }
 
     private void unavailable(GeminiJson json) {
-        assertThatThrownBy(() -> json.generate(LlmPurpose.COMPATIBILITY, "system", "synthetic", List.of("why")))
+        assertThatThrownBy(() -> json.generate(LlmPurpose.DATING, "system", "synthetic", List.of("why")))
                 .isInstanceOf(BusinessException.class).extracting("errorCode").isEqualTo(ErrorCode.LLM_UNAVAILABLE);
     }
 

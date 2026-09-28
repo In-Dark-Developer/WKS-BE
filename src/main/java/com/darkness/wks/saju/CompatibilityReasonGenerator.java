@@ -1,5 +1,7 @@
 package com.darkness.wks.saju;
 
+import com.darkness.wks.common.exception.BusinessException;
+import com.darkness.wks.common.exception.ErrorCode;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -9,8 +11,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 두 팔자 + 점수 + 관계 유형 → 궁합 상세 이유 세 답. 사전 생성본({@link CompatibilityReasonBank})에서 고르고,
- * 없는 조합만 Gemini 한 번 호출 (FR-CP-13).
+ * 두 팔자 + 점수 + 관계 유형 → 궁합 상세 이유 세 답. 무료 키로 Gemini 를 한 번 호출하고(FR-CP-13), 실패하면
+ * 사전 생성본({@link CompatibilityReasonBank})에서 고른다. 생성본이 대체하므로 유료 키는 쓰지 않는다.
  * <p>
  * 프롬프트에는 팔자·점수·관계 유형과 코드가 정한 오행 사실만 들어간다 (FR-CP-14).
  * 성별은 넣지 않는다 — 궁합 이유는 성별을 보지 않고, 성별을 고려한 글은 소개팅 쪽이 따로 만든다.
@@ -37,8 +39,13 @@ public class CompatibilityReasonGenerator {
      */
     public CompatibilityReason generate(SajuPillars a, SajuPillars b, int score, String tier, int ordinal,
                                         Set<String> shownSentences) {
-        return bank.pick(CompatibilityReasonBank.key(a, b, tier), ordinal, shownSentences)
-                .orElseGet(() -> generateWithLlm(a, b, score, tier));
+        try {
+            return generateWithLlm(a, b, score, tier);
+        } catch (BusinessException e) {
+            // 무료 키만 한 번 시도한다(유료 전환 없음). 과부하·한도·무응답이면 사전 생성본으로 바로 응답한다
+            if (e.getErrorCode() != ErrorCode.LLM_UNAVAILABLE) throw e;
+            return bank.pick(CompatibilityReasonBank.key(a, b, tier), ordinal, shownSentences).orElseThrow(() -> e);
+        }
     }
 
     private CompatibilityReason generateWithLlm(SajuPillars a, SajuPillars b, int score, String tier) {

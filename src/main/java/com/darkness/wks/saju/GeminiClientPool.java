@@ -86,6 +86,7 @@ public final class GeminiClientPool implements AutoCloseable {
     }
 
     synchronized Endpoint acquirePaid(LlmPurpose purpose) {
+        if (!purpose.paidFallback()) return null;
         int reservedForOthers = paidReserves.entrySet().stream()
                 .filter(e -> e.getKey() != purpose).mapToInt(Map.Entry::getValue).sum();
         if (paid != null && paid.budget.remainingToday() > reservedForOthers && reserve(paid)) return paid;

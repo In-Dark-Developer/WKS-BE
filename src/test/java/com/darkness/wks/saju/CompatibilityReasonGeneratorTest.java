@@ -1,5 +1,7 @@
 package com.darkness.wks.saju;
 
+import com.darkness.wks.common.exception.BusinessException;
+import com.darkness.wks.common.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -7,12 +9,12 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** Gemini 는 호출하지 않는다 (TR-E-01). 프롬프트 조립만 검증 — 성별·닉네임·생년월일이 없고 오행 관계를 코드가 정하는지 */
@@ -44,7 +46,7 @@ class CompatibilityReasonGeneratorTest {
     }
 
     @Test
-    void bankHitSkipsLlmAndMissFallsBackToLlm() {
+    void llmFirstThenBankWhenLlmUnavailable() {
         GeminiJson gemini = mock(GeminiJson.class);
         SajuPillars wood = new SajuPillars("갑인", "갑인", "갑인", "갑인");
         SajuPillars fire = new SajuPillars("병오", "병오", "병오", "병오");
@@ -52,12 +54,16 @@ class CompatibilityReasonGeneratorTest {
         CompatibilityReasonGenerator generator = new CompatibilityReasonGenerator(gemini,
                 new CompatibilityReasonBank(Map.of("찰떡|나무:나무|불:불", List.of(banked))));
 
-        assertThat(generator.generate(fire, wood, 80, "찰떡", 0, Set.of())).isEqualTo(banked);
-        verifyNoInteractions(gemini);
-
         when(gemini.generate(eq(LlmPurpose.COMPATIBILITY), anyString(), any(), anyList()))
                 .thenReturn(Map.of("why", "왜", "together", "만나면", "conflict", "싸우면"));
-        assertThat(generator.generate(fire, wood, 70, "벗", 0, Set.of()))
+        assertThat(generator.generate(fire, wood, 80, "찰떡", 0, Set.of()))
                 .isEqualTo(new CompatibilityReason("왜", "만나면", "싸우면"));
+
+        when(gemini.generate(eq(LlmPurpose.COMPATIBILITY), anyString(), any(), anyList()))
+                .thenThrow(new BusinessException(ErrorCode.LLM_UNAVAILABLE));
+        assertThat(generator.generate(fire, wood, 80, "찰떡", 0, Set.of())).isEqualTo(banked);
+        // 생성본에도 없는 조합이면 원래 오류 그대로
+        assertThatThrownBy(() -> generator.generate(fire, wood, 70, "벗", 0, Set.of()))
+                .isInstanceOf(BusinessException.class).extracting("errorCode").isEqualTo(ErrorCode.LLM_UNAVAILABLE);
     }
 }
