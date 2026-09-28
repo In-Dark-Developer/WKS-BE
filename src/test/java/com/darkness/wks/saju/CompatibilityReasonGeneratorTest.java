@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,12 +51,12 @@ class CompatibilityReasonGeneratorTest {
         CompatibilityReasonGenerator generator = new CompatibilityReasonGenerator(gemini,
                 new CompatibilityReasonBank(Map.of("찰떡|나무:나무|불:불", List.of(banked))));
 
-        assertThat(generator.generate(fire, wood, 80, "찰떡", 0)).isEqualTo(banked);
+        assertThat(generator.generate(fire, wood, 80, "찰떡", 0, Set.of())).isEqualTo(banked);
         verifyNoInteractions(gemini);
 
         when(gemini.generate(anyString(), any(), anyList()))
                 .thenReturn(Map.of("why", "왜", "together", "만나면", "conflict", "싸우면"));
-        assertThat(generator.generate(fire, wood, 70, "벗", 0))
+        assertThat(generator.generate(fire, wood, 70, "벗", 0, Set.of()))
                 .isEqualTo(new CompatibilityReason("왜", "만나면", "싸우면"));
     }
 }

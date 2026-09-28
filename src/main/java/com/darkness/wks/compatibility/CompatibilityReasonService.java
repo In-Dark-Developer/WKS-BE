@@ -9,6 +9,9 @@ import com.darkness.wks.saju.CompatibilityReason;
 import com.darkness.wks.saju.CompatibilityReasonBank;
 import com.darkness.wks.saju.CompatibilityReasonGenerator;
 import com.darkness.wks.saju.SajuPillars;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -31,8 +34,10 @@ public class CompatibilityReasonService {
         if (c.hasReason()) {
             return CompatibilityReasonResponse.from(c);
         }
+        List<Compatibility> siblings = compatibilityRepository.findAllByOriginIdWithResults(c.getOrigin().getId());
         CompatibilityReason reason = generator.generate(
-                toPillars(c.getOrigin()), toPillars(c.getGuest()), c.getScore(), c.getTier().korean(), ordinal(c));
+                toPillars(c.getOrigin()), toPillars(c.getGuest()), c.getScore(), c.getTier().korean(),
+                ordinal(c, siblings), shownSentences(siblings));
         int saved = compatibilityRepository.saveReasonIfAbsent(id, reason.why(), reason.together(), reason.conflict());
         if (saved == 0) { // 동시에 연 다른 사람이 먼저 저장했다. 둘이 같은 글을 보도록 저장된 쪽을 돌려준다
             return CompatibilityReasonResponse.from(find(id));
@@ -46,12 +51,25 @@ public class CompatibilityReasonService {
      * 행 순서·공유자 id 로만 정하므로 두 사람은 여전히 같은 글을 본다.
      * ponytail: 공유자 궁합 전부를 읽는다. 축제 규모(사람당 수십 건)면 충분하고, 커지면 조합 키 컬럼을 둔다.
      */
-    private int ordinal(Compatibility c) {
+    private static int ordinal(Compatibility c, List<Compatibility> siblings) {
         String key = key(c);
-        long earlier = compatibilityRepository.findAllByOriginIdWithResults(c.getOrigin().getId()).stream()
+        long earlier = siblings.stream()
                 .filter(other -> other.getId() < c.getId() && key.equals(key(other)))
                 .count();
         return CompatibilityReasonBank.start(c.getOrigin().getId()) + (int) earlier;
+    }
+
+    /** 공유자가 다른 궁합에서 이미 읽은 문장. 사전 생성본이 첫 문장을 정형구로 쓰는 일이 잦아 변형 선택 때 피한다 */
+    private static Set<String> shownSentences(List<Compatibility> siblings) {
+        Set<String> shown = new HashSet<>();
+        for (Compatibility other : siblings) {
+            if (other.hasReason()) {
+                shown.addAll(CompatibilityReasonBank.sentences(other.getReasonWhy()));
+                shown.addAll(CompatibilityReasonBank.sentences(other.getReasonTogether()));
+                shown.addAll(CompatibilityReasonBank.sentences(other.getReasonConflict()));
+            }
+        }
+        return shown;
     }
 
     private static String key(Compatibility c) {

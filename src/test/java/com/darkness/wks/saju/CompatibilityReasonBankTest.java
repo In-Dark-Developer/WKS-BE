@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,22 @@ class CompatibilityReasonBankTest {
 
     private static String field(CompatibilityReason r, int i) {
         return i == 0 ? r.why() : i == 1 ? r.together() : r.conflict();
+    }
+
+    @Test
+    void shownSentencesSteerEachFieldToAnUnseenVariant() {
+        CompatibilityReason a = new CompatibilityReason("공통 첫 문장. 왜A.", "만나면A.", "싸우면A.");
+        CompatibilityReason b = new CompatibilityReason("공통 첫 문장. 왜B.", "만나면B.", "싸우면B.");
+        CompatibilityReason c = new CompatibilityReason("다른 시작. 왜C.", "만나면C.", "싸우면C.");
+        CompatibilityReasonBank bank = new CompatibilityReasonBank(Map.of("k", List.of(a, b, c)));
+
+        // 회전상 why=a 차례지만 '공통 첫 문장'을 이미 봤으면 c 로. 다른 답은 회전 순서 유지
+        assertThat(bank.pick("k", 0, Set.of("공통 첫 문장.")))
+                .contains(new CompatibilityReason("다른 시작. 왜C.", "만나면B.", "싸우면C."));
+        // 전부 겹치면 가장 적게 겹치는 것(= 회전 순서 첫 후보)
+        assertThat(bank.pick("k", 0, Set.of("공통 첫 문장.", "다른 시작."))).contains(bank.pick("k", 0).orElseThrow());
+        assertThat(CompatibilityReasonBank.sentences("첫 문장이에요. 둘째 문장이지요!  셋째?"))
+                .containsExactlyInAnyOrder("첫 문장이에요.", "둘째 문장이지요!", "셋째?");
     }
 
     @Test
