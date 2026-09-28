@@ -32,6 +32,17 @@ class CallBudgetTest {
     }
 
     @Test
+    void minuteBoundaryDoesNotAllowAnotherBurst() {
+        TestClock clock = new TestClock(Instant.parse("2026-09-20T03:00:59Z"));
+        CallBudget budget = new CallBudget(1, 100, clock);
+        assertThat(budget.tryAcquire()).isTrue();
+        clock.now = clock.now.plusSeconds(1);
+        assertThat(budget.tryAcquire()).isFalse();
+        clock.now = clock.now.plusSeconds(59);
+        assertThat(budget.tryAcquire()).isTrue();
+    }
+
+    @Test
     void dayCapResetsAtPacificMidnight() {
         // 태평양 자정 = 2026-09-20 07:00Z (PDT). 그 1분 전엔 같은 날, 이후엔 새 날
         TestClock clock = new TestClock(Instant.parse("2026-09-20T06:59:00Z"));

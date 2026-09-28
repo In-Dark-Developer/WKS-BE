@@ -436,7 +436,7 @@ CreateResultRequest
 - 생성 결과는 `compatibility.reason_*` 세 컬럼(V13)에 캐싱하고, 재조회는 LLM 호출 0회다. 조합은 A↔B 무순서로 한 행이라 **두 사람이 같은 글을 본다**
 - 세 질문("왜 귀인인가"·"둘이 만나게 된다면"·"둘이 싸움이 난다면")을 **한 번의 호출**로 생성한다 (FR-GM-02). `saju/CompatibilityReasonGenerator` + `prompts/compatibility-reason-system.txt`
 - 실패하면 `LLM_UNAVAILABLE` 503. 프론트는 해당 영역만 미노출하고 재시도할 수 있다. 화면 전체를 에러로 만들지 않는다
-- 프롬프트에는 팔자·점수·관계유형과 코드가 정한 오행 사실(두 기운·상생/상극)만 넣는다. **성별은 넣지 않는다** — 성별을 고려한 글은 소개팅 쪽이 따로 만든다. 호출은 `saju/GeminiJson` 의 `CallBudget` 하나에 사주 해석과 함께 집계된다
+- 프롬프트에는 팔자·점수·관계유형과 코드가 정한 오행 사실(두 기운·상생/상극)만 넣는다. **성별은 넣지 않는다** — 성별을 고려한 글은 소개팅 쪽이 따로 만든다. 호출은 `saju/GeminiJson`의 프로젝트별·전체 `CallBudget`에 사주 해석과 함께 집계된다
 - 동시에 처음 열면 LLM 을 두 번 부를 수 있지만 저장은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 되고, 진 쪽은 저장된 글을 다시 읽는다. 잠금은 LLM 30초 동안 DB 연결을 잡아 두므로 쓰지 않는다
 - 서비스 메서드에 트랜잭션을 걸지 않는다. 같은 이유
 - 프롬프트를 바꾸면 기존 캐시는 옛 글로 남는다. 다시 만들려면 `UPDATE compatibility SET reason_why = NULL, reason_together = NULL, reason_conflict = NULL` (버전 컬럼은 두지 않았다)
@@ -457,14 +457,16 @@ CreateResultRequest
 
 ### LLM 연동 — Gemini Flash 무료 티어
 
-SDK: `com.google.genai:google-genai` (Gemini Developer API).
-API 키는 Google AI Studio에서 발급. 환경변수 `GOOGLE_API_KEY`.
-모델 `gemini-3.5-flash-lite` (설정 `gemini.model`), 타임아웃 30초 (`gemini.timeout-seconds`).
-`gemini-2.5-flash` 는 2026-09 기준 신규 키에 404 ("no longer available to new users").
-모델별 무료 한도가 크게 다르다: `gemini-3.6-flash` 는 하루 20건, `gemini-3.5-flash-lite` 는 하루 2,000건 이상 실측(2026-09-13, 1토큰 요청). 실제 크기 요청(약 2,100토큰/건)으로도 분당 90건·20만 토큰까지 429 없음 (2026-09-16, p95 5.8초). 그래서 lite 를 기본으로 쓴다.
-3.x 는 `thinkingBudget` 을 거부하므로 `thinkingLevel: MINIMAL` 로 사고 토큰을 줄인다.
+SDK: `com.google.genai:google-genai` (Gemini Developer API), 모델 `gemini-3.5-flash-lite`.
+무료 프로젝트 키 최대 3개를 `GEMINI_FREE_KEY_1`·`_2`·`_3`으로 받아 가용한 프로젝트만 라운드 로빈으로 선택한다. 모두 비어 있으면 기존 `GOOGLE_API_KEY`를 사용한다. **프로젝트마다 키 하나**이며 프로젝트 ID는 받지 않는다. 같은 프로젝트 키 여러 개는 한도를 공유하므로 별개 항목으로 등록하지 않는다.
 
-**호출 총량 상한** (`saju/CallBudget`, #64): 분당 `gemini.max-per-minute`(기본 60)·일일 `gemini.max-per-day`(기본 1,600) 넘으면 Gemini 를 부르지 않고 `LLM_UNAVAILABLE`. 무료 한도는 키가 아니라 **프로젝트 단위**이고 **태평양 자정에 리셋**(KST 16:00, 서머타임 땐 17:00)이라 일일 창도 그 기준. 재시도도 한도를 쓰니 시도마다 센다. 같은 입력 재사용(#62)은 카운트 안 함. 메모리 카운터라 재시작하면 0 부터. IP 제한은 축제장 NAT 때문에 좁게 못 잡아서 총량으로 지킨다 (nginx `limit_req` 는 폭주 차단용으로 넓게, 곽도윤).
+**장애 처리 (#127, 2026-09-28)**: SDK 내부 재시도는 `attempts(1)`로 끈다. Google 원본 503일 때만 `GEMINI_PAID_KEY`로 1회 전환한다(최대 HTTP 2회). 429·IO·파싱 실패·그 외 오류는 즉시 `LLM_UNAVAILABLE` 503. 무료 예산 소진만으로 유료를 쓰지 않는다. 모델 자체 과부하는 유료 전환도 실패할 수 있다. 시도당 기본 12초, LLM 단계 전체 예산 25초이며 각 호출에 남은 시간을 전달한다. `MINIMAL` 사고 설정은 유지한다.
+
+**예산·쿨다운**: 무료 프로젝트별 기본 15 RPM, 500 RPD(2026-09-28 운영 429 메시지의 실제 한도) / 유료 기본 5 RPM, 120 RPD / 앱 전체 50 RPM, 1,600 RPD(= 무료 3개 + 유료 합). 운영 31시간 로그 102회 시도: 성공 49%, IO 실패 34%, 429 10%, Google 503 7%. 유료 전환은 이 7%만 대상이다. 분당 예산은 최근 60초, 일일 예산은 `America/Los_Angeles` 자정에 리셋한다(PDT: KST 16시, PST: KST 17시). 선택·예산 예약만 동기화하며 HTTP 호출 동안 락을 잡지 않는다. SDK 자체 시도를 끄므로 실패한 호출·유료 대체도 예산에 반영된다.
+
+Google 503이면 해당 프로젝트를 30초, 429면 최소 60초 제외한다. SDK 메시지의 구조화된 RetryInfo/QuotaFailure를 해석할 수 있으면 더 긴 재시도 시간/일일 리셋까지 기다린다. 401·403은 설정 수정·재시작 전까지 제외한다. 모든 무료 프로젝트가 제한되면 빠르게 실패한다. 카운터·쿨다운은 프로세스 메모리라 재시작 시 초기화되며 dev·운영·다른 도구의 호출을 합산하지 못한다. 프로젝트를 분리하거나 예산을 나눠야 한다.
+
+소개팅 요청 이유(받은 사람 문장, 수락 후 보낸 사람 문장)의 비동기 생성은 `dating/DatingReasonService`가 요청·방향별로 진행 중 중복을 막고, 실패/작업 제출 거절 뒤 60초 쿨다운을 둔다. 이후 실제 목록 조회가 있을 때 재시도한다. 새로고침 자체로 호출량이 반복 소진되는 것을 막는다. 키 설정·한도 변경 절차는 `runbook-dev-server.md`의 Gemini 설정 절을 따른다.
 
 > SDK 2.0.0부터 Java 17 이상이 필수다. 우리는 Java 17이라 문제없다.
 

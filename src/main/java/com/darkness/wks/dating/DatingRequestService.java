@@ -120,7 +120,7 @@ public class DatingRequestService {
             boolean received = request.getRecipient().getMemberId().equals(memberId);
             if (received && request.getRecipientReason() == null) {
                 // 요청 직후 생성이 실패한 이유를 다시 만든다. 이번 응답은 null 로 나가고 다음 조회에 채워진다.
-                // ponytail: 목록 조회마다 실패 요청 수만큼 LLM 재시도. 축제 규모(수백 건)면 CallBudget 안이다
+                // 서비스가 생성 중 중복과 실패 후 60초 내 재시도를 막는다.
                 reasonService.fillRecipientReasonAsync(request.getId());
             }
             if (!received && request.getStatus() == DatingRequestStatus.ACCEPTED

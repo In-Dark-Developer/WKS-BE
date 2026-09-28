@@ -53,10 +53,29 @@ springdoc:
     path: /swagger-ui.html
 
 gemini:
-  timeout-seconds: 30
-  # 호출 총량 상한 (#64). 무료 한도 실측(90 RPM·2,000 RPD 이상 통과)의 안전값. AI Studio 한도 확인 후 조정
-  max-per-minute: ${GEMINI_MAX_PER_MINUTE:60}
+  model: gemini-3.5-flash-lite
+  timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:12}
+  total-timeout-seconds: ${GEMINI_TOTAL_TIMEOUT_SECONDS:25}
+  # 전역 안전 상한 = 무료 3개 + 유료 예산의 합. 프로젝트별 예산과 함께 검사하며 유료 대체 호출도 포함한다.
+  max-per-minute: ${GEMINI_MAX_PER_MINUTE:50}
   max-per-day: ${GEMINI_MAX_PER_DAY:1600}
+  # 각각 다른 프로젝트의 키 하나씩. 모두 비어 있으면 기존 gemini.api-key 사용.
+  # 무료 실측 한도(2026-09-28 429 메시지): 15 RPM, 500 RPD/프로젝트. 앱 상한도 같은 값으로 둔다.
+  free-projects:
+    - api-key: ${GEMINI_FREE_KEY_1:}
+      max-per-minute: ${GEMINI_FREE_RPM_1:15}
+      max-per-day: ${GEMINI_FREE_RPD_1:500}
+    - api-key: ${GEMINI_FREE_KEY_2:}
+      max-per-minute: ${GEMINI_FREE_RPM_2:15}
+      max-per-day: ${GEMINI_FREE_RPD_2:500}
+    - api-key: ${GEMINI_FREE_KEY_3:}
+      max-per-minute: ${GEMINI_FREE_RPM_3:15}
+      max-per-day: ${GEMINI_FREE_RPD_3:500}
+  paid-project:
+    api-key: ${GEMINI_PAID_KEY:}
+    max-per-minute: ${GEMINI_PAID_RPM:5}
+    # 운영 로그 기준 Google 503은 시도의 약 7%. 무료 1,500/일 전부 쓰면 유료 약 105/일 → 여유 있게 120.
+    max-per-day: ${GEMINI_PAID_RPD:120}
 
 app:
   mail:

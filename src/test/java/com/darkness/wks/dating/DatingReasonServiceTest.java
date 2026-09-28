@@ -183,6 +183,41 @@ class DatingReasonServiceTest {
         verifyNoInteractions(recommendationRepository, resultRepository, generator);
     }
 
+    @Test
+    void recipientFailuresWaitSixtySecondsBeforeRetry() {
+        UUID requestId = UUID.randomUUID();
+        java.time.Clock clock = org.mockito.Mockito.mock(java.time.Clock.class);
+        java.time.Instant now = java.time.Instant.parse("2026-09-28T00:00:00Z");
+        when(clock.instant()).thenReturn(now);
+        when(requestRepository.findWithProfiles(requestId)).thenReturn(Optional.empty());
+        DatingReasonService limited = new DatingReasonService(recommendationRepository, requestRepository,
+                resultRepository, generator, new SyncTaskExecutor(), clock);
+        limited.fillRecipientReasonAsync(requestId);
+        limited.fillRecipientReasonAsync(requestId);
+        when(clock.instant()).thenReturn(now.plusSeconds(59));
+        limited.fillRecipientReasonAsync(requestId);
+        verify(requestRepository).findWithProfiles(requestId);
+        when(clock.instant()).thenReturn(now.plusSeconds(60));
+        limited.fillRecipientReasonAsync(requestId);
+        verify(requestRepository, org.mockito.Mockito.times(2)).findWithProfiles(requestId);
+    }
+
+    @Test
+    void queuedWorkIsNotDuplicatedAndRejectedWorkCoolsDown() {
+        UUID requestId = UUID.randomUUID();
+        org.springframework.core.task.TaskExecutor executor = org.mockito.Mockito.mock(org.springframework.core.task.TaskExecutor.class);
+        DatingReasonService queued = new DatingReasonService(recommendationRepository, requestRepository,
+                resultRepository, generator, executor);
+        queued.fillRecipientReasonAsync(requestId);
+        queued.fillRecipientReasonAsync(requestId);
+        verify(executor).execute(any());
+        UUID rejected = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new java.util.concurrent.RejectedExecutionException()).when(executor).execute(any());
+        queued.fillRecipientReasonAsync(rejected);
+        queued.fillRecipientReasonAsync(rejected);
+        verify(executor, org.mockito.Mockito.times(2)).execute(any());
+    }
+
     /** 보낸 사람 member 1, 받은 사람 member 2 */
     private static DatingRequest request() {
         DatingProfile sender = new DatingProfile(1L, "sender@example.com", "보낸이", ContactMethod.PHONE,
