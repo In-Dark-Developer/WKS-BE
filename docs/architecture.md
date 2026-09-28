@@ -11,6 +11,9 @@
 [프론트 레포 · 별도 팀 3명]
         │ HTTP (계약: docs/api-spec.md)
         ▼
+  CloudFront + WAF   (api·api-dev 공용 배포 1개, 2026-09-29. IP당 요청 제한은 여기서)
+        │  원본 origin.threadoffate.site → EIP, Host 헤더를 그대로 넘겨 nginx 가 api/api-dev 를 나눈다
+        ▼
     nginx (EC2)
         ▼
   Spring Boot API   ← 이 레포
@@ -42,7 +45,7 @@
 | API Docs | **springdoc-openapi 3.1.1** |
 | Monitoring | Actuator |
 | Test | JUnit5, Mockito, Testcontainers |
-| Infra | Docker, EC2, nginx, GitHub Actions |
+| Infra | Docker, EC2, nginx, GitHub Actions, CloudFront + AWS WAF (2026-09-29) |
 
 ### 의도적으로 뺀 것
 

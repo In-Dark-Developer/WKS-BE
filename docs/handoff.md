@@ -32,6 +32,7 @@
 
 | 내용 | 담당 | 필요한 것 |
 |---|---|---|
+| **운영 `api` DNS 를 CloudFront 로 전환** (#139) | hairyung2002 | #139 를 `main` 까지 배포(nginx 재시작) **직후** Route53 `api.threadoffate.site` 를 별칭 → `dqvbbt49r7ipv.cloudfront.net`. 순서가 바뀌면 nginx 가 CloudFront IP 로 요청을 세서 429 가 난다. 절차는 아래 2026-09-29 #139 기록 |
 | 프론트 배포 도메인 (CORS용) | 곽도윤 | 프론트 팀 확인 |
 | 개발 서버 별도 운영 여부 | 곽도윤 | ✅ 2026-09-26 EC2 에 띄워 동작 확인. 남은 것은 아래 세 줄 |
 | 운영 릴리즈 직후 CORS credentials 확인 | 곽도윤 | 운영 preflight 응답에 `access-control-allow-credentials: true` 가 생겼는지 (명령은 아래 2026-09-26 인프라 기록). 없으면 운영 쿠키 로그인이 CORS 에서 막힌다 |
@@ -182,6 +183,49 @@
 ---
 
 ## 기록
+
+### 2026-09-29 (화) · hairyung2002 · 인프라 CloudFront + WAF 도입, nginx 요청 제한 제거 (#139) · Claude Code
+
+**한 일**
+- `api`·`api-dev` 앞에 **CloudFront 배포 1개**(`E2KI5C05LAAION`, `dqvbbt49r7ipv.cloudfront.net`, **무료 플랜**)와 WAF 를 붙였다.
+  nginx·certbot·프론트는 그대로 두는 구성이다
+  - 원본 `origin.threadoffate.site`(Route53 A → EIP, 신규). 원본 요청 정책 **AllViewer** 로 `Host` 를 넘겨 nginx 가
+    지금처럼 `server_name` 으로 운영/개발을 나누고, 기존 Let's Encrypt 인증서로 원본 TLS 검사도 통과한다
+  - 기본 동작: HTTPS only(443), 원본 응답 제한 60초, 메서드 GET~DELETE 전부, **CachingDisabled**
+  - 인증서 갱신용 동작 `/.well-known/acme-challenge/*` → 원본 **HTTP 80**(뷰어 HTTP·HTTPS 허용). certbot HTTP-01 이
+    CloudFront 를 거쳐 기존 nginx 80 블록으로 간다. `api-dev` 로 `certbot renew --dry-run` 성공 확인
+  - 인증서: ACM(us-east-1) 1장에 `api`·`api-dev` 두 이름
+  - WAF: `CreatedByCloudFront-6ac741da` — 코어 보호 3개(자동) + **`rate-all`(IP당 5분 6,000건, 차단)**. 무료 플랜은
+    경로·메서드 조건을 못 걸어 `/api/results` 전용 제한은 만들지 못했다(Gemini 는 앱 `CallBudget` 이 막는다)
+- **`api-dev` 는 전환 완료**(Route53 별칭 → CloudFront). 로그인·사주·궁합·소개팅 한 바퀴 정상
+- `nginx/default.conf` 에서 운영 `limit_req` 제거(#139). CloudFront 뒤에서는 nginx 가 CloudFront IP 를 보므로 IP 별로 세면
+  정상 사용자가 429 를 받는다. 제한은 WAF `rate-all` 이 대신한다. `api-dev.conf` 는 원래 제한이 없어 그대로
+
+**건드린 파일/패키지**
+- `nginx/default.conf`, `docs/architecture.md`(§1 구성도·§2 스택)
+- AWS 콘솔: Route53(`origin` 신규, `api`·`api-dev` TTL 300→60, `api-dev` 별칭), ACM(us-east-1), CloudFront, WAF
+
+**다음 사람이 알아야 할 것**
+- **운영 전환 순서**: #139 를 `main` 에 머지 → `deploy.yml` 의 `restart nginx` 까지 끝난 것 확인 → **곧바로** Route53
+  `api.threadoffate.site` 편집 → 별칭 → CloudFront `dqvbbt49r7ipv.cloudfront.net`. 확인은 응답 헤더 `Via: ... (CloudFront)`,
+  WAF 샘플링된 요청, 로그인 유지, `certbot renew --dry-run --cert-name api.threadoffate.site`
+- **되돌리기**: Route53 레코드를 A(EIP), TTL 60 으로. nginx 요청 제한은 안 되돌려도 서비스는 동작한다
+- CloudFront 콘솔의 **"Route domains to CloudFront" 버튼은 쓰지 않는다** — `api`·`api-dev` 를 한꺼번에 바꾼다
+- 프론트는 계속 `api.threadoffate.site`·`api-dev.threadoffate.site` 를 쓴다. `*.cloudfront.net` 주소를 쓰면 쿠키가 안 붙어 로그인이 깨진다
+- WAF·CloudFront 에 예전 프로젝트 배포 2개(`E222VBT99ZC2O8` 봄 축제, `ENYP5A3DXU7ZX` 동아리박람회, 둘 다 사용 중지)와
+  그 ACL 2개가 남아 있다. **우리 것은 `E2KI5C05LAAION` / `CreatedByCloudFront-6ac741da` 뿐** — 헷갈리지 말 것
+- 무료 플랜 한도(월 요청 수)는 전환 후 CloudFront 사용량 화면에서 확인할 것
+
+**막힌 것 / 넘기는 것**
+- 운영 DNS 전환(위 "지금 막혀 있는 것" 표)
+- 축제 후: 보안 그룹 80·443 을 CloudFront prefix list 로 제한(80·443 별도 SG, SSH 22 유지), 코어 보호 오판 여부 확인,
+  예전 배포·ACL 정리
+
+**문서 변경**
+- `architecture.md` §1·§2
+
+**프론트에 알려야 할 것**
+- 없음 (API 주소·형식 그대로). 응답 헤더에 `Via`·`X-Amz-Cf-*` 가 붙고, WAF 에 걸리면 CloudFront 가 403 을 줄 수 있다
 
 ### 2026-09-29 (화) · hairyung2002 · saju/ Gemini 무료 6키·유료 전환 확대·사주 예약분 (이슈 없음) · Claude Code
 
