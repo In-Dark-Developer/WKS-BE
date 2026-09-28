@@ -11,7 +11,7 @@ import java.util.Set;
 public record GeminiProperties(
         String apiKey,
         @DefaultValue("gemini-3.5-flash-lite") String model,
-        @DefaultValue("8") int timeoutSeconds,
+        @DefaultValue("12") int timeoutSeconds,
         @DefaultValue("25") int totalTimeoutSeconds,
         List<Project> freeProjects,
         Project paidProject,
