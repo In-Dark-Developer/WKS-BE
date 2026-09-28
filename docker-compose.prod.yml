@@ -32,11 +32,24 @@ services:
       DB_NAME: ${DB_NAME:-wks}
       DB_USERNAME: ${DB_USERNAME:-wks}
       DB_PASSWORD: ${DB_PASSWORD}
+      # SES 로 바꿀 때 .env 에 적는다(email-smtp.ap-northeast-2.amazonaws.com). 기본값은 기존 Gmail.
+      # 보조 계정도 같은 호스트로 접속하므로, SES 로 바꾸면 MAIL_SECONDARY_* 는 비워야 한다
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       # 빠지면 발신 주소가 기본값(noreply@wks.local)이 되고, Gmail 이 계정 주소로 덮어쓰면서 발신 이름까지 사라진다
       MAIL_FROM: ${MAIL_FROM}
+      # 기본 계정이 실패(하루 500통 한도 등)하면 보조 계정으로 보낸다. 비워 두면 전환 없이 기본 계정만 쓴다
+      MAIL_SECONDARY_USERNAME: ${MAIL_SECONDARY_USERNAME:-}
+      MAIL_SECONDARY_PASSWORD: ${MAIL_SECONDARY_PASSWORD:-}
+      MAIL_SECONDARY_FROM: ${MAIL_SECONDARY_FROM:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      # Gemini 호출 총량 상한(CallBudget). 전에는 넘기지 않아 .env 에 적어도 앱 기본값(60·1600)이 쓰였다
+      GEMINI_MAX_PER_MINUTE: ${GEMINI_MAX_PER_MINUTE:-60}
+      GEMINI_MAX_PER_DAY: ${GEMINI_MAX_PER_DAY:-1600}
+      # 제휴처 유입 보상 "코드:금액:표시이름". 기본값을 앱과 같게 둔다 — 빈 값을 넘기면 보상이 조용히 꺼진다
+      PARTNER_REWARDS: ${PARTNER_REWARDS:-FESTIVAL:10:동국대 축제}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       VERIFY_REDIRECT_URL: ${VERIFY_REDIRECT_URL}
       BACKEND_BASE_URL: ${BACKEND_BASE_URL}

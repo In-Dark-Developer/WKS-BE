@@ -1,5 +1,6 @@
 package com.darkness.wks.dating;
 
+import com.darkness.wks.dating.DatingRequestNotifier.DatingRequestAcceptedEvent;
 import com.darkness.wks.dating.DatingRequestNotifier.DatingRequestSentEvent;
 import jakarta.mail.Message;
 import jakarta.mail.Session;
@@ -45,6 +46,19 @@ class DatingRequestNotifierTest {
         verify(mailSender).send(sent.capture());
         assertThat(sent.getValue().getRecipients(Message.RecipientType.TO)[0].toString()).isEqualTo(EMAIL);
         assertThat(sent.getValue().getSubject()).contains("소개팅 신청");
+    }
+
+    @Test
+    void sendsAcceptedNotificationToSenderWithoutContact() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
+
+        notifier().onRequestAccepted(new DatingRequestAcceptedEvent(UUID.randomUUID(), EMAIL));
+
+        ArgumentCaptor<MimeMessage> sent = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(sent.capture());
+        assertThat(sent.getValue().getRecipients(Message.RecipientType.TO)[0].toString()).isEqualTo(EMAIL);
+        assertThat(sent.getValue().getSubject()).contains("수락");
+        assertThat(sent.getValue().getContent().toString()).contains("보낸 신청함");
     }
 
     @Test

@@ -14,6 +14,7 @@ import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.BirthDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -30,6 +31,7 @@ public class ResultService {
     private final ReadingRepository readingRepository;
     private final CompatibilityRepository compatibilityRepository;
     private final ResultAnalysisPort resultAnalysisPort;
+    private final ResultSaver resultSaver;
 
     private static final LocalDate MIN_BIRTH_DATE = LocalDate.of(1950, 1, 1);
 
@@ -38,7 +40,9 @@ public class ResultService {
      *                 연결한다 — 이미 있으면 계정 결과를 그대로 두고 새 결과는 익명으로 남긴다(plan.md §1.1 과
      *                 같은 "계정 우선", TBD-14 중 로그인 후 결과 생성 부분, 2026-09-26)
      */
-    @Transactional
+    // 트랜잭션을 열지 않는다. Gemini 호출(최대 30초)이 트랜잭션 안에 있으면 그동안 DB 커넥션(풀 10개)을 붙잡아
+    // 새 결과가 몰릴 때 다른 API 까지 커넥션 대기 3초 뒤 500 이 된다. 저장만 ResultSaver 의 짧은 트랜잭션으로 한다
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ResultResponse createResult(CreateResultRequest request, Long memberId) {
         LocalDate birthDate = toSolar(request);
         int version = resultAnalysisPort.analysisVersion();
@@ -62,31 +66,7 @@ public class ResultService {
                 request.birthDate(), // 입력 원본. 폼 자동 채움용 (#66)
                 request.leapMonth()
         );
-        // 잠금은 해석(LLM 호출 가능) 뒤에 잡는다 — 잠근 채로 최대 수십 초를 기다리지 않게
-        if (memberId != null && resultRepository.lockMember(memberId).isPresent()
-                && !resultRepository.existsByMemberId(memberId)) {
-            result.linkMember(memberId);
-        }
-        result = resultRepository.save(result);
-
-        ResultAnalysisPort.Fortune marriage = analysis.fortune(FortuneCategory.MARRIAGE);
-        ResultAnalysisPort.Fortune children = analysis.fortune(FortuneCategory.CHILDREN);
-        ResultAnalysisPort.Fortune love = analysis.fortune(FortuneCategory.LOVE);
-        Reading reading = new Reading(
-                result,
-                analysis.destinyDescription(),
-                marriage.score(),
-                marriage.content(),
-                children.score(),
-                children.content(),
-                love.score(),
-                love.content(),
-                analysis.elementMatchReason(),
-                version
-        );
-        readingRepository.save(reading);
-
-        return ResultResponse.from(result, reading);
+        return resultSaver.save(result, analysis, version, memberId);
     }
 
     private static ResultAnalysisPort.AnalysisResult toAnalysis(Reading r) {

@@ -14,7 +14,7 @@ import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.SajuPillars;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -47,8 +47,14 @@ class ResultServiceTest {
     @Mock
     private ResultAnalysisPort resultAnalysisPort;
 
-    @InjectMocks
     private ResultService resultService;
+
+    @BeforeEach
+    void setUp() {
+        // 저장은 ResultSaver 로 분리됐다 — 같은 목으로 실제 객체를 붙여 기존 저장 검증을 그대로 쓴다
+        resultService = new ResultService(resultRepository, readingRepository, compatibilityRepository,
+                resultAnalysisPort, new ResultSaver(resultRepository, readingRepository));
+    }
 
     @Test
     void getsStoredResultWithoutCallingAnalysisModule() {

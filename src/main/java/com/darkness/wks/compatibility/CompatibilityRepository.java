@@ -37,6 +37,16 @@ public interface CompatibilityRepository extends JpaRepository<Compatibility, Lo
             @Param("secondId") UUID secondId
     );
 
+    /** 이 결과가 공유자(origin)인 궁합 — 로그인 후 친구 등록 보상 소급 지급용 */
+    @Query("""
+            SELECT compatibility
+            FROM Compatibility compatibility
+            JOIN FETCH compatibility.origin
+            JOIN FETCH compatibility.guest
+            WHERE compatibility.origin.id = :resultId
+            """)
+    List<Compatibility> findAllByOriginIdWithResults(@Param("resultId") UUID resultId);
+
     @Query("""
             SELECT compatibility
             FROM Compatibility compatibility

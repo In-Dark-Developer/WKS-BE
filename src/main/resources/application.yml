@@ -30,6 +30,11 @@ server:
     whitelabel:
       enabled: false
 
+logging:
+  pattern:
+    # 에러 응답의 traceId(TraceIdFilter)로 그 요청의 로그만 골라낼 수 있게 레벨 옆에 붙인다
+    level: "%5p [%X{traceId:-}]"
+
 management:
   endpoints:
     web:
@@ -56,6 +61,11 @@ gemini:
 app:
   mail:
     from: ${MAIL_FROM:noreply@wks.local}
+    # 기본 계정(spring.mail.*) 실패 시 전환할 보조 계정. 호스트·포트는 기본 계정과 같다 (common/mail/MailConfig)
+    secondary:
+      username: ${MAIL_SECONDARY_USERNAME:}
+      password: ${MAIL_SECONDARY_PASSWORD:}
+      from: ${MAIL_SECONDARY_FROM:}
   backend:
     base-url: ${BACKEND_BASE_URL:http://localhost:8080}
   frontend:
@@ -63,6 +73,9 @@ app:
     dating-verify-redirect-url: ${DATING_VERIFY_REDIRECT_URL:http://localhost:3000/dating/verify}
     # 재신청 초대 메일이 가리키는 프론트 페이지. 백엔드를 거치지 않는다 — 토큰은 클릭 시점에 소비되지 않는다
     reapply-url: ${REAPPLY_URL:http://localhost:3000/dating/reapply}
+  partner:
+    # 제휴처 유입 보상. "코드:금액:표시이름" 을 콤마로 나열. 계정당 코드별 1회 (wallet/PartnerRewardService)
+    rewards: ${PARTNER_REWARDS:FESTIVAL:10:동국대 축제}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   signup:

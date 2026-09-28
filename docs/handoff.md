@@ -116,6 +116,8 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-28 | **[축제 사이트 유입 보상, 프론트 대응 필수]** `?ref=FESTIVAL` 로 들어온 사람에게 계정당 1회 10실. ① 비로그인이면 `ref` 를 보관했다가 `POST /api/auth/kakao` 의 `ref` 로 전달 → 응답 `rewardGranted` 가 채워짐 ② 이미 로그인 상태면 `POST /api/wallet/partner-rewards {ref}` 신규 호출. 이미 받았으면 둘 다 `rewardGranted: null`(에러 아님). `api-spec.md` §9·§12 | ❌ |
+| 2026-09-28 | 에러 응답 `error` 에 `traceId`(8자리 hex) 추가 — api-spec §1 에 원래 있던 필드. 그리고 깨진 JSON·없는 enum 값·잘못된 시각 형식·경로 id 형식 오류·잘못된 Content-Type 이 **500 `INTERNAL_ERROR` 대신 400 `INVALID_INPUT`** 으로 나간다. 형식 변경 없음 | ❌ |
 | 2026-09-27 | `POST /api/signups`·`POST /api/signups/resend` — `resultId` 가 있고 계정에 연결 안 된 신청이면 **인증 메일 대신 재신청 매직링크**를 보낸다. 요청·응답 필드 변경 없음, `message` 문구만 바뀜. 결과 없는 신청은 기존 인증 메일. `api-spec.md` §5 | ❌ |
 | 2026-09-27 | `GET /api/me` 의 `hasDatingProfile` 이 이제 실제 값이다(그동안 항상 `false`). 소개팅 프로필 등록(=학교메일 인증 완료 신청자)이면 `true`. 형식 변경 없음. `api-spec.md` §9 | ❌ |
 | 2026-09-28 | #123 `GET /api/dating/requests?box=received`·`?box=sent` 의 `counterpart.fields` 에 `reason` 추가. 받은 목록은 **받은 사람 기준** 문장, 무료, 항상 `locked:false`. 요청 직후·생성 실패 시 `value:null` → 잠시 후 목록 재조회. 보낸 목록은 카드와 같은 해금 상태. `api-spec.md` §11.1 | ❌ |
@@ -177,6 +179,133 @@
 ---
 
 ## 기록
+
+### 2026-09-28 (월) · (이름) · compatibility/·member/ 친구 등록 실 — 중복 인물 차단·로그인 후 소급 · Claude Code
+
+**한 일**
+- 친구 궁합 등록 실(+3)을 **같은 사람은 공유자당 한 번만** 준다(사용자 결정, 하루 상한은 없음). 익명 결과를 같은
+  생년월일로 반복 생성해 내 링크에 등록하면 실이 무한히 쌓이던 경로(QA)를 막는다. 공유자 자신과 같은 사람도 제외
+- 원장 `MAP_FRIEND` 의 `ref_id` 를 궁합 id → **친구 팔자 네 기둥·성별 해시**(`p:`+32hex)로 변경. 원문 팔자는 사실상 생년월일이라 해시
+- **소급 지급**: 로그인 전에 만든 결과가 로그인으로 계정에 연결되면(`MemberRaceOps.linkResultIfUnowned` 성공) 그동안
+  등록된 친구 몫을 같은 규칙으로 지급한다(사용자 결정). `result.ResultLinkedEvent` → `MapFriendRewardService` 동기 리스너
+
+**건드린 파일/패키지**
+- `compatibility/` — `MapFriendRewardService`(신규), `CompatibilityService`(지급 로직 이동), `CompatibilityRepository`(`findAllByOriginIdWithResults`)
+- `member/` — `MemberService`(이벤트 발행), `MemberRaceOps`(연결 성공 여부 반환)
+- `result/` — `ResultLinkedEvent`(신규, 레코드만)
+- 테스트: `MapFriendRewardFlowTest`(신규, Testcontainers), `CompatibilityServiceTest`, `MemberServiceTest`
+
+**다음 사람이 알아야 할 것**
+- `member → compatibility` 직접 의존은 만들지 않았다. 둘 다 이미 의존하는 `result` 에 이벤트를 둔다(architecture.md 의존 방향에 기록)
+- 소급은 로그인 트랜잭션 안에서 동기로 돈다 — 결과 연결과 지급이 함께 커밋된다. 친구가 수백 명이어도 로그인 1회에 한 번뿐
+- 이미 연결된 결과로 다시 로그인하면 연결이 일어나지 않아 소급도 다시 안 돈다(UNIQUE 로도 막힌다)
+- 2026-09-28 이전 지급 행은 `ref_id` 가 궁합 id 라, 그 전에 받은 친구가 결과를 새로 만들어 다시 등록하면 한 번 더 받을 수 있다(1회 한정, 감수)
+- 로그인 중 결과 생성(`POST /api/results` 쿠키 연결)은 새 결과라 등록된 친구가 없어 소급 대상이 아니다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- `plan.md` §5.8·§9.4, `api-spec.md` §12 표, `architecture.md` 의존 방향·ref_id 규칙
+
+**프론트에 알려야 할 것**
+- API 형식 변경 없음. 같은 친구가 다시 등록되면 실이 안 늘어나고, 로그인하면 전에 등록된 친구 몫이 한꺼번에 들어온다(잔액은 `GET /api/me`)
+
+### 2026-09-28 (월) · (이름) · auth/·wallet/ 축제 사이트 유입 보상(PARTNER) · Claude Code
+
+**한 일**
+- 축제 사이트 링크(`?ref=FESTIVAL`)로 들어온 사람에게 **계정당 1회 10실**(사용자 결정: 가입 시점 무관, 로그인한 사람만)
+- 두 경로: 로그인 요청 `POST /api/auth/kakao` 의 `ref`(응답 `rewardGranted` 채움), 이미 로그인한 사람용
+  `POST /api/wallet/partner-rewards {ref}`(신규). 원장 `PARTNER`, `ref_id` = 코드라 UNIQUE 로 계정당 코드별 1회
+- 코드 목록은 설정 `app.partner.rewards`(env `PARTNER_REWARDS`, "코드:금액:표시이름" 콤마 나열). 기본값 `FESTIVAL:10:동국대 축제`
+
+**건드린 파일/패키지**
+- `wallet/` — `PartnerRewardService`(신규), `WalletController`, `LedgerReason`(주석), `dto/PartnerReward*`(신규)
+- `auth/` — `AuthService`, `dto/KakaoLoginResponse`(주석)
+- `application.yml`, `docker-compose.prod.yml`(`PARTNER_REWARDS`, 앱과 같은 기본값), `.env.*.example`(주석 예시)
+- 테스트: `PartnerRewardServiceTest`·`AuthServiceTest`(신규), `WalletServiceTest`(HTTP·실제 DB)
+
+**다음 사람이 알아야 할 것**
+- Flyway 없음 — `PARTNER` 는 V19 CHECK 에 이미 있었다
+- 설정 형식이 틀린 항목은 기동을 막지 않고 건너뛴다(에러 로그 `invalid app.partner.rewards entry`). .env 오타로 축제 중 앱이 죽지 않게
+- 코드는 URL 에 공개되는 값이라 누구나 한 번은 받을 수 있다. 계정당 1회라 가입 보너스와 같은 수준으로 봤다
+- 신규 회원이 축제 링크로 가입하면 가입 보너스 10 + 축제 10 = 20실
+
+**막힌 것 / 넘기는 것**
+- 표시 이름 "동국대 축제" 는 임시값. 바꾸려면 `.env` 의 `PARTNER_REWARDS` 만 고치면 된다
+
+**문서 변경**
+- `api-spec.md` §9(`ref`·`rewardGranted`), §12(표·`POST /api/wallet/partner-rewards` 신설), `plan.md` §1.4
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-28 첫 줄 참고
+
+### 2026-09-28 (월) · (이름) · result/·signup/·dating/·common/ QA 수정 (커넥션 풀·썸네일 회전·수락 메일·보조 메일 계정) · Claude Code
+
+**한 일**
+- **사주 생성 중 커넥션 점유 제거**: `ResultService.createResult` 가 트랜잭션 없이 Gemini 를 부르고, 저장만
+  `ResultSaver`(신규, 짧은 트랜잭션)에서 한다. 전에는 LLM 최대 30초 동안 커넥션(풀 10개)을 쥐어 새 결과가
+  몰리면 다른 API 까지 3초 뒤 500 이었다
+- **트랜잭션 안 외부 호출 제거**: 사전신청 `createSignup`·`resend`(SMTP·S3 확인), 소개팅 `DatingProfileService.create`
+  (S3 다운로드·블러·업로드)를 트랜잭션 밖으로. 저장은 각 리포지토리의 짧은 트랜잭션. 사전신청 동시 중복은
+  UNIQUE 위반을 `DUPLICATE_SIGNUP` 409 로 바꾼다(전에는 500)
+- **블러 썸네일 90° 누움 수정**: JPEG EXIF Orientation 을 직접 읽어(`JpegOrientation`, 라이브러리 추가 없음) 썸네일에 적용
+- **매칭 수락 메일**: 수락이 커밋되면 **보낸 사람** 학교 메일로 알림(요청 알림과 같은 비동기 구조). 연락처는 메일에 없다
+- **메일 보조 계정**: `common/mail/FailoverMailSender` — 기본 계정 발송 실패 시 보조 계정으로 재발송, 이후 1시간은
+  보조 계정으로 바로 보낸다. 보조 계정 env 가 비어 있으면 지금과 동일
+
+**건드린 파일/패키지**
+- `result/` — `ResultService`, `ResultSaver`(신규) · **최선우 담당 패키지, 리뷰 부탁**
+- `signup/` — `SignupService`, `SignupRepository`(`findByEmail` → `findWithResultByEmail`, result fetch join)
+- `dating/` — `DatingProfileService`, `DatingPhotoService`, `JpegOrientation`(신규), `DatingRequestNotifier`, `DatingRequestService`
+- `common/mail/` — `MailConfig`·`FailoverMailSender`(신규). Boot 기본 발송기 대신 이 빈이 `spring.mail.*` 로 기본 계정을 만든다
+- `application.yml`(`app.mail.secondary.*`), `docker-compose.prod.yml`, `.env.*.example` — `MAIL_SECONDARY_USERNAME`·`PASSWORD`·`FROM`
+- `docker-compose.prod.yml` — `GEMINI_MAX_PER_MINUTE`·`GEMINI_MAX_PER_DAY` 전달 추가(전에는 빠져 있어 운영 `.env` 값이 무시됐다)
+- 테스트: `ResultCreateFlowTest`(신규, Testcontainers — 해석이 트랜잭션 밖인지), `SignupReapplyFlowTest`(메일 실패·재발송·중복),
+  `JpegOrientationTest`(신규), `DatingRequestNotifierTest`, `FailoverMailSenderTest`(신규)
+
+**다음 사람이 알아야 할 것**
+- 사전신청은 이제 메일 발송 전에 신청이 커밋된다. 메일이 실패해도 신청은 남고 `mailSent:false`(원래 계약과 같다)
+- 사주 생성은 같은 입력 동시 제출이면 둘 다 LLM 을 부를 수 있다(전과 같음, `CallBudget` 이 총량을 막는다)
+- 보조 메일 계정도 지메일이면 앱 비밀번호가 필요하다. `MAIL_SECONDARY_FROM` 을 비우면 계정 주소를 발신자로 쓴다
+- 썸네일 회전은 새로 등록하는 프로필부터 적용된다. 이미 만든 썸네일은 다시 만들지 않는다
+
+**막힌 것 / 넘기는 것**
+- 운영 EC2 `.env` 에 보조 메일 계정 값을 넣어야 전환이 동작한다
+
+**문서 변경**
+- `api-spec.md` §11 (수락 시 메일), `plan.md` §12
+
+**프론트에 알려야 할 것**
+- API 형식 변경 없음. 원하면 "수락되면 상대에게 메일이 간다" 안내 문구
+
+### 2026-09-28 (월) · (이름) · common/ 입력 파싱 오류 400 처리 + 에러 응답 traceId · Claude Code
+
+**한 일**
+- 자체 QA 에서 잘못된 입력이 500 으로 나가는 것을 확인했다(`gender:"XYZ"`, `birthTime:"25:99"`, 깨진 JSON,
+  `GET /api/compatibilities/abc/reason` 전부 500). `GlobalExceptionHandler` 에 `HttpMessageNotReadableException`·
+  `MethodArgumentTypeMismatchException`·`HttpMediaTypeNotSupportedException` → `INVALID_INPUT` 400 핸들러 추가
+- 요청마다 8자리 traceId 를 MDC 에 넣는 `common/trace/TraceIdFilter` 추가. 에러 응답 `error.traceId` 와 로그 레벨 옆
+  `[traceId]` 에 같은 값이 찍힌다(`application.yml` `logging.pattern.level`)
+
+**건드린 파일/패키지**
+- `common/` — `exception/GlobalExceptionHandler`, `response/ErrorResponse`, `trace/TraceIdFilter`(신규)
+- `application.yml` — `logging.pattern.level`
+- 테스트: `GlobalExceptionHandlerTest`
+
+**다음 사람이 알아야 할 것**
+- 파싱 실패 로그에는 예외 **타입만** 남긴다. Jackson 메시지에 입력값(생년월일 등)이 그대로 실리기 때문이다
+- 소개팅 해금 `fields:["FOO"]` 도 이제 api-spec §10.5 대로 400 이다(전에는 500)
+- 사용자가 traceId 를 알려주면 `docker logs <app> | grep <traceId>` 로 그 요청 로그만 볼 수 있다
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- 없음 (api-spec §1 의 `traceId` 가 이제 실제로 나간다)
+
+**프론트에 알려야 할 것**
+- 에러 응답에 `error.traceId` 가 생겼다. 오류 화면에 작게 보여 주면 문의 대응이 쉬워진다. 입력 형식 오류는 500 대신 400 `INVALID_INPUT`
 
 ### 2026-09-28 (월) · 차은호 · dating/ 받은 요청 목록에 받은 사람 기준 궁합 이유 (#123) · Claude Code
 
