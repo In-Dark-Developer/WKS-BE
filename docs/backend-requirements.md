@@ -175,7 +175,7 @@ Spring Mail · springdoc-openapi 3.1.1 · Lombok · Testcontainers · JWT (§16)
 | FR-GM-02 | P0 | **전체 운명 콘텐츠를 한 번의 호출로 생성**한다. 개별 호출 금지 |
 | FR-GM-03 | P0 | 응답을 JSON으로 받아 파싱. 필드 누락·파싱 실패 시 `LLM_UNAVAILABLE` |
 | FR-GM-04 | P0 | `429 RESOURCE_EXHAUSTED` → `LLM_UNAVAILABLE` 503으로 변환 |
-| FR-GM-05 | P0 | 재시도는 **1회까지.** 무한 재시도는 한도를 더 빨리 태운다 |
+| FR-GM-05 | P0 | SDK 내부 재시도는 끄고, Google 원본 503일 때만 유료 프로젝트로 **1회까지** 전환한다. 다른 오류는 즉시 실패. 모든 시도는 프로젝트별·전체 예산에 포함 (#127) |
 | FR-GM-06 | P0 | 요청·응답 전문을 로그에 남기지 않는다. 토큰 수·소요 시간만 |
 | FR-GM-07 | P1 | 실제 RPM·RPD 한도를 측정하고 `docs/handoff.md` 에 기록 |
 

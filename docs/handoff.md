@@ -181,6 +181,47 @@
 
 ## 기록
 
+### 2026-09-28 (월) · 차은호 · saju/ Gemini 무료 3프로젝트 분산·503 유료 전환 (#127) · Codex → Claude Code
+
+**한 일**
+- 무료 프로젝트 키 3개(`GEMINI_FREE_KEY_1~3`)를 가용한 것만 라운드 로빈으로 쓰고, **Google 원본 503일 때만** `GEMINI_PAID_KEY`로 1회 전환한다. 429·IO·파싱 실패·예산 소진은 전환 없이 즉시 `LLM_UNAVAILABLE`. 요청당 HTTP 최대 2회.
+- SDK 내부 재시도(기본 5회)를 `attempts(1)`로 끊어 모든 시도가 앱 예산에 잡히게 했다. 시도당 12초·LLM 단계 전체 25초. 프로젝트별 15 RPM/1,600 RPD + 유료 5/100 + 전체 60/1,600. 503은 30초, 429는 60초(RetryInfo 있으면 그 이상), 401·403은 재시작 전까지 해당 프로젝트 제외.
+- `CallBudget`을 정각 리셋에서 최근 60초 슬라이딩으로 바꿨다. 일일 창은 그대로 태평양 자정.
+- 소개팅 이유 비동기 생성(받은 사람 문장, #128의 수락 후 보낸 사람 문장 둘 다)에 요청·방향별 60초 실패 쿨다운. 새로고침이 LLM을 반복 호출하지 않는다.
+- 기존 단일 `GOOGLE_API_KEY`는 무료 키가 모두 비어 있을 때만 fallback. dev·prod yml에서 선택값으로 바꿨다.
+- 전체 테스트 315개 통과(1 skipped = GeminiSmokeTest, 키 없음). Testcontainers 포함. 단, 로컬에 JDK 17이 없어 **JDK 21 + `--release 17`**로 돌렸다. CI(JDK 17)가 초록인지 머지 전 확인.
+- **운영 로그 실측(wks-app 31시간, 시도 102회)**: 성공 49%(50), `GenAiIOException` 34%(35), 429 10%(10), Google 503 7%(7). 성공 지연 p50 5.1초·p95 6.4초·max 17초, 호출당 평균 2,425 토큰. 피크 4회/분. dev 로그 429 메시지의 실제 무료 한도는 **500 RPD/프로젝트**(`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit 500). 9/13 실측 2,000+는 더 이상 유효하지 않다.
+- 실측에 맞춰 기본값 조정: 무료 RPD 1,600→**500**, 유료 RPD 100→**120**(503 7% × 무료 1,500/일 ≈ 105에 여유), 전체 RPM 60→**50**(= 15×3 + 5). 시도당 12초는 p95 6.4초의 약 2배라 유지.
+- **유료 예상 비용**: 단가 입력 $0.30·출력 $2.50 /1M 토큰 → 호출당 약 $0.0015. 평시(503 7%) 하루 ≤120회 ≈ **$0.2/일**, 축제 3일 ≈ $0.5. 503이 100%인 스파이크가 하루 내내 이어져 유료 상한 120회를 다 써도 상한은 $0.2/일이다. 유료 RPD를 1,500까지 열어도 $2.3/일.
+- **로컬 실호출 스모크(무료 키 2개, 23:36~23:39 KST)**: 7건 전부 Google 503 `This model is currently experiencing high demand`. 라우팅은 설계대로 동작 — free-1 → free-2 순환, 503 후 30초 제외, 제외 중 요청은 14ms에 즉시 503(`gemini pool unavailable. kind=free`), 유료 미설정이라 전환 없음. 같은 시각 `gemini-3.1-flash-lite`도 503, `gemini-3.5-flash`는 20초 타임아웃 → 무료 티어 전반의 Google 측 과부하. 운영 IO 실패 34%도 같은 원인일 가능성이 크다.
+
+**건드린 파일/패키지**
+- `saju/`: `GeminiJson`, `CallBudget`, 신규 `GeminiClientPool`
+- `common/config/`: `GeminiConfig`, 신규 `GeminiProperties` (팀 공유 완료 후 수정)
+- `dating/DatingReasonService`, `DatingRequestService`(주석만)
+- `application.yml`, `application-dev.yml`, `application-prod.yml`, `docker-compose.prod.yml`
+- 테스트: 신규 `GeminiRoutingTest`(로컬 HTTP 서버로 실제 SDK 경로 검증), `CallBudgetTest`, `DatingReasonServiceTest`
+
+**다음 사람이 알아야 할 것**
+- 키 위치: dev `/opt/wks-dev/.env`, 운영 `/opt/wks/.env`, 로컬 `application-local.yml`의 `gemini.free-projects[].api-key`. 절차는 `runbook-dev-server.md` 마지막 절. `.env` 바꾸면 `restart`가 아니라 `up -d --force-recreate`.
+- **프로젝트마다 다른 키 하나.** 같은 프로젝트 키를 여러 칸에 넣으면 15 RPM×3으로 잘못 계산한다. 앱은 동일 문자열만 거부한다.
+- 유료 키 비우면 유료 전환 없음(현재 그렇게 운영 예정). 카운터·쿨다운은 프로세스 메모리 — 재시작 시 0, dev·운영이 프로젝트를 공유하면 합산 안 됨.
+- 무료 RPD 기본 1,600은 앱 안전 상한이지 Google 실제 할당량이 아니다. 유료 5/100, 시도당 12초는 미실측 제안값. 실제 Gemini 호출은 이 작업에서 한 번도 하지 않았다.
+- 전체 25초 예산은 새 시도 시작 여부만 정한다. 이미 받은 정상 응답은 늦어도 반환한다.
+- 503 비율은 시간대에 따라 7%에서 100%까지 널뛴다. **유료 키가 없으면 스파이크 동안 결과 생성이 전부 실패한다.** 유료 프로젝트가 무료 과부하에서 우선 처리되는지는 미확인(유료 키 미보유). 키를 받으면 스파이크 시각에 유료 1회 호출로 확인할 것.
+- 기동 검증 `Duplicate Gemini key configuration`은 같은 키 문자열이 두 칸에 들어간 경우다. 로컬 스모크에서 실제로 걸렸다(1번·3번 동일).
+
+**막힌 것 / 넘기는 것**
+- `.env.prod.example`에 실제 `GOOGLE_API_KEY` 값이 dev 브랜치에 아직 남아 있다(로컬 `feat/123` 커밋 f62b9d4에서만 제거됨). 별도 PR로 지우고 그 키는 폐기 권장.
+- 배포 후 dev 로그에서 `gemini ok project=free-1/2/3`, `gemini fallback`, nginx 504 잔존 여부 확인 필요.
+- 유료 프로젝트 키 준비·결제 설정은 팀 결정 대기. 위 비용 추정 기준 하루 $0.2 수준.
+
+**문서 변경**
+- `architecture.md` LLM 연동 절 전면 갱신, `api-spec.md` `LLM_UNAVAILABLE` 설명·궁합 이유 30초→25초·소개팅 이유 60초 쿨다운, `backend-requirements.md` FR-GM-05, `runbook-dev-server.md` Gemini 설정 절 추가. 별도 계획 문서(`gemini-routing-plan.md`)는 architecture에 흡수해 두지 않았다.
+
+**프론트에 알려야 할 것**
+- 에러코드·필드 변경 없음. 소개팅 목록 `reason.value`가 `null`이면 60초 뒤 재조회해야 재생성이 걸린다(그 안의 재조회는 호출 안 함).
+
 ### 2026-09-28 (월) · 최선우 · dating/ 수락 후 보낸 요청 정보 공개 · Codex
 
 **한 일**
