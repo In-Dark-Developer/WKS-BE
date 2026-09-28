@@ -12,7 +12,9 @@ import tools.jackson.databind.json.JsonMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /** 프로젝트 선택과 예산 예약만 잠근다. 외부 호출은 이 락 밖에서 실행한다. */
 @Slf4j
@@ -20,14 +22,14 @@ public final class GeminiClientPool implements AutoCloseable {
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private final List<Endpoint> free;
     private final Endpoint paid;
-    private final CallBudget total;
+    /** 유료 대체의 파트별 하루 몫. 없는 파트는 유료 전체 예산만 본다 */
+    private final Map<LlmPurpose, CallBudget> paidShares = new EnumMap<>(LlmPurpose.class);
     private final Clock clock;
     private final List<Client> ownedClients = new ArrayList<>();
     private int cursor;
 
     public GeminiClientPool(GeminiProperties properties, Client primary) {
         clock = Clock.systemUTC();
-        total = new CallBudget(properties.maxPerMinute(), properties.maxPerDay(), clock);
         free = new ArrayList<>();
         List<GeminiProperties.Project> projects = properties.activeFreeProjects();
         for (int i = 0; i < projects.size(); i++) {
@@ -39,13 +41,21 @@ public final class GeminiClientPool implements AutoCloseable {
         paid = project != null && project.configured()
                 ? new Endpoint("paid", create(project, properties.timeoutSeconds()),
                         project.maxPerMinute(), project.maxPerDay(), clock) : null;
+        if (paid != null) {
+            paidShares.put(LlmPurpose.SAJU,
+                    new CallBudget(project.maxPerMinute(), properties.paidSajuMaxPerDay(), clock));
+        }
     }
 
-    GeminiClientPool(List<Endpoint> free, Endpoint paid, int rpm, int rpd, Clock clock) {
+    GeminiClientPool(List<Endpoint> free, Endpoint paid, Clock clock) {
+        this(free, paid, Map.of(), clock);
+    }
+
+    GeminiClientPool(List<Endpoint> free, Endpoint paid, Map<LlmPurpose, Integer> paidPerDay, Clock clock) {
         this.free = List.copyOf(free);
         this.paid = paid;
-        this.total = new CallBudget(rpm, rpd, clock);
         this.clock = clock;
+        paidPerDay.forEach((purpose, perDay) -> paidShares.put(purpose, new CallBudget(Integer.MAX_VALUE, perDay, clock)));
     }
 
     public static Client createClient(String apiKey, int timeoutSeconds) {
@@ -71,21 +81,25 @@ public final class GeminiClientPool implements AutoCloseable {
                 return endpoint;
             }
         }
-        log.warn("gemini pool unavailable. kind=free {}", total.status());
+        log.warn("gemini pool unavailable. kind=free projects={}", free.size());
         return null;
     }
 
-    synchronized Endpoint acquirePaid() {
-        if (paid != null && reserve(paid)) return paid;
-        log.warn("gemini pool unavailable. kind=paid configured={} {}", paid != null, total.status());
+    synchronized Endpoint acquirePaid(LlmPurpose purpose) {
+        CallBudget share = paidShares.get(purpose);
+        if (paid != null && (share == null || share.available()) && reserve(paid)) {
+            if (share != null) share.tryAcquire();
+            return paid;
+        }
+        log.warn("gemini pool unavailable. kind=paid purpose={} configured={} {} share={}", purpose, paid != null,
+                paid == null ? "" : paid.budget.status(), share == null ? "none" : share.status());
         return null;
     }
 
     private boolean reserve(Endpoint endpoint) {
         if (endpoint.disabled || clock.instant().isBefore(endpoint.blockedUntil)
-                || !endpoint.budget.available() || !total.available()) return false;
+                || !endpoint.budget.available()) return false;
         endpoint.budget.tryAcquire();
-        total.tryAcquire();
         return true;
     }
 

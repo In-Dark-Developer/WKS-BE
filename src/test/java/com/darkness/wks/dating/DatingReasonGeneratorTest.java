@@ -1,6 +1,7 @@
 package com.darkness.wks.dating;
 
 import com.darkness.wks.saju.GeminiJson;
+import com.darkness.wks.saju.LlmPurpose;
 import com.darkness.wks.saju.SajuPillars;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +23,7 @@ class DatingReasonGeneratorTest {
         DatingReasonGenerator generator = new DatingReasonGenerator(gemini);
         SajuPillars viewer = new SajuPillars("갑자", "을축", "병인", null);
         SajuPillars candidate = new SajuPillars("계해", "임술", "기유", "경신");
-        when(gemini.generate(anyString(), anyString(), eq(List.of("reason"))))
+        when(gemini.generate(eq(LlmPurpose.DATING), anyString(), anyString(), eq(List.of("reason"))))
                 .thenReturn(Map.of("reason", "서로의 기운이 어울려요."));
 
         assertThat(generator.generate(viewer, candidate, 82, "찰떡"))
@@ -30,6 +31,6 @@ class DatingReasonGeneratorTest {
         String prompt = DatingReasonGenerator.buildPrompt(viewer, candidate, 82, "찰떡");
         assertThat(prompt).contains("갑자", "기유", "82", "찰떡", "상생");
         assertThat(prompt).doesNotContain("2002", "닉네임", "생년월일", "null");
-        verify(gemini).generate(anyString(), eq(prompt), eq(List.of("reason")));
+        verify(gemini).generate(eq(LlmPurpose.DATING), anyString(), eq(prompt), eq(List.of("reason")));
     }
 }

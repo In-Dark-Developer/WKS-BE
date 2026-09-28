@@ -181,6 +181,29 @@
 
 ## 기록
 
+### 2026-09-29 (화) · hairyung2002 · saju/ Gemini 무료 6키·429 유료 전환·사주 유료 몫 (#이슈번호) · Claude Code
+
+**한 일**
+- 무료 프로젝트 키 최대 3개 → **6개**(`GEMINI_FREE_KEY_4~6`, `_RPM_4~6`, `_RPD_4~6`)
+- 유료 전환 조건 확대: 무료 호출의 Google **503·429**, 그리고 **무료 키 전부 사용 불가**(키마다 하루 500회 소진·쿨다운)면 유료 1회. IO·타임아웃·파싱 실패는 그대로 전환 없음. 요청당 HTTP 최대 2회 유지
+- `GeminiJson.generate(LlmPurpose, …)`: 호출 파트(`SAJU`·`COMPATIBILITY`·`DATING`)를 받아 로그에 남기고, 유료 대체는 파트별 하루 몫을 따로 본다. 현재 몫은 사주만 `GEMINI_PAID_SAJU_RPD`(기본 42 = 유료 120 × 7천 원/2만 원). 사주가 몫을 다 쓰면 사주만 유료가 막히고 궁합·소개팅은 유료 RPD 나머지로 계속 전환
+- **앱 전체 한도(`GEMINI_MAX_PER_MINUTE`·`_PER_DAY`) 제거.** 프로젝트별 예산 합이 곧 상한이고, 유료 값을 올릴 때 같이 안 올리면 유료가 막히는 실수만 만든다. `.env` 에 남아 있어도 무시된다
+- `gemini ok` 로그에 `in=`·`out=`(입력·출력+사고 토큰) 추가. 단가가 입력 $0.30·출력 $2.50/1M(3.5 Flash-Lite, 2026-09-29 가격 페이지 확인)이라 파트별 호출 비용을 정확히 환산하려고
+
+**건드린 파일/패키지**
+- `saju/`: 신규 `LlmPurpose`, `GeminiJson`, `GeminiClientPool`, `ReadingGenerator`·`CompatibilityReasonGenerator`(호출 인자만)
+- `dating/DatingReasonGenerator`(호출 인자만), `common/config/GeminiProperties`
+- `application.yml`, `docker-compose.prod.yml`, `docs/architecture.md`, `docs/runbook-dev-server.md`
+- 테스트: `GeminiRoutingTest`(429 전환·무료 소진 직행·사주 몫·키 6개/7개 거부), `DatingReasonGeneratorTest`
+
+**다음 사람이 알아야 할 것**
+- **금액 한도는 호출 수로 환산해 `.env` 에 넣는다.** 앱은 금액을 모른다. 기본 사주 몫 42 는 비율 자리값이지 7천 원 환산이 아니다
+- 무료가 다 떨어지면 **모든 요청이 유료로 가므로 `GEMINI_PAID_RPM`(기본 5)이 병목**이 된다. 축제 트래픽이면 올릴 것
+- 카운터는 메모리라 배포마다 0. 실제 비용 상한은 GCP 콘솔 유료 프로젝트의 일일 요청 쿼터로 건다
+
+**막힌 것 / 넘기는 것**
+- 운영·dev `.env` 에 `GEMINI_FREE_KEY_4~6`·`GEMINI_PAID_RPD`·`GEMINI_PAID_SAJU_RPD` 등 추가, GCP 쿼터 설정 — 배포 담당
+
 ### 2026-09-28 (월) · 차은호 · saju/ Gemini 무료 3프로젝트 분산·503 유료 전환 (#127) · Codex → Claude Code
 
 **한 일**

@@ -28,7 +28,7 @@ public class CompatibilityReasonGenerator {
 
     /** @param tier 관계 유형 한글(귀인·찰떡·벗·스침). compatibility 패키지 enum 을 saju 가 모르게 문자열로 받는다 */
     public CompatibilityReason generate(SajuPillars a, SajuPillars b, int score, String tier) {
-        Map<String, String> m = gemini.generate(SYSTEM_PROMPT, buildPrompt(a, b, score, tier), FIELDS);
+        Map<String, String> m = gemini.generate(LlmPurpose.COMPATIBILITY, SYSTEM_PROMPT, buildPrompt(a, b, score, tier), FIELDS);
         return new CompatibilityReason(m.get("why"), m.get("together"), m.get("conflict"));
     }
 

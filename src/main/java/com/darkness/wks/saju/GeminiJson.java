@@ -34,8 +34,10 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Gemini 를 **한 번** 호출해 문자열 필드만 있는 JSON 을 받는다. 사주 해석과 궁합 이유가 함께 쓴다.
  * <p>
- * Google 503만 유료 프로젝트로 1회 전환한다. 그 외 실패는 즉시 {@link ErrorCode#LLM_UNAVAILABLE} (FR-GM-03~05).
+ * 무료 쪽이 Google 503(과부하)·429(한도 소진)로 실패하거나 무료 키가 모두 쓸 수 없으면 유료 프로젝트로 1회 전환한다.
+ * 유료 비용은 유료 RPD·파트별 몫이 막는다. 그 외 실패(IO·타임아웃·파싱)는 즉시 {@link ErrorCode#LLM_UNAVAILABLE} (FR-GM-03~05).
  * 프로젝트별·전체 {@link CallBudget}을 사주·친구 궁합·소개팅 생성기가 함께 쓴다 (FR-CP-14).
+ * 유료 대체는 {@link LlmPurpose} 별 하루 몫도 따로 본다 — 사주가 유료 한도를 다 써서 궁합·소개팅이 막히지 않게.
  * 로그에는 토큰 수·소요 시간만 남긴다 (FR-GM-06). "gemini ok/failed"로 검증 성공·실패한 시도를 구별한다 (NFR-O-06).
  */
 @Slf4j
@@ -70,7 +72,7 @@ public class GeminiJson {
     /** 기존 파싱 테스트·수동 스모크도 같은 예산과 재시도 정책을 사용한다. */
     GeminiJson(Client client, String model) {
         this(new GeminiClientPool(List.of(new GeminiClientPool.Endpoint("free-1", client, 15, 1600,
-                Clock.systemUTC())), null, 60, 1600, Clock.systemUTC()), model, 12_000, 25_000, System::nanoTime);
+                Clock.systemUTC())), null, Clock.systemUTC()), model, 12_000, 25_000, System::nanoTime);
     }
 
     String model() {
@@ -78,7 +80,7 @@ public class GeminiJson {
     }
 
     /** 모든 필드가 비어 있지 않은 문자열 JSON. 아니면 {@link ErrorCode#LLM_UNAVAILABLE} */
-    public Map<String, String> generate(String systemPrompt, String prompt, List<String> fields) {
+    public Map<String, String> generate(LlmPurpose purpose, String systemPrompt, String prompt, List<String> fields) {
         Schema schema = Schema.builder()
                 .type(Type.Known.OBJECT)
                 .properties(fields.stream().collect(Collectors.toMap(f -> f, f -> Schema.builder().type(Type.Known.STRING).build())))
@@ -86,6 +88,13 @@ public class GeminiJson {
                 .build();
         long started = nanoTime.getAsLong();
         GeminiClientPool.Endpoint endpoint = pool.acquireFree();
+        boolean onPaid = false;
+        if (endpoint == null) {
+            // 무료 키가 모두 하루 한도·쿨다운·비활성. 무료 요청을 보내 봐야 429 뿐이라 바로 유료로 간다
+            endpoint = pool.acquirePaid(purpose);
+            onPaid = true;
+            if (endpoint != null) log.info("gemini fallback. purpose={} project=paid reason=free-unavailable", purpose);
+        }
         for (int attempt = 1; endpoint != null && attempt <= 2; attempt++) {
             long remainingMillis = TimeUnit.NANOSECONDS.toMillis(totalTimeoutNanos - (nanoTime.getAsLong() - started));
             if (remainingMillis < 1000) break;
@@ -95,20 +104,27 @@ public class GeminiJson {
                         (int) Math.min(timeoutMillis, remainingMillis));
                 // 전체 시간 예산은 새 시도를 시작할지만 정한다. 이미 받은 정상 응답은 늦어도 쓴다.
                 Map<String, String> result = parse(response.text(), fields);
-                log.info("gemini ok. project={} attempt={} ms={} tokens={}", endpoint.alias, attempt,
-                        (nanoTime.getAsLong() - callStarted) / 1_000_000,
-                        response.usageMetadata().flatMap(u -> u.totalTokenCount()).orElse(-1));
+                // 입력·출력 단가가 8배 넘게 달라서 유료 한도(원 → 호출 수) 환산에 둘을 나눠 남긴다. 출력에 사고 토큰 포함
+                var usage = response.usageMetadata();
+                log.info("gemini ok. purpose={} project={} attempt={} ms={} tokens={} in={} out={}", purpose,
+                        endpoint.alias, attempt, (nanoTime.getAsLong() - callStarted) / 1_000_000,
+                        usage.flatMap(u -> u.totalTokenCount()).orElse(-1),
+                        usage.flatMap(u -> u.promptTokenCount()).orElse(-1),
+                        usage.flatMap(u -> u.candidatesTokenCount()).orElse(0)
+                                + usage.flatMap(u -> u.thoughtsTokenCount()).orElse(0));
                 return result;
             } catch (RuntimeException error) {
                 int code = error instanceof ApiException api ? api.code() : 0;
-                log.warn("gemini failed. project={} attempt={} code={} type={} ms={}", endpoint.alias, attempt,
+                log.warn("gemini failed. purpose={} project={} attempt={} code={} type={} ms={}", purpose, endpoint.alias, attempt,
                         code, error.getClass().getSimpleName(), (nanoTime.getAsLong() - started) / 1_000_000);
                 if (error instanceof ApiException api) pool.failed(endpoint, api);
-                // 앱이 반환하는 503과 구별한다. Google 원본 503에만 유료 비용을 허용한다.
-                if (attempt == 1 && code == 503
+                // Google 원본 503·429에만 유료 비용을 허용한다. IO·타임아웃은 유료도 같은 이유로 실패하기 쉽고,
+                // 유료에서 실패하면 다시 시도하지 않는다 (요청당 HTTP 최대 2회)
+                if (!onPaid && (code == 503 || code == 429)
                         && totalTimeoutNanos - (nanoTime.getAsLong() - started) >= TimeUnit.SECONDS.toNanos(1)) {
-                    endpoint = pool.acquirePaid();
-                    if (endpoint != null) log.info("gemini fallback. project=paid");
+                    endpoint = pool.acquirePaid(purpose);
+                    onPaid = true;
+                    if (endpoint != null) log.info("gemini fallback. purpose={} project=paid reason={}", purpose, code);
                 } else {
                     break;
                 }
