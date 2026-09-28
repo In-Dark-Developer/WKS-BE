@@ -274,7 +274,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 ### `GET /api/compatibilities/{id}/reason`
 
 궁합지도에서 친구 Row 를 눌러 상세 시트를 열 때 호출한다 (기능명세 4.7 · 5.10).
-세 질문의 답을 한 번에 준다. **처음 열어볼 때 LLM 으로 생성해 저장**하므로 첫 호출만 느리고(LLM 단계 기본 전체 예산 25초), 이후는 캐시를 반환한다. Google 503에만 유료 프로젝트로 한 번 전환하며, 실패 시 `LLM_UNAVAILABLE` 503을 반환한다.
+세 질문의 답을 한 번에 준다. 첫 호출에 서버가 사전 생성본에서 골라 저장하므로(2026-09-29, #131) 첫 호출도 즉시 응답하며, 이후는 저장된 글을 반환한다. 사전 생성본에 없는 조합에서만 LLM 을 실시간 호출하고(현재 없음), 그때 실패하면 `LLM_UNAVAILABLE` 503.
 `{id}` = 궁합 생성 응답 또는 결과 조회 `compatibilities[].id`.
 
 **Response 200**
