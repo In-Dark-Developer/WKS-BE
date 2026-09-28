@@ -41,19 +41,24 @@ class MemberRaceOps {
         }
     }
 
-    /** 결과가 이미 다른 회원 것이면(동시에 채감) 조용히 실패로 본다 — 로그인 자체는 그대로 성공이다 */
+    /**
+     * 결과가 이미 다른 회원 것이면(동시에 채감) 조용히 실패로 본다 — 로그인 자체는 그대로 성공이다.
+     * @return 이번 호출로 실제 연결됐으면 true (소급 보상 이벤트를 낼지 호출자가 정한다)
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    void linkResultIfUnowned(UUID resultId, Long memberId) {
+    boolean linkResultIfUnowned(UUID resultId, Long memberId) {
         Optional<Result> target = resultRepository.findByIdAndMemberIdIsNull(resultId);
         if (target.isEmpty()) {
-            return;
+            return false;
         }
         Result result = target.get();
         result.linkMember(memberId);
         try {
             resultRepository.saveAndFlush(result);
+            return true;
         } catch (DataIntegrityViolationException e) {
             // 이 트랜잭션만 롤백된다 — 연결이 안 됐을 뿐 로그인은 그대로 성공
+            return false;
         }
     }
 }

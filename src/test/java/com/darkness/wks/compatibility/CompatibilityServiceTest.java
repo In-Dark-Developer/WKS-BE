@@ -10,10 +10,10 @@ import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.wallet.LedgerReason;
 import com.darkness.wks.wallet.WalletService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -47,8 +47,14 @@ class CompatibilityServiceTest {
     @Mock
     private WalletService walletService;
 
-    @InjectMocks
     private CompatibilityService compatibilityService;
+
+    @BeforeEach
+    void setUp() {
+        // 지급 규칙은 MapFriendRewardService 로 옮겼다 — 실제 객체를 붙여 원장 호출을 그대로 검증한다
+        compatibilityService = new CompatibilityService(compatibilityRepository, resultRepository,
+                compatibilityCalculator, new MapFriendRewardService(compatibilityRepository, walletService));
+    }
 
     @Test
     void createsAndStoresNewCompatibility() {
@@ -96,7 +102,8 @@ class CompatibilityServiceTest {
         compatibilityService.createCompatibility(
                 origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()));
 
-        verify(walletService).credit(42L, LedgerReason.MAP_FRIEND, "7", 3);
+        // ref_id 는 궁합 id 가 아니라 친구의 팔자·성별 해시 — 같은 사람이 결과를 새로 만들어 다시 등록해도 한 번만
+        verify(walletService).credit(42L, LedgerReason.MAP_FRIEND, MapFriendRewardService.personKey(guest), 3);
     }
 
     @Test

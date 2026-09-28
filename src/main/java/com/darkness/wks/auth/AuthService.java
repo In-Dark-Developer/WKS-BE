@@ -7,6 +7,7 @@ import com.darkness.wks.common.auth.JwtProvider;
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.member.MemberService;
+import com.darkness.wks.wallet.PartnerRewardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,7 @@ public class AuthService {
     private final KakaoClient kakaoClient;
     private final MemberService memberService;
     private final JwtProvider jwtProvider;
+    private final PartnerRewardService partnerRewardService;
 
     public LoginOutcome login(KakaoLoginRequest request) {
         if (!properties.isConfigured()) {
@@ -34,8 +36,13 @@ public class AuthService {
         redirectUriPolicy.validate(request.redirectUri());
         long kakaoId = kakaoClient.fetchKakaoId(request.code(), request.redirectUri());
         MemberService.LoginResult result = memberService.loginAndLink(kakaoId, request.resultId());
-        String token = jwtProvider.issue(result.member().getId());
-        KakaoLoginResponse body = new KakaoLoginResponse(result.isNewUser(), result.restoredResultId(), null);
+        Long memberId = result.member().getId();
+        // 제휴처(축제 사이트) 링크로 들어와 로그인하면 계정당 1회 보상. 모르는 ref 는 조용히 무시한다(plan.md §8.1)
+        KakaoLoginResponse.RewardGranted reward = partnerRewardService.grant(memberId, request.ref())
+                .map(granted -> new KakaoLoginResponse.RewardGranted(granted.partnerName(), granted.amount()))
+                .orElse(null);
+        String token = jwtProvider.issue(memberId);
+        KakaoLoginResponse body = new KakaoLoginResponse(result.isNewUser(), result.restoredResultId(), reward);
         return new LoginOutcome(token, body);
     }
 

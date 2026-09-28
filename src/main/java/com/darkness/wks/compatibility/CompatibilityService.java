@@ -9,8 +9,6 @@ import com.darkness.wks.compatibility.entity.CompatibilityTier;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.SajuPillars;
-import com.darkness.wks.wallet.LedgerReason;
-import com.darkness.wks.wallet.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,12 +21,10 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class CompatibilityService {
 
-    private static final int MAP_FRIEND_AMOUNT = 3;
-
     private final CompatibilityRepository compatibilityRepository;
     private final ResultRepository resultRepository;
     private final CompatibilityCalculator compatibilityCalculator;
-    private final WalletService walletService;
+    private final MapFriendRewardService mapFriendRewardService;
 
     @Transactional
     public CreationResult createCompatibility(String shareId, CreateCompatibilityRequest request) {
@@ -62,13 +58,8 @@ public class CompatibilityService {
                 (short) score,
                 CompatibilityTier.fromScore(score)
         ));
-        // 공유자(origin)의 궁합지도에 친구가 등록됐다 — 로그인 계정일 때만 지급한다(plan.md §5.8·§1.4).
-        // ref_id = compatibility.id: findByResultPair 가 같은 쌍을 두 번 create() 로 보내지 않게 이미
-        // 막고 있지만, 동시 요청 방어로 원장 UNIQUE 도 같이 건다(plan.md §9.5).
-        if (origin.getMemberId() != null) {
-            walletService.credit(origin.getMemberId(), LedgerReason.MAP_FRIEND,
-                    compatibility.getId().toString(), MAP_FRIEND_AMOUNT);
-        }
+        // 공유자(origin)의 궁합지도에 친구가 등록됐다 — 같은 사람은 한 번만, 로그인 계정일 때만(MapFriendRewardService)
+        mapFriendRewardService.rewardNew(compatibility);
         return new CreationResult(CompatibilityResponse.from(compatibility, origin, guest), true);
     }
 

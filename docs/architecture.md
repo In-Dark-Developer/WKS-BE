@@ -150,6 +150,7 @@ dating  →  result·compatibility·member·wallet   허용
 dating  →  signup    금지 (2026-09-26 에 초대 토큰 검증용으로 열었다가 2026-09-27 초대가 학교메일 인증을 대신하지 않게 바뀌며 다시 닫았다)
 signup  →  dating    금지 (캠페인 대상 조회도 signup·result 쪽만 본다)
 compatibility  →  wallet   허용 (친구 궁합 등록 시 공유자에게 실 +3)
+member  →  compatibility  없음 — 로그인으로 결과가 연결되면 member 가 `result.ResultLinkedEvent` 를 내고 compatibility 가 받아 친구 보상을 소급 지급한다(2026-09-28, 새 의존 없이 둘 다 이미 의존하는 result 에 이벤트를 둔다)
 wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 ```
 
@@ -401,7 +402,7 @@ CREATE TABLE signup_reapply_invite (
 - **`name`·`phone` 컬럼은 없다. 추가하지 마라**
 - **`member` 에 프로필 컬럼(닉네임·이메일·이름·프로필 사진)을 추가하지 마라.** 로그인 식별자는 `kakao_id` 하나다
 - **한 계정에 결과를 둘 이상 연결하지 마라.** `result.member_id` 는 계정당 1개(부분 unique)다. 병합은 V2 (plan §1.1)
-- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = compatibility id, `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
+- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = 친구의 팔자 네 기둥·성별 SHA-256 앞 16바이트(`p:`+32hex — 같은 사람 한 번만, 원문 팔자는 사실상 생년월일이라 해시. 2026-09-28 전 행은 compatibility id), `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
 
 ---
 

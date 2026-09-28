@@ -258,7 +258,7 @@ class SignupServiceTest {
         Signup signup = new Signup("dev@gmail.com", unlinkedResult(), Gender.MALE, Gender.FEMALE, null, null, null, null, null, null, null);
         ReflectionTestUtils.setField(signup, "id", 7L);
         signup.markVerified(Instant.now());
-        when(signupRepository.findByEmail("dev@gmail.com")).thenReturn(Optional.of(signup));
+        when(signupRepository.findWithResultByEmail("dev@gmail.com")).thenReturn(Optional.of(signup));
         when(reapplyService.issueInvite(7L)).thenReturn(invite("invite-token-2"));
 
         ResendSignupResponse response = signupService.resend("dev@gmail.com");
@@ -281,7 +281,7 @@ class SignupServiceTest {
 
     @Test
     void resendRejectsUnknownEmail() {
-        when(signupRepository.findByEmail("dev@dgu.ac.kr")).thenReturn(Optional.empty());
+        when(signupRepository.findWithResultByEmail("dev@dgu.ac.kr")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> signupService.resend("dev@dgu.ac.kr"))
                 .isInstanceOfSatisfying(BusinessException.class,
@@ -292,7 +292,7 @@ class SignupServiceTest {
     void resendRejectsAlreadyVerifiedEmail() {
         Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개", null);
         signup.markVerified(Instant.now());
-        when(signupRepository.findByEmail("dev@dgu.ac.kr")).thenReturn(Optional.of(signup));
+        when(signupRepository.findWithResultByEmail("dev@dgu.ac.kr")).thenReturn(Optional.of(signup));
 
         assertThatThrownBy(() -> signupService.resend("dev@dgu.ac.kr"))
                 .isInstanceOfSatisfying(BusinessException.class,
@@ -304,7 +304,7 @@ class SignupServiceTest {
     @Test
     void resendIssuesNewTokenForUnverifiedEmail() {
         Signup signup = new Signup("dev@dgu.ac.kr", null, Gender.MALE, Gender.FEMALE, "김동국", ContactMethod.PHONE, "010-1234-5678", "컴퓨터공학과", "INFP", "자기소개", null);
-        when(signupRepository.findByEmail("dev@dgu.ac.kr")).thenReturn(Optional.of(signup));
+        when(signupRepository.findWithResultByEmail("dev@dgu.ac.kr")).thenReturn(Optional.of(signup));
         when(emailVerificationService.issueToken(signup))
                 .thenReturn(new EmailVerification("token2", signup, Instant.now().plusSeconds(1800)));
 

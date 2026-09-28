@@ -1,11 +1,13 @@
 package com.darkness.wks.member;
 
 import com.darkness.wks.member.entity.Member;
+import com.darkness.wks.result.ResultLinkedEvent;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.wallet.LedgerReason;
 import com.darkness.wks.wallet.WalletService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class MemberService {
     private final ResultRepository resultRepository;
     private final MemberRaceOps raceOps;
     private final WalletService walletService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public record LoginResult(Member member, boolean isNewUser, String restoredResultId) {
     }
@@ -67,7 +70,13 @@ public class MemberService {
         }
 
         // resultId 가 없거나 형식이 틀리거나(이미 다른 회원 것 포함) 없어도 로그인은 그대로 성공한다(FR-AU-06·07).
-        parseUuidV4(browserResultId).ifPresent(id -> raceOps.linkResultIfUnowned(id, member.getId()));
+        parseUuidV4(browserResultId).ifPresent(id -> {
+            if (raceOps.linkResultIfUnowned(id, member.getId())) {
+                // 로그인 전에 이 결과의 궁합지도에 등록된 친구들의 실(+3)을 소급 지급한다 (2026-09-28 결정).
+                // 동기 리스너라 로그인 트랜잭션에서 함께 커밋된다
+                eventPublisher.publishEvent(new ResultLinkedEvent(id, member.getId()));
+            }
+        });
         return new LoginResult(member, isNewUser, null);
     }
 

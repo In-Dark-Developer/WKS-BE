@@ -13,7 +13,9 @@ public interface SignupRepository extends JpaRepository<Signup, Long> {
 
     boolean existsByEmail(String email);
 
-    Optional<Signup> findByEmail(String email);
+    /** 재발송은 트랜잭션 없이 돌며 결과의 계정 연결 여부를 보므로 LAZY 인 result 를 함께 읽는다 */
+    @Query("SELECT s FROM Signup s LEFT JOIN FETCH s.result WHERE s.email = :email")
+    Optional<Signup> findWithResultByEmail(@Param("email") String email);
 
     /**
      * 재신청 초대 대상. 초대의 목적은 사전신청 때 만든 사주 결과를 카카오 계정에 잇는 것이라

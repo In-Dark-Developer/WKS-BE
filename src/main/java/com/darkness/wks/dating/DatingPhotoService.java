@@ -145,23 +145,29 @@ public class DatingPhotoService {
                     throw new BusinessException(ErrorCode.INVALID_INPUT);
                 }
                 BufferedImage source = reader.read(0);
-                BufferedImage small = new BufferedImage(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT,
-                        BufferedImage.TYPE_INT_RGB);
+                // 폰 사진은 픽셀을 누운 채 저장하고 EXIF 로 "돌려서 보여라"만 적는다. ImageIO 는 그 값을 무시해서
+                // 브라우저가 똑바로 보여 주는 원본과 달리 썸네일이 90° 누웠다. 원본 전체를 돌리면 수천만 픽셀이라
+                // 저장된 방향 그대로 작게 줄인 뒤(가로세로가 바뀌는 방향이면 틀도 바꿔서) 썸네일만 돌린다
+                int orientation = "JPEG".equals(expectedFormat) ? JpegOrientation.read(original) : 1;
+                boolean swapsAxes = JpegOrientation.swapsAxes(orientation);
+                int storedWidth = swapsAxes ? THUMBNAIL_HEIGHT : THUMBNAIL_WIDTH;
+                int storedHeight = swapsAxes ? THUMBNAIL_WIDTH : THUMBNAIL_HEIGHT;
+                BufferedImage small = new BufferedImage(storedWidth, storedHeight, BufferedImage.TYPE_INT_RGB);
                 Graphics2D graphics = small.createGraphics();
                 try {
                     graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
                             RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                    double targetRatio = (double) THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT;
+                    double targetRatio = (double) storedWidth / storedHeight;
                     int cropWidth = Math.min(source.getWidth(), (int) Math.round(source.getHeight() * targetRatio));
                     int cropHeight = Math.min(source.getHeight(), (int) Math.round(source.getWidth() / targetRatio));
                     int left = (source.getWidth() - cropWidth) / 2;
                     int top = (source.getHeight() - cropHeight) / 2;
-                    graphics.drawImage(source, 0, 0, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT,
+                    graphics.drawImage(source, 0, 0, storedWidth, storedHeight,
                             left, top, left + cropWidth, top + cropHeight, null);
                 } finally {
                     graphics.dispose();
                 }
-                BufferedImage blurred = gaussianBlur(small);
+                BufferedImage blurred = gaussianBlur(JpegOrientation.apply(small, orientation));
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
                 ImageIO.write(blurred, "PNG", output);
                 return output.toByteArray();

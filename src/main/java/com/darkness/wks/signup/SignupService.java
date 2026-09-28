@@ -14,7 +14,9 @@ import com.darkness.wks.signup.entity.SignupReapplyInvite;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -43,7 +45,10 @@ public class SignupService {
     @Value("${app.signup.allowed-email-domains}")
     private String allowedEmailDomainsRaw;
 
-    @Transactional
+    // 트랜잭션으로 묶지 않는다. S3 확인·SMTP 발송(각 수 초)이 트랜잭션 안에 있으면 그동안 DB 커넥션을 붙잡는다 —
+    // 안쪽 메서드가 NOT_SUPPORTED 여도 바깥 트랜잭션은 커넥션을 쥔 채 잠시 멈출 뿐이다. 신청 저장·토큰 발급은
+    // 각각 짧은 트랜잭션으로 커밋되고, 메일이 실패해도 신청은 남는다(api-spec §5 mailSent:false 와 같은 원칙)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public SignupResponse createSignup(CreateSignupRequest request) {
         String email = request.email().trim();
         validateEmailDomain(email);
@@ -61,7 +66,12 @@ public class SignupService {
                 blankToNull(request.name()), request.contactMethod(), contactValue,
                 blankToNull(request.department()), normalizeMbti(request.mbti()), blankToNull(request.bio()), photoKey);
         signup.issueCoupon();
-        signupRepository.save(signup);
+        try {
+            signupRepository.save(signup);
+        } catch (DataIntegrityViolationException exception) {
+            // 같은 이메일 두 건이 동시에 existsByEmail 을 통과했다 — 진 쪽도 중복 신청으로 응답한다
+            throw new BusinessException(ErrorCode.DUPLICATE_SIGNUP);
+        }
 
         boolean mailSent = canLinkByInvite(signup)
                 ? trySendInvite(signup)
@@ -71,9 +81,10 @@ public class SignupService {
         return SignupResponse.of(signup, mailSent);
     }
 
-    @Transactional
+    // createSignup 과 같은 이유로 트랜잭션 없이 돈다. 결과 연결 여부를 트랜잭션 밖에서 보므로 result 를 함께 읽는다
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ResendSignupResponse resend(String email) {
-        Signup signup = signupRepository.findByEmail(email.trim())
+        Signup signup = signupRepository.findWithResultByEmail(email.trim())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT));
         // 매직링크 대상은 이메일 인증 여부와 무관하다 — 메일을 잃어버렸으면 새 초대를 다시 보낸다
         if (canLinkByInvite(signup)) {

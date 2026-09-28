@@ -2,6 +2,7 @@ package com.darkness.wks.dating;
 
 import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
+import com.darkness.wks.dating.DatingRequestNotifier.DatingRequestAcceptedEvent;
 import com.darkness.wks.dating.DatingRequestNotifier.DatingRequestSentEvent;
 import com.darkness.wks.dating.dto.DatingRequestListResponse;
 import com.darkness.wks.dating.dto.DatingRequestResponse;
@@ -146,6 +147,7 @@ public class DatingRequestService {
             throw new BusinessException(ErrorCode.DATING_REQUEST_CONFLICT);
         }
         request.accept(Instant.now());
+        eventPublisher.publishEvent(new DatingRequestAcceptedEvent(request.getId(), sender.getEmail()));
         return DatingRequestResponse.from(request, memberId);
     }
 

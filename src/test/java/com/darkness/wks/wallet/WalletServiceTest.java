@@ -120,4 +120,33 @@ class WalletServiceTest {
                 .andExpect(jsonPath("$.data.balance").value(0))
                 .andExpect(jsonPath("$.data.canCheckInToday").value(true));
     }
+
+    /** 이미 로그인한 사람이 축제 링크로 들어오면 계정당 1회 10실. 다시 불러도 에러 없이 지급만 안 된다 */
+    @Test
+    void 제휴처_유입_보상은_계정당_한번이다() throws Exception {
+        long memberId = newMember();
+        var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
+        Cookie cookie = new Cookie("wks_token", jwtProvider.issue(memberId));
+
+        mvc.perform(post("/api/wallet/partner-rewards").contentType("application/json").content("{\"ref\":\"FESTIVAL\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(post("/api/wallet/partner-rewards").cookie(cookie)
+                        .contentType("application/json").content("{\"ref\":\"FESTIVAL\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rewardGranted.partnerName").value("동국대 축제"))
+                .andExpect(jsonPath("$.data.rewardGranted.amount").value(10))
+                .andExpect(jsonPath("$.data.balance").value(10));
+
+        mvc.perform(post("/api/wallet/partner-rewards").cookie(cookie)
+                        .contentType("application/json").content("{\"ref\":\"festival\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rewardGranted").doesNotExist())
+                .andExpect(jsonPath("$.data.balance").value(10));
+
+        mvc.perform(post("/api/wallet/partner-rewards").cookie(cookie)
+                        .contentType("application/json").content("{\"ref\":\"UNKNOWN\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.balance").value(10));
+    }
 }
