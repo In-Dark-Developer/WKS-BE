@@ -11,18 +11,18 @@ import java.util.Set;
 public record GeminiProperties(
         String apiKey,
         @DefaultValue("gemini-3.5-flash-lite") String model,
-        @DefaultValue("12") int timeoutSeconds,
+        @DefaultValue("8") int timeoutSeconds,
         @DefaultValue("25") int totalTimeoutSeconds,
         List<Project> freeProjects,
         Project paidProject,
-        // 유료 대체 중 사주 해석의 하루 몫. 유료 RPD 안에서 센다 (사주 7천 원 / 유료 2만 원 비율의 호출 수)
-        @DefaultValue("42") int paidSajuMaxPerDay
+        // 유료 RPD 중 사주만 쓸 수 있게 남겨 두는 호출 수. 다른 파트는 유료 잔량이 이보다 많을 때만 쓴다
+        @DefaultValue("42") int paidSajuReservePerDay
 ) {
     public GeminiProperties {
         apiKey = apiKey == null ? "" : apiKey.trim();
         freeProjects = freeProjects == null ? List.of() : List.copyOf(freeProjects);
         if (model == null || model.isBlank() || freeProjects.size() > 6 || timeoutSeconds < 1 || totalTimeoutSeconds < 1
-                || timeoutSeconds > 30 || totalTimeoutSeconds > 30 || paidSajuMaxPerDay < 1) {
+                || timeoutSeconds > 30 || totalTimeoutSeconds > 30 || paidSajuReservePerDay < 0) {
             throw new IllegalArgumentException("Invalid Gemini limits");
         }
         Set<String> keys = new HashSet<>();

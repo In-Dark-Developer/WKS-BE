@@ -359,9 +359,9 @@ GEMINI_FREE_RPD_5=500
 GEMINI_FREE_RPD_6=500
 GEMINI_PAID_RPM=5
 GEMINI_PAID_RPD=120
-# 유료 RPD 중 사주 해석 몫. 궁합·소개팅은 나머지를 쓴다
-GEMINI_PAID_SAJU_RPD=42
-GEMINI_TIMEOUT_SECONDS=12
+# 유료 RPD 중 사주만 쓸 수 있게 남겨 두는 호출 수. 다른 파트는 잔량이 이보다 많을 때만 쓴다
+GEMINI_PAID_SAJU_RESERVE_RPD=42
+GEMINI_TIMEOUT_SECONDS=8
 GEMINI_TOTAL_TIMEOUT_SECONDS=25
 ```
 
@@ -370,7 +370,7 @@ GEMINI_TOTAL_TIMEOUT_SECONDS=25
 - 무료 키가 모두 비어 있으면 기존 `GOOGLE_API_KEY` 단일 키로 동작한다. 새 무료 키를 하나라도 넣으면 기존 키를 추가로 사용하지 않는다. 프로젝트 ID는 필요 없다.
 - 같은 프로젝트의 키를 여러 칸에 넣지 않는다. 동일한 키 문자열은 기동 검증에서 거부하지만, 서로 다른 키의 프로젝트 귀속은 자동 판별할 수 없다.
 - dev·운영이 프로젝트를 공유하면 예산도 공유된다. 가능하면 프로젝트를 분리하고, 공유할 경우 모든 프로세스의 설정 합계를 실제 할당량 이하로 배분한다.
-- 유료 키를 설정하면 무료 호출의 **Google 503·429**, 그리고 **무료 키 전부 사용 불가**일 때 과금 대체 호출을 한다(2026-09-29 변경). 타임아웃·IO 실패에는 전환하지 않는다. 유료 RPD·사주 몫은 비용 한도가 아니라 호출 횟수 상한이다 — 금액은 단가로 환산해 넣는다.
+- 유료 키를 설정하면 무료 호출의 **Google 503·429·IO 실패(타임아웃 포함)**, 그리고 **무료 키 전부 사용 불가**일 때 과금 대체 호출을 한다(2026-09-29 변경). 유료 RPD·사주 예약분은 비용 한도가 아니라 호출 횟수 상한이다 — 금액은 단가(3.5 Flash-Lite 입력 $0.30·출력 $2.50 /1M)로 환산해 넣는다. 예: 2만 원 → `GEMINI_PAID_RPD`, 그중 사주 7천 원 → `GEMINI_PAID_SAJU_RESERVE_RPD`.
 - 앱 카운터는 재시작·배포마다 0이 된다. **실제 비용 상한은 GCP 콘솔의 유료 프로젝트 일일 요청 쿼터로 건다.** 결제 예산 알림은 과금을 멈추지 않는다.
 - 운영은 `docker-compose.prod.yml`의 `app.environment`에 위 변수 전달을 구현했다. 개발은 기존 `env_file`로 읽는다. `.env` 변경 후 단순 `restart`로는 새 환경변수가 적용되지 않아 컨테이너를 재생성한다. 기존 배포 이미지가 #127을 포함하는지 먼저 확인한다.
 
@@ -388,4 +388,4 @@ cd /opt/wks
 docker compose -f docker-compose.prod.yml up -d --force-recreate app
 ```
 
-로그에서는 `gemini ok/failed`의 `purpose=SAJU|COMPATIBILITY|DATING`·`project=free-1~6/paid`, `in=`·`out=`(입력·출력 토큰, 유료 한도 환산용)·`code=`, `gemini fallback`(`reason=503|429|free-unavailable`), `gemini pool unavailable. kind=free|paid`(유료는 `share=` 로 사주 몫 소진 여부) 및 nginx 504를 확인한다. `code=503`이 연속이면 Google 무료 티어 과부하(`high demand`)이며 키·설정 문제가 아니다. 기동 시 `Duplicate Gemini key configuration`이면 같은 키가 두 칸에 들어간 것이다. 무료 별칭은 설정된 키의 순서다. 출력 전문이나 키가 포함될 수 있는 환경 덤프는 공유하지 않는다. 유료 호출을 중단하려면 `GEMINI_PAID_KEY`를 비우고 앱을 재생성한다. 문장 길이·DB 캐시는 변경하지 않는다.
+로그에서는 `gemini ok/failed`의 `purpose=SAJU|COMPATIBILITY|DATING`·`project=free-1~6/paid`, `in=`·`out=`(입력·출력 토큰, 유료 한도 환산용)·`code=`, `gemini fallback`(`reason=503|429|GenAiIOException|free-unavailable`), `gemini pool unavailable. kind=free|paid`(유료는 `reservedForOthers=` 로 사주 예약분 때문에 막혔는지) 및 nginx 504를 확인한다. `code=503`이 연속이면 Google 무료 티어 과부하(`high demand`)이며 키·설정 문제가 아니다. 기동 시 `Duplicate Gemini key configuration`이면 같은 키가 두 칸에 들어간 것이다. 무료 별칭은 설정된 키의 순서다. 출력 전문이나 키가 포함될 수 있는 환경 덤프는 공유하지 않는다. 유료 호출을 중단하려면 `GEMINI_PAID_KEY`를 비우고 앱을 재생성한다. 문장 길이·DB 캐시는 변경하지 않는다.

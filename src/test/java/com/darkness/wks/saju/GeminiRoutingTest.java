@@ -90,23 +90,23 @@ class GeminiRoutingTest {
     }
 
     @Test
-    void sajuPaidShareRunsOutWithoutBlockingOtherPurposes() {
-        var paid = endpoint("paid", null, 5, 100);
+    void sajuReserveIsLeftOnlyForSaju() {
+        var paid = endpoint("paid", null, 5, 3);
         var pool = new GeminiClientPool(List.of(), paid, Map.of(LlmPurpose.SAJU, 1), clock);
+        assertThat(pool.acquirePaid(LlmPurpose.DATING)).isSameAs(paid);
+        assertThat(pool.acquirePaid(LlmPurpose.COMPATIBILITY)).isSameAs(paid);
+        assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNull(); // 남은 1회는 사주 예약분
         assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isSameAs(paid);
         assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNull();
-        assertThat(pool.acquirePaid(LlmPurpose.COMPATIBILITY)).isSameAs(paid);
+        clock.now = Instant.parse("2026-09-29T07:00:00Z"); // 태평양 자정 뒤 다시 찬다
         assertThat(pool.acquirePaid(LlmPurpose.DATING)).isSameAs(paid);
-        clock.now = Instant.parse("2026-09-29T07:00:00Z"); // 태평양 자정 뒤 몫이 다시 찬다
-        assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isSameAs(paid);
     }
 
     @Test
-    void paidDailyLimitStillCapsAllPurposesTogether() {
-        var paid = endpoint("paid", null, 5, 2);
-        var pool = new GeminiClientPool(List.of(), paid, Map.of(LlmPurpose.SAJU, 5), clock);
-        assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isSameAs(paid);
-        assertThat(pool.acquirePaid(LlmPurpose.COMPATIBILITY)).isSameAs(paid);
+    void sajuCanAlsoSpendTheSharedPart() {
+        var paid = endpoint("paid", null, 5, 3);
+        var pool = new GeminiClientPool(List.of(), paid, Map.of(LlmPurpose.SAJU, 1), clock);
+        for (int i = 0; i < 3; i++) assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isSameAs(paid);
         assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNull();
         assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNull();
     }
@@ -182,7 +182,7 @@ class GeminiRoutingTest {
     }
 
     @Test
-    void sdkTimeoutEndsCallWithoutRetryOrPaidFallback() throws Exception {
+    void sdkTimeoutFallsBackToPaidOnce() throws Exception {
         try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
             server.delayMillis = 600;
             var pool = new GeminiClientPool(List.of(endpoint("free", free, 15, 100)),
@@ -192,7 +192,7 @@ class GeminiRoutingTest {
             unavailable(json);
             assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(1500);
             assertThat(server.count("free")).isEqualTo(1);
-            assertThat(server.count("paid")).isZero();
+            assertThat(server.count("paid")).isEqualTo(1);
         }
     }
 
@@ -214,14 +214,15 @@ class GeminiRoutingTest {
         runner.withPropertyValues("gemini.free-projects[0].api-key=k1", "gemini.free-projects[1].api-key=k2",
                 "gemini.free-projects[2].api-key=k3", "gemini.free-projects[3].api-key=k4",
                 "gemini.free-projects[4].api-key=k5", "gemini.free-projects[5].api-key=k6",
-                "gemini.paid-project.api-key=paid", "gemini.paid-saju-max-per-day=1")
+                "gemini.paid-project.api-key=paid", "gemini.paid-project.max-per-day=2",
+                "gemini.paid-saju-reserve-per-day=1")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     var pool = context.getBean(GeminiClientPool.class);
                     for (int i = 1; i <= 6; i++) assertThat(pool.acquireFree().alias).isEqualTo("free-" + i);
+                    assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNotNull();
+                    assertThat(pool.acquirePaid(LlmPurpose.DATING)).isNull();
                     assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNotNull();
-                    assertThat(pool.acquirePaid(LlmPurpose.SAJU)).isNull();
-                    assertThat(pool.acquirePaid(LlmPurpose.COMPATIBILITY)).isNotNull();
                 });
         runner.withPropertyValues("gemini.free-projects[0].api-key=k1", "gemini.free-projects[1].api-key=k2",
                 "gemini.free-projects[2].api-key=k3", "gemini.free-projects[3].api-key=k4",
@@ -288,6 +289,8 @@ class GeminiRoutingTest {
                     exchange.close();
                 }
             });
+            // 기본 실행기는 스레드 하나라 지연 응답 중 다음 요청을 받지 못한다. 대체 호출이 도착했는지 세려면 동시에 받아야 한다
+            server.setExecutor(Executors.newCachedThreadPool());
             server.start();
         }
 

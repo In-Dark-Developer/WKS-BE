@@ -5,6 +5,7 @@ import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.google.genai.Client;
 import com.google.genai.errors.ApiException;
+import com.google.genai.errors.GenAiIOException;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
@@ -34,10 +35,10 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Gemini 를 **한 번** 호출해 문자열 필드만 있는 JSON 을 받는다. 사주 해석과 궁합 이유가 함께 쓴다.
  * <p>
- * 무료 쪽이 Google 503(과부하)·429(한도 소진)로 실패하거나 무료 키가 모두 쓸 수 없으면 유료 프로젝트로 1회 전환한다.
- * 유료 비용은 유료 RPD·파트별 몫이 막는다. 그 외 실패(IO·타임아웃·파싱)는 즉시 {@link ErrorCode#LLM_UNAVAILABLE} (FR-GM-03~05).
+ * 무료 쪽이 Google 503(과부하)·429(한도 소진)·IO 실패(타임아웃 포함)로 실패하거나 무료 키가 모두 쓸 수 없으면 유료 프로젝트로
+ * 1회 전환한다. 유료 비용은 유료 RPD·사주 예약분이 막는다. 그 외 실패(파싱·4xx)는 즉시 {@link ErrorCode#LLM_UNAVAILABLE} (FR-GM-03~05).
  * 프로젝트별·전체 {@link CallBudget}을 사주·친구 궁합·소개팅 생성기가 함께 쓴다 (FR-CP-14).
- * 유료 대체는 {@link LlmPurpose} 별 하루 몫도 따로 본다 — 사주가 유료 한도를 다 써서 궁합·소개팅이 막히지 않게.
+ * 유료 대체는 {@link LlmPurpose} 별 예약분을 본다 — 소개팅 등이 유료 한도를 다 써서 사주 결과가 막히지 않게.
  * 로그에는 토큰 수·소요 시간만 남긴다 (FR-GM-06). "gemini ok/failed"로 검증 성공·실패한 시도를 구별한다 (NFR-O-06).
  */
 @Slf4j
@@ -118,13 +119,14 @@ public class GeminiJson {
                 log.warn("gemini failed. purpose={} project={} attempt={} code={} type={} ms={}", purpose, endpoint.alias, attempt,
                         code, error.getClass().getSimpleName(), (nanoTime.getAsLong() - started) / 1_000_000);
                 if (error instanceof ApiException api) pool.failed(endpoint, api);
-                // Google 원본 503·429에만 유료 비용을 허용한다. IO·타임아웃은 유료도 같은 이유로 실패하기 쉽고,
+                // 무료 과부하(503)·한도(429)·무응답(IO, 운영 실패의 34%)만 유료로 넘긴다. 파싱·4xx 는 유료도 같다.
                 // 유료에서 실패하면 다시 시도하지 않는다 (요청당 HTTP 최대 2회)
-                if (!onPaid && (code == 503 || code == 429)
+                if (!onPaid && (code == 503 || code == 429 || error instanceof GenAiIOException)
                         && totalTimeoutNanos - (nanoTime.getAsLong() - started) >= TimeUnit.SECONDS.toNanos(1)) {
                     endpoint = pool.acquirePaid(purpose);
                     onPaid = true;
-                    if (endpoint != null) log.info("gemini fallback. purpose={} project=paid reason={}", purpose, code);
+                    if (endpoint != null) log.info("gemini fallback. purpose={} project=paid reason={}", purpose,
+                            code != 0 ? code : error.getClass().getSimpleName());
                 } else {
                     break;
                 }
