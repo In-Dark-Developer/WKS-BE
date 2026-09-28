@@ -123,8 +123,14 @@ public class DatingRequestService {
                 // ponytail: 목록 조회마다 실패 요청 수만큼 LLM 재시도. 축제 규모(수백 건)면 CallBudget 안이다
                 reasonService.fillRecipientReasonAsync(request.getId());
             }
+            if (!received && request.getStatus() == DatingRequestStatus.ACCEPTED
+                    && recommendation.getReasonContent() == null) {
+                // 수락 후 무료 공개되는 보낸 사람 시점 문장. 실패해도 다음 목록 조회에서 재시도한다.
+                reasonService.fillSenderReasonAsync(request.getId());
+            }
             DatingProfile other = received ? request.getSender() : request.getRecipient();
-            String originalPhotoUrl = received || recommendation.isPhotoUnlocked()
+            String originalPhotoUrl = received || request.getStatus() == DatingRequestStatus.ACCEPTED
+                    || recommendation.isPhotoUnlocked()
                     ? photoService.originalUrl(other.getPhoto()) : null;
             return DatingRequestListResponse.from(request, memberId, recommendation,
                     ages.get(other.getMemberId()), photoService.thumbnailUrl(other.getPhoto()), originalPhotoUrl);

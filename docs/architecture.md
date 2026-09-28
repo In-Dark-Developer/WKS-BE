@@ -440,7 +440,7 @@ CreateResultRequest
 - 동시에 처음 열면 LLM 을 두 번 부를 수 있지만 저장은 `UPDATE … WHERE reason_why IS NULL` 로 먼저 온 쪽만 되고, 진 쪽은 저장된 글을 다시 읽는다. 잠금은 LLM 30초 동안 DB 연결을 잡아 두므로 쓰지 않는다
 - 서비스 메서드에 트랜잭션을 걸지 않는다. 같은 이유
 - 프롬프트를 바꾸면 기존 캐시는 옛 글로 남는다. 다시 만들려면 `UPDATE compatibility SET reason_why = NULL, reason_together = NULL, reason_conflict = NULL` (버전 컬럼은 두지 않았다)
-- 소개팅 "궁합 까닭"은 친구 궁합과 다른 문구다. 첫 REASON 해금 성공 시 생성하고 `dating_recommendation.reason_content`(V18)에 캐싱한다. 추천 조회에서는 LLM을 호출하지 않는다
+- 소개팅 "궁합 까닭"은 친구 궁합과 다른 문구다. 첫 REASON 해금 성공 시 생성하고 `dating_recommendation.reason_content`(V18)에 캐싱한다. 해금 전 보낸 요청이 수락되면 같은 캐시에 비동기로 무료 생성하며, 실패하면 보낸 요청 목록 조회에서 재시도한다. 추천 조회에서는 LLM을 호출하지 않는다
 
 ### 시간·지역 모름
 

@@ -4,8 +4,10 @@ import com.darkness.wks.common.exception.BusinessException;
 import com.darkness.wks.common.exception.ErrorCode;
 import com.darkness.wks.compatibility.entity.CompatibilityTier;
 import com.darkness.wks.dating.DatingRequestNotifier.DatingRequestSentEvent;
+import com.darkness.wks.dating.DatingRequestNotifier.DatingRequestAcceptedEvent;
 import com.darkness.wks.dating.entity.DatingRecommendation;
 import com.darkness.wks.dating.entity.DatingRequest;
+import com.darkness.wks.dating.entity.DatingRequestStatus;
 import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import com.darkness.wks.saju.SajuPillars;
@@ -25,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 소개팅 궁합 이유 두 가지.
  * <ul>
  *   <li>{@link #getOrCreate}: 추천 카드의 이유(보낸 사람 시점). 해금 API가 결제를 확정하기 전에 호출한다.
- *       추천 조회에서는 호출하지 않는다.</li>
+ *       수락된 보낸 요청에서는 같은 문장을 비동기로 무료 생성한다. 추천 조회에서는 호출하지 않는다.</li>
  *   <li>{@link #fillRecipientReason}: 받은 요청 목록의 이유(받은 사람 시점, #123). 요청이 커밋된 뒤 별도
  *       스레드에서 한 번 만든다 — 요청 응답·트랜잭션을 LLM(최대 30초)이 붙잡지 않게.</li>
  * </ul>
@@ -41,6 +43,7 @@ public class DatingReasonService {
     private final TaskExecutor taskExecutor;
     // 같은 요청의 생성이 겹치지 않게 한다. 저장은 DB 가 한 번만 받지만 LLM 호출은 그 전에 나가므로 여기서 막는다
     private final Set<UUID> inFlight = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> senderInFlight = ConcurrentHashMap.newKeySet();
 
     public DatingReasonService(DatingRecommendationRepository recommendationRepository,
                                DatingRequestRepository requestRepository, ResultRepository resultRepository,
@@ -61,9 +64,14 @@ public class DatingReasonService {
             return recommendation.getReasonContent();
         }
 
+        return generateAndSave(recommendation, viewerMemberId, recommendation.getCandidate().getMemberId());
+    }
+
+    private String generateAndSave(DatingRecommendation recommendation, Long viewerMemberId,
+                                   Long candidateMemberId) {
         Result viewer = resultRepository.findByMemberId(viewerMemberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
-        Result candidate = resultRepository.findByMemberId(recommendation.getCandidate().getMemberId())
+        Result candidate = resultRepository.findByMemberId(candidateMemberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESULT_NOT_FOUND));
         String generated = generator.generate(pillars(viewer), pillars(candidate),
                 recommendation.getScore(), CompatibilityTier.fromScore(recommendation.getScore()).korean());
@@ -79,6 +87,50 @@ public class DatingReasonService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onRequestSent(DatingRequestSentEvent event) {
         fillRecipientReasonAsync(event.requestId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onRequestAccepted(DatingRequestAcceptedEvent event) {
+        fillSenderReasonAsync(event.requestId());
+    }
+
+    /** 수락 후 보낸 사람 목록의 무료 이유. 추천 카드가 리롤로 비활성화돼도 요청에 연결된 행을 쓴다. */
+    public void fillSenderReasonAsync(UUID requestId) {
+        if (!senderInFlight.add(requestId)) {
+            return;
+        }
+        try {
+            taskExecutor.execute(() -> {
+                try {
+                    fillSenderReason(requestId);
+                } finally {
+                    senderInFlight.remove(requestId);
+                }
+            });
+        } catch (RuntimeException rejected) {
+            senderInFlight.remove(requestId);
+            log.warn("dating sender reason not scheduled. requestId={}, cause={}", requestId,
+                    rejected.getClass().getSimpleName());
+        }
+    }
+
+    void fillSenderReason(UUID requestId) {
+        try {
+            DatingRequest request = requestRepository.findWithProfiles(requestId).orElseThrow();
+            if (request.getStatus() != DatingRequestStatus.ACCEPTED) {
+                return;
+            }
+            Long senderMemberId = request.getSender().getMemberId();
+            DatingRecommendation recommendation = recommendationRepository.findForRequestPairs(
+                    List.of(senderMemberId), List.of(request.getRecipient().getId()))
+                    .stream().findFirst().orElseThrow();
+            if (recommendation.getReasonContent() == null) {
+                generateAndSave(recommendation, senderMemberId, request.getRecipient().getMemberId());
+            }
+        } catch (RuntimeException exception) {
+            log.warn("dating sender reason failed. requestId={}, cause={}", requestId,
+                    exception.getClass().getSimpleName());
+        }
     }
 
     /** 받은 목록 조회에서 아직 이유가 없는 요청을 다시 시도할 때도 부른다. 응답은 기다리지 않는다. */
