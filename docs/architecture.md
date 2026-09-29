@@ -152,8 +152,8 @@ member  →  dating       허용 (`GET /api/me` 의 `hasDatingProfile` 존재 �
 dating  →  result·compatibility·member·wallet   허용
 dating  →  signup    금지 (2026-09-26 에 초대 토큰 검증용으로 열었다가 2026-09-27 초대가 학교메일 인증을 대신하지 않게 바뀌며 다시 닫았다)
 signup  →  dating    금지 (캠페인 대상 조회도 signup·result 쪽만 본다)
-compatibility  →  wallet   허용 (친구 궁합 등록 시 공유자에게 실 +3)
-member  →  compatibility  없음 — 로그인으로 결과가 연결되면 member 가 `result.ResultLinkedEvent` 를 내고 compatibility 가 받아 친구 보상을 소급 지급한다(2026-09-28, 새 의존 없이 둘 다 이미 의존하는 result 에 이벤트를 둔다)
+compatibility  →  wallet   허용 (로그인 친구 궁합 등록 시 공유자에게 실 +2)
+member  →  compatibility  없음 — 로그인으로 결과가 연결되면 member 가 `result.ResultLinkedEvent` 를 내고 compatibility 가 받아 친구 보상을 소급 지급한다(2026-09-28, 새 의존 없이 둘 다 이미 의존하는 result 에 이벤트를 둔다). 연결된 결과가 공유자든 친구든 양쪽 방향으로 훑는다(2026-09-29)
 wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 ```
 
@@ -405,7 +405,7 @@ CREATE TABLE signup_reapply_invite (
 - **`name`·`phone` 컬럼은 없다. 추가하지 마라**
 - **`member` 에 프로필 컬럼(닉네임·이메일·이름·프로필 사진)을 추가하지 마라.** 로그인 식별자는 `kakao_id` 하나다
 - **한 계정에 결과를 둘 이상 연결하지 마라.** `result.member_id` 는 계정당 1개(부분 unique)다. 병합은 V2 (plan §1.1)
-- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = 친구의 팔자 네 기둥·성별 SHA-256 앞 16바이트(`p:`+32hex — 같은 사람 한 번만, 원문 팔자는 사실상 생년월일이라 해시. 2026-09-28 전 행은 compatibility id), `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
+- **`thread_ledger.ref_id` 는 NOT NULL.** reason 별 값 규칙: `SIGNUP_BONUS` = member id, `CHECK_IN` = KST 날짜(`yyyy-MM-dd`), `MAP_FRIEND` = 친구의 memberId(`m:`+id, 2026-09-29 — 로그인 친구만 세고 공유자당 같은 계정 한 번. 2026-09-28~29 행은 팔자·성별 해시 `p:`+32hex, 그 전은 compatibility id. 옛 행은 잔액 유지를 위해 그대로 둔다), `PARTNER` = 제휴 코드, `UNLOCK` = `추천행id:필드`, `REROLL` = `KST날짜#회차`(무료분도 `amount = 0` 행으로 남겨 하루 횟수를 센다, 2026-09-27). `REQUEST` 는 매칭 요청이 무료라 쓰지 않는다
 
 ---
 
@@ -468,7 +468,7 @@ SDK: `com.google.genai:google-genai` (Gemini Developer API), 모델 `gemini-3.5-
 
 **예산·쿨다운**: 무료 프로젝트별 기본 15 RPM, 500 RPD(2026-09-28 운영 429 메시지의 실제 한도) / 유료 기본 5 RPM, 120 RPD, 그중 사주 예약 42. 앱 전체 한도는 두지 않는다(2026-09-29 제거) — 프로젝트별 예산의 합이 곧 상한이고, 따로 두면 유료 값을 올릴 때 같이 안 올려 유료가 막히는 설정 실수만 생긴다. 운영 31시간 로그 102회 시도: 성공 49%, IO 실패 34%, 429 10%, Google 503 7%. 당시 유료 전환은 이 7%만 대상이었고, 2026-09-29부터 IO 실패(34%)·429(10%)·무료 소진도 포함한다. 분당 예산은 최근 60초, 일일 예산은 `America/Los_Angeles` 자정에 리셋한다(PDT: KST 16시, PST: KST 17시). 선택·예산 예약만 동기화하며 HTTP 호출 동안 락을 잡지 않는다. SDK 자체 시도를 끄므로 실패한 호출·유료 대체도 예산에 반영된다.
 
-Google 503이면 해당 프로젝트를 30초, 429면 최소 60초 제외한다. SDK 메시지의 구조화된 RetryInfo/QuotaFailure를 해석할 수 있으면 더 긴 재시도 시간/일일 리셋까지 기다린다. 401·403은 설정 수정·재시작 전까지 제외한다. 모든 무료 프로젝트가 제한되면 빠르게 실패한다. 카운터·쿨다운은 프로세스 메모리라 재시작 시 초기화되며 dev·운영·다른 도구의 호출을 합산하지 못한다. 프로젝트를 분리하거나 예산을 나눠야 한다.
+429는 프로젝트 한도라 **키별**로 제외한다 — 메시지의 QuotaFailure 에 `PerDay` 가 있으면 태평양 자정까지, RetryInfo 가 있으면 그 시간, 못 읽으면 60초. 503·IO 타임아웃은 모델 전체 신호라(28일 밤 무료 3키 동시 5시간 503) **무료 전체**를 쉰다(#142): 키 무관 연속 5회부터 30초 → 1 → 2 → 4 → 최대 10분 배가, 그동안 요청은 바로 유료. 무료 성공 1건이면 리셋. 첫 503부터 전체를 세우지 않는 이유는 간헐 503 때 유료가 7% → 31%(10건/분)로 튀기 때문이고, 연속 5회 조건이면 유료 비율은 키별 쿨다운과 같으면서 전면 shedding 때 무료 헛호출(RPD 소모)이 51% → 3%로 준다. 401·403은 설정 수정·재시작 전까지 제외한다. 쿨다운 등록은 `gemini cooldown.` 로그 한 줄로 남긴다(키·원문 없음). 카운터·쿨다운은 프로세스 메모리라 재시작 시 초기화되며 dev·운영·다른 도구의 호출을 합산하지 못한다. 프로젝트를 분리하거나 예산을 나눠야 한다.
 
 소개팅 요청 이유(받은 사람 문장, 수락 후 보낸 사람 문장)의 비동기 생성은 `dating/DatingReasonService`가 요청·방향별로 진행 중 중복을 막고, 실패/작업 제출 거절 뒤 60초 쿨다운을 둔다. 이후 실제 목록 조회가 있을 때 재시도한다. 새로고침 자체로 호출량이 반복 소진되는 것을 막는다. 키 설정·한도 변경 절차는 `runbook-dev-server.md`의 Gemini 설정 절을 따른다.
 

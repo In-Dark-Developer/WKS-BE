@@ -89,6 +89,7 @@ class CompatibilityServiceTest {
         Result origin = result("서연", UUID.randomUUID(), "임오", "계묘", "갑진", "신미");
         ReflectionTestUtils.setField(origin, "memberId", 42L);
         Result guest = result("민수", UUID.randomUUID(), "정축", "을해", "기유", "병자");
+        ReflectionTestUtils.setField(guest, "memberId", 43L);
         when(resultRepository.findByShareId(origin.getShareId())).thenReturn(Optional.of(origin));
         when(resultRepository.findAllByIdForUpdate(anyList())).thenReturn(List.of(origin, guest));
         when(compatibilityRepository.findByResultPair(origin.getId(), guest.getId())).thenReturn(Optional.empty());
@@ -102,9 +103,8 @@ class CompatibilityServiceTest {
         compatibilityService.createCompatibility(
                 origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()));
 
-        // ref_id 는 궁합 id 가 아니라 친구의 팔자·성별 해시 — 같은 사람이 결과를 새로 만들어 다시 등록해도 한 번만
-        // 친구 5명마다 3실 — 몇 번째인지는 원장이 센다
-        verify(walletService).creditEveryNth(42L, LedgerReason.MAP_FRIEND, MapFriendRewardService.personKey(guest), 5, 3);
+        // ref_id 는 친구의 memberId — 같은 계정이 결과를 새로 만들어 다시 등록해도 한 번만
+        verify(walletService).credit(42L, LedgerReason.MAP_FRIEND, "m:43", 2);
     }
 
     @Test
