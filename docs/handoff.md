@@ -187,6 +187,38 @@
 
 ## 기록
 
+### 2026-09-29 (화) · hairyung2002 · admin/ 축제 통계 + admin.html 버튼 잠금 (이슈 없음) · Claude Code
+
+**한 일**
+- `GET /api/admin/stats` — 축제 3일(09-29 ~ 10-01 KST) 동안의 사주 결과·궁합·소개팅(프로필·요청) 수. 일별 수, KST 시간대별 수(24칸), 성별·궁합 등급·요청 상태 분포, 인증·비활성 프로필 수, 추천을 받아본 회원 수. 기존 `ADMIN_TOKEN` 인터셉터가 그대로 막는다.
+- 소개팅 성비(기간 안 등록 / 지금 추천 풀 전체), 보낸 쪽 성별별 요청·수락·거절·대기 수, 매칭 성사(수락 시각 기준 시리즈, 매칭된 사람 수). 성별은 `result.gender` 에서 가져온다.
+- `admin.html` — "소개팅 프로필 / 축제 통계" 탭 추가. 숫자 카드와 CSS 막대만 쓰고 차트 라이브러리는 없다. "토큰 지우기"는 탭 줄로 옮겼다.
+- `admin.html` — 요청이 나가 있는 동안 동작 버튼을 전부 잠근다(`run()`). 사진 업로드 연타, 요청끼리 겹치는 것을 막는다.
+- 테스트: `AdminStatsFlowTest`(Testcontainers). 관리자 테스트 10개 통과. 로컬 앱을 띄워 브라우저에서 탭·잠금·통계 화면을 확인했다(통계 수치는 가짜 응답).
+
+**건드린 파일/패키지**
+- 신규 `admin/AdminStatsController`·`AdminStatsService`·`dto/AdminStatsResponse`, `test/.../admin/AdminStatsFlowTest`
+- 수정 `static/admin.html`, `docs/admin-api.md`, `docs/plan.md` §1.5
+- 마이그레이션·ErrorCode·`application.yml`·새 라이브러리 없음
+
+**다음 사람이 알아야 할 것**
+- **운영 EC2·DB 세션 시간대가 KST 가 아니다.** 통계는 기간 경계를 Java 에서 KST 절대 시각으로 만들어 넘기고, 버킷은 SQL `AT TIME ZONE 'Asia/Seoul'` 로 자른다. 날짜는 `getObject(LocalDate)` 로 읽는다(`getDate` 는 JVM 시간대로 밀린다). 날짜를 다루는 다른 코드도 `ZoneId.of("Asia/Seoul")` 를 명시해야 한다.
+- 축제 기간은 `AdminStatsService.FESTIVAL_FIRST_DAY`·`FESTIVAL_DAYS` 상수다. 축제 후에도 이 3일만 보여 준다.
+- 인증·비활성·요청 상태는 조회 시점 값이다. 운영자가 삭제한 프로필은 수에서 빠진다.
+- 예외 둘: `poolByGender` 는 기간과 무관한 지금 추천 풀 전체이고, 매칭 성사는 요청 생성 시각이 아니라 수락 시각 기준이다.
+- 코드에서 `match` 는 금지어라 성사는 `accepted` 로 이름 붙였다(화면 문구만 "매칭").
+- 여러 도메인 테이블을 `JdbcTemplate` 으로 **읽기만** 한다. 각 패키지의 Repository 는 안 건드렸다.
+
+**막힌 것 / 넘기는 것**
+- 팀 채널 공지(`admin.html` 은 차은호 작업물) — PR 전에.
+- `admin/` 담당이 AGENTS.md 표에 없다.
+
+**문서 변경**
+- `plan.md` §1.5 운영자 통계, `admin-api.md` 통계 절·페이지 설명
+
+**프론트에 알려야 할 것**
+- 없음 (관리자 API 는 프론트 계약이 아니다)
+
 ### 2026-09-29 (화) · 차은호 · admin/·dating/ 소개팅 관리자 API + admin.html (#147) · Claude Code
 
 **한 일**
