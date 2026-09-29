@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소개팅 운영</title>
+<style>
+  :root { --bg: #f6f5f2; --card: #fff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e2e0da; --accent: #3d5afe; --danger: #c62828; --ok: #2e7d32; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, select, textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; color: var(--ink); }
+  textarea { min-height: 88px; resize: vertical; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  button { padding: 9px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); border-color: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { min-height: 22px; margin-top: 10px; font-size: 14px; white-space: pre-wrap; }
+  .status.err { color: var(--danger); } .status.ok { color: var(--ok); }
+  .meta { color: var(--muted); font-size: 13px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #e8f5e9; color: var(--ok); }
+  .badge.off { background: #fdecea; color: var(--danger); }
+  img.photo { width: 120px; height: 151px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: #eee; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>소개팅 운영</h1>
+
+  <section id="gate">
+    <label for="token">운영자 토큰</label>
+    <input id="token" type="password" autocomplete="off" placeholder="담당자에게 받은 값">
+    <div class="row"><button class="primary" id="tokenSave">사용</button></div>
+    <p class="meta">토큰은 이 탭이 열려 있는 동안만 기억합니다. 탭을 닫으면 다시 입력합니다.</p>
+  </section>
+
+  <section id="search" class="hidden">
+    <label for="email">학교 이메일로 찾기</label>
+    <input id="email" type="email" inputmode="email" placeholder="student@dgu.ac.kr">
+    <div class="row">
+      <button class="primary" id="find">찾기</button>
+      <button id="logout">토큰 지우기</button>
+    </div>
+    <div class="status" id="searchStatus"></div>
+  </section>
+
+  <section id="profile" class="hidden">
+    <div style="display:flex; gap:14px; align-items:flex-start">
+      <img class="photo" id="photo" alt="프로필 사진">
+      <div>
+        <div><span class="badge" id="state"></span></div>
+        <div class="meta" id="ids"></div>
+      </div>
+    </div>
+
+    <label>이메일</label><input id="f-email" type="email">
+    <label>이름</label><input id="f-name" maxlength="50">
+    <label>연락 방법</label>
+    <select id="f-contactMethod"><option value="PHONE">전화번호</option><option value="INSTAGRAM">인스타그램</option></select>
+    <label>연락처</label><input id="f-contactValue" maxlength="100">
+    <label>학과</label><input id="f-department" maxlength="100">
+    <label>MBTI</label><input id="f-mbti" maxlength="4" style="text-transform:uppercase">
+    <label>자기소개</label><textarea id="f-bio" maxlength="500"></textarea>
+    <div class="row">
+      <button class="primary" id="save">수정 저장</button>
+      <button id="toggle"></button>
+    </div>
+    <div class="status" id="editStatus"></div>
+
+    <label for="file">사진 교체 (JPEG·PNG, 10MB 이하)</label>
+    <input id="file" type="file" accept="image/jpeg,image/png">
+    <div class="row"><button id="upload">사진 올리고 교체</button></div>
+    <div class="status" id="photoStatus"></div>
+
+    <label for="confirmEmail">삭제하려면 이메일을 다시 입력</label>
+    <input id="confirmEmail" type="email" autocomplete="off">
+    <div class="row"><button class="danger" id="delete" disabled>프로필 삭제 (되돌릴 수 없음)</button></div>
+    <div class="status" id="deleteStatus"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const BASE = '/api/admin/dating/profiles';
+  const FIELDS = ['email', 'name', 'contactMethod', 'contactValue', 'department', 'mbti', 'bio'];
+  let token = null;
+  let current = null;
+
+  try { token = sessionStorage.getItem('adminToken'); } catch (_) {}
+
+  const show = (id, on) => $(id).classList.toggle('hidden', !on);
+  const status = (id, text, kind) => { const el = $(id); el.textContent = text || ''; el.className = 'status' + (kind ? ' ' + kind : ''); };
+
+  async function api(method, path, body) {
+    const res = await fetch(BASE + path, {
+      method,
+      headers: Object.assign({ 'X-Admin-Token': token }, body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (res.status === 401) { clearToken(); throw new Error('토큰이 틀리거나 만료됐습니다. 다시 입력하세요.'); }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((json.error && (json.error.code + ' — ' + json.error.message)) || ('HTTP ' + res.status));
+    return json.data;
+  }
+
+  function setToken(value) {
+    token = value;
+    try { sessionStorage.setItem('adminToken', value); } catch (_) {}
+    show('gate', false); show('search', true);
+  }
+  function clearToken() {
+    token = null; current = null;
+    try { sessionStorage.removeItem('adminToken'); } catch (_) {}
+    show('gate', true); show('search', false); show('profile', false);
+    $('token').value = '';
+  }
+
+  function render(p) {
+    current = p;
+    $('photo').src = p.photoUrl || '';
+    const off = !!p.deactivatedAt;
+    $('state').textContent = off ? '비활성 · ' + new Date(p.deactivatedAt).toLocaleString() : '활성';
+    $('state').className = 'badge' + (off ? ' off' : '');
+    $('ids').textContent = 'profileId ' + p.profileId + '\nmemberId ' + p.memberId + '\n등록 ' + new Date(p.createdAt).toLocaleString();
+    $('ids').style.whiteSpace = 'pre-line';
+    FIELDS.forEach(f => { $('f-' + f).value = p[f] ?? ''; });
+    $('toggle').textContent = off ? '활성화' : '비활성화';
+    $('confirmEmail').value = ''; $('delete').disabled = true;
+    ['editStatus', 'photoStatus', 'deleteStatus'].forEach(id => status(id, ''));
+    show('profile', true);
+  }
+
+  $('tokenSave').onclick = () => { const v = $('token').value.trim(); if (v) setToken(v); };
+  $('token').onkeydown = e => { if (e.key === 'Enter') $('tokenSave').click(); };
+  $('logout').onclick = clearToken;
+
+  $('find').onclick = async () => {
+    const email = $('email').value.trim();
+    if (!email) return;
+    status('searchStatus', '조회 중…');
+    try { render(await api('GET', '?email=' + encodeURIComponent(email))); status('searchStatus', ''); }
+    catch (e) { show('profile', false); status('searchStatus', e.message, 'err'); }
+  };
+  $('email').onkeydown = e => { if (e.key === 'Enter') $('find').click(); };
+
+  $('save').onclick = async () => {
+    const body = {};
+    FIELDS.forEach(f => {
+      let v = $('f-' + f).value.trim();
+      if (f === 'mbti') v = v.toUpperCase();
+      if (v !== (current[f] ?? '')) body[f] = v;
+    });
+    if (!Object.keys(body).length) { status('editStatus', '바뀐 항목이 없습니다.'); return; }
+    status('editStatus', '저장 중…');
+    try { render(await api('PATCH', '/' + current.profileId, body)); status('editStatus', '저장했습니다.', 'ok'); }
+    catch (e) { status('editStatus', e.message, 'err'); }
+  };
+
+  $('toggle').onclick = async () => {
+    const action = current.deactivatedAt ? 'activate' : 'deactivate';
+    status('editStatus', '처리 중…');
+    try { render(await api('POST', '/' + current.profileId + '/' + action)); status('editStatus', action === 'deactivate' ? '비활성화했습니다. 추천 카드에서 빠집니다.' : '활성화했습니다.', 'ok'); }
+    catch (e) { status('editStatus', e.message, 'err'); }
+  };
+
+  $('upload').onclick = async () => {
+    const file = $('file').files[0];
+    if (!file) { status('photoStatus', '파일을 고르세요.', 'err'); return; }
+    if (!['image/jpeg', 'image/png'].includes(file.type)) { status('photoStatus', 'JPEG 또는 PNG 만 됩니다. (HEIC 는 사진 앱에서 JPEG 로 내보내기)', 'err'); return; }
+    if (file.size > 10 * 1024 * 1024) { status('photoStatus', '10MB 를 넘습니다.', 'err'); return; }
+    try {
+      status('photoStatus', '1/3 업로드 주소 받는 중…');
+      const issued = await api('POST', '/' + current.profileId + '/photo-upload-url', { contentType: file.type });
+      status('photoStatus', '2/3 S3 에 올리는 중…');
+      const put = await fetch(issued.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      if (!put.ok) throw new Error('S3 업로드 실패 HTTP ' + put.status);
+      status('photoStatus', '3/3 프로필에 붙이는 중…');
+      render(await api('PATCH', '/' + current.profileId + '/photo', { photoId: issued.photoId }));
+      $('file').value = '';
+      status('photoStatus', '사진을 교체했습니다.', 'ok');
+    } catch (e) { status('photoStatus', e.message, 'err'); }
+  };
+
+  $('confirmEmail').oninput = () => { $('delete').disabled = $('confirmEmail').value.trim().toLowerCase() !== current.email; };
+  $('delete').onclick = async () => {
+    status('deleteStatus', '삭제 중…');
+    try {
+      await api('DELETE', '/' + current.profileId);
+      show('profile', false); current = null;
+      status('searchStatus', '삭제했습니다. 같은 회원은 다시 등록할 수 있습니다.', 'ok');
+    } catch (e) { status('deleteStatus', e.message, 'err'); }
+  };
+
+  if (token) { show('gate', false); show('search', true); }
+})();
+</script>
+</body>
+</html>
