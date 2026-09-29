@@ -12,8 +12,6 @@ public interface ThreadLedgerRepository extends JpaRepository<ThreadLedger, Long
 
     boolean existsByMemberIdAndReasonAndRefId(Long memberId, LedgerReason reason, String refId);
 
-    long countByMemberIdAndReason(Long memberId, LedgerReason reason);
-
     long countByMemberIdAndReasonAndRefIdStartingWith(Long memberId, LedgerReason reason, String refIdPrefix);
 
     /**
