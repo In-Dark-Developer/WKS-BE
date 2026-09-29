@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>소개팅 운영</title>
+<title>운영자 페이지</title>
 <style>
   :root { --bg: #f6f5f2; --card: #fff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e2e0da; --accent: #3d5afe; --danger: #c62828; --ok: #2e7d32; }
   * { box-sizing: border-box; }
@@ -26,11 +26,24 @@
   .badge.off { background: #fdecea; color: var(--danger); }
   img.photo { width: 120px; height: 151px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: #eee; }
   .hidden { display: none; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .big { font-size: 28px; font-weight: 700; line-height: 1.2; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
+  .cell { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .cell b { display: block; font-size: 18px; }
+  .bars { display: flex; align-items: flex-end; gap: 2px; height: 80px; margin-top: 12px; border-bottom: 1px solid var(--line); }
+  .bars div { flex: 1; background: var(--accent); min-height: 1px; border-radius: 2px 2px 0 0; }
+  .bars div.zero { background: var(--line); }
+  .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .ratio { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin: 6px 0 4px; }
+  .ratio .g-MALE { background: var(--accent); } .ratio .g-FEMALE { background: #e0527d; } .ratio .g-UNKNOWN { background: #b8b6ae; }
 </style>
 </head>
 <body>
 <main>
-  <h1>소개팅 운영</h1>
+  <h1>운영자 페이지</h1>
 
   <section id="gate">
     <label for="token">운영자 토큰</label>
@@ -39,12 +52,35 @@
     <p class="meta">토큰은 이 탭이 열려 있는 동안만 기억합니다. 탭을 닫으면 다시 입력합니다.</p>
   </section>
 
-  <section id="search" class="hidden">
+  <nav class="tabs hidden" id="tabs">
+    <button id="tab-manage" class="on">소개팅 프로필</button>
+    <button id="tab-stats">축제 통계</button>
+    <button id="logout" style="margin-left:auto">토큰 지우기</button>
+  </nav>
+
+  <div id="stats" class="hidden">
+    <section>
+      <div class="row" style="margin-top:0; align-items:center">
+        <select id="statsDay" class="hidden" style="width:auto"></select>
+        <button class="primary" id="statsRefresh">새로고침</button>
+      </div>
+      <div class="meta" id="statsMeta">축제 3일(KST) 기준. 시간대별 막대는 고른 날짜의 0~23시입니다.</div>
+      <div class="status" id="statsStatus"></div>
+    </section>
+    <section id="statsSaju" class="hidden"></section>
+    <section id="statsCompat" class="hidden"></section>
+    <section id="statsDating" class="hidden"></section>
+    <section id="statsRequests" class="hidden"></section>
+    <section id="statsAccepted" class="hidden"></section>
+  </div>
+
+  <div id="manage" class="hidden">
+
+  <section id="search">
     <label for="email">학교 이메일로 찾기</label>
     <input id="email" type="email" inputmode="email" placeholder="student@dgu.ac.kr">
     <div class="row">
       <button class="primary" id="find">찾기</button>
-      <button id="logout">토큰 지우기</button>
     </div>
     <div class="status" id="searchStatus"></div>
   </section>
@@ -82,12 +118,14 @@
     <div class="row"><button class="danger" id="delete" disabled>프로필 삭제 (되돌릴 수 없음)</button></div>
     <div class="status" id="deleteStatus"></div>
   </section>
+  </div>
 </main>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const BASE = '/api/admin/dating/profiles';
+  const BASE = '/api/admin';
+  const PROFILES = '/dating/profiles';
   const FIELDS = ['email', 'name', 'contactMethod', 'contactValue', 'department', 'mbti', 'bio'];
   let token = null;
   let current = null;
@@ -112,13 +150,30 @@
   function setToken(value) {
     token = value;
     try { sessionStorage.setItem('adminToken', value); } catch (_) {}
-    show('gate', false); show('search', true);
+    showApp();
   }
   function clearToken() {
-    token = null; current = null;
+    token = null; current = null; stats = null;
+    STATS_SECTIONS.forEach(id => show(id, false));
     try { sessionStorage.removeItem('adminToken'); } catch (_) {}
-    show('gate', true); show('search', false); show('profile', false);
+    show('gate', true); show('tabs', false); show('manage', false); show('stats', false); show('profile', false);
     $('token').value = '';
+  }
+
+  // 요청 하나가 끝날 때까지 모든 동작 버튼을 잠근다. 같은 버튼 연타(사진 S3 업로드 중복)뿐 아니라
+  // 사진 교체 중 저장처럼 서로 다른 요청이 같은 프로필을 두고 겹쳐 render 가 뒤섞이는 것도 막는다
+  const ACTIONS = ['find', 'logout', 'save', 'toggle', 'upload', 'delete', 'statsRefresh'];
+  let busy = false;
+
+  function syncButtons() {
+    ACTIONS.forEach(id => { $(id).disabled = busy; });
+    if (!busy) $('delete').disabled = !current || $('confirmEmail').value.trim().toLowerCase() !== current.email;
+  }
+
+  async function run(task) {
+    if (busy) return;
+    busy = true; syncButtons();
+    try { await task(); } finally { busy = false; syncButtons(); }
   }
 
   function render(p) {
@@ -131,7 +186,7 @@
     $('ids').style.whiteSpace = 'pre-line';
     FIELDS.forEach(f => { $('f-' + f).value = p[f] ?? ''; });
     $('toggle').textContent = off ? '활성화' : '비활성화';
-    $('confirmEmail').value = ''; $('delete').disabled = true;
+    $('confirmEmail').value = ''; syncButtons();
     ['editStatus', 'photoStatus', 'deleteStatus'].forEach(id => status(id, ''));
     show('profile', true);
   }
@@ -140,16 +195,16 @@
   $('token').onkeydown = e => { if (e.key === 'Enter') $('tokenSave').click(); };
   $('logout').onclick = clearToken;
 
-  $('find').onclick = async () => {
+  $('find').onclick = () => run(async () => {
     const email = $('email').value.trim();
     if (!email) return;
     status('searchStatus', '조회 중…');
-    try { render(await api('GET', '?email=' + encodeURIComponent(email))); status('searchStatus', ''); }
+    try { render(await api('GET', PROFILES + '?email=' + encodeURIComponent(email))); status('searchStatus', ''); }
     catch (e) { show('profile', false); status('searchStatus', e.message, 'err'); }
-  };
+  });
   $('email').onkeydown = e => { if (e.key === 'Enter') $('find').click(); };
 
-  $('save').onclick = async () => {
+  $('save').onclick = () => run(async () => {
     const body = {};
     FIELDS.forEach(f => {
       let v = $('f-' + f).value.trim();
@@ -158,46 +213,172 @@
     });
     if (!Object.keys(body).length) { status('editStatus', '바뀐 항목이 없습니다.'); return; }
     status('editStatus', '저장 중…');
-    try { render(await api('PATCH', '/' + current.profileId, body)); status('editStatus', '저장했습니다.', 'ok'); }
+    try { render(await api('PATCH', PROFILES + '/' + current.profileId, body)); status('editStatus', '저장했습니다.', 'ok'); }
     catch (e) { status('editStatus', e.message, 'err'); }
-  };
+  });
 
-  $('toggle').onclick = async () => {
+  $('toggle').onclick = () => run(async () => {
     const action = current.deactivatedAt ? 'activate' : 'deactivate';
     status('editStatus', '처리 중…');
-    try { render(await api('POST', '/' + current.profileId + '/' + action)); status('editStatus', action === 'deactivate' ? '비활성화했습니다. 추천 카드에서 빠집니다.' : '활성화했습니다.', 'ok'); }
+    try { render(await api('POST', PROFILES + '/' + current.profileId + '/' + action)); status('editStatus', action === 'deactivate' ? '비활성화했습니다. 추천 카드에서 빠집니다.' : '활성화했습니다.', 'ok'); }
     catch (e) { status('editStatus', e.message, 'err'); }
-  };
+  });
 
-  $('upload').onclick = async () => {
+  $('upload').onclick = () => run(async () => {
     const file = $('file').files[0];
     if (!file) { status('photoStatus', '파일을 고르세요.', 'err'); return; }
     if (!['image/jpeg', 'image/png'].includes(file.type)) { status('photoStatus', 'JPEG 또는 PNG 만 됩니다. (HEIC 는 사진 앱에서 JPEG 로 내보내기)', 'err'); return; }
     if (file.size > 10 * 1024 * 1024) { status('photoStatus', '10MB 를 넘습니다.', 'err'); return; }
     try {
       status('photoStatus', '1/3 업로드 주소 받는 중…');
-      const issued = await api('POST', '/' + current.profileId + '/photo-upload-url', { contentType: file.type });
+      const issued = await api('POST', PROFILES + '/' + current.profileId + '/photo-upload-url', { contentType: file.type });
       status('photoStatus', '2/3 S3 에 올리는 중…');
       const put = await fetch(issued.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
       if (!put.ok) throw new Error('S3 업로드 실패 HTTP ' + put.status);
       status('photoStatus', '3/3 프로필에 붙이는 중…');
-      render(await api('PATCH', '/' + current.profileId + '/photo', { photoId: issued.photoId }));
+      render(await api('PATCH', PROFILES + '/' + current.profileId + '/photo', { photoId: issued.photoId }));
       $('file').value = '';
       status('photoStatus', '사진을 교체했습니다.', 'ok');
     } catch (e) { status('photoStatus', e.message, 'err'); }
-  };
+  });
 
-  $('confirmEmail').oninput = () => { $('delete').disabled = $('confirmEmail').value.trim().toLowerCase() !== current.email; };
-  $('delete').onclick = async () => {
+  $('confirmEmail').oninput = syncButtons;
+  $('delete').onclick = () => run(async () => {
     status('deleteStatus', '삭제 중…');
     try {
-      await api('DELETE', '/' + current.profileId);
+      await api('DELETE', PROFILES + '/' + current.profileId);
       show('profile', false); current = null;
       status('searchStatus', '삭제했습니다. 같은 회원은 다시 등록할 수 있습니다.', 'ok');
     } catch (e) { status('deleteStatus', e.message, 'err'); }
-  };
+  });
 
-  if (token) { show('gate', false); show('search', true); }
+  // ---- 축제 통계 ----
+  const TIER = { GUIIN: '귀인', CHALTTEOK: '찰떡', BEOT: '벗', SEUCHIM: '스침' };
+  const GENDER = { MALE: '남', FEMALE: '여', UNKNOWN: '모름' };
+  const REQUEST = { PENDING: '대기', ACCEPTED: '수락', REJECTED: '거절', CANCELLED: '취소' };
+  const STATS_SECTIONS = ['statsSaju', 'statsCompat', 'statsDating', 'statsRequests', 'statsAccepted'];
+  let stats = null;
+
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const fmt = n => Number(n).toLocaleString('ko-KR');
+  const dayLabel = date => { const [, m, d] = date.split('-'); return +m + '/' + +d; };
+  // 운영자 PC 시간대와 무관하게 KST 오늘 (en-CA 는 YYYY-MM-DD 로 찍힌다)
+  const kstToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+
+  function cells(pairs) {
+    const grid = el('div', 'grid');
+    pairs.forEach(([label, value]) => {
+      const cell = el('div', 'cell');
+      cell.append(el('b', null, value), el('span', 'meta', label));
+      grid.append(cell);
+    });
+    return grid;
+  }
+
+  function bars(hourly) {
+    const max = Math.max(1, ...hourly);
+    const box = el('div', 'bars');
+    hourly.forEach((n, hour) => {
+      const bar = el('div', n ? null : 'zero');
+      bar.style.height = (n / max * 100) + '%';
+      bar.title = hour + '시 · ' + fmt(n) + '건';
+      box.append(bar);
+    });
+    const axis = el('div', 'axis');
+    [0, 6, 12, 18, 23].forEach(hour => axis.append(el('span', null, hour + '시')));
+    return [box, axis];
+  }
+
+  // 합계 → 일별 → (분포) → 고른 날 시간대별
+  function seriesBlock(title, series, extras) {
+    const day = series.days.find(d => d.date === $('statsDay').value) || series.days[0];
+    const caption = el('div', 'meta', dayLabel(day.date) + ' 시간대별 (최대 ' + fmt(Math.max(...day.hourly)) + '건)');
+    caption.style.marginTop = '14px';
+    return [el('h2', null, title), el('div', 'big', fmt(series.total)), el('div', 'meta', '축제 기간 합계'),
+        cells(series.days.map(d => [dayLabel(d.date), fmt(d.count)])), ...[].concat(extras || []),
+        caption, ...bars(day.hourly)];
+  }
+
+  const breakdown = (counts, labels) => cells(Object.entries(counts).map(([k, v]) => [labels[k] || k, fmt(v)]));
+  const pct = (n, total) => total ? Math.round(n / total * 100) + '%' : '—';
+
+  // 남·여(·모름) 비율 막대 한 줄
+  function ratio(title, counts) {
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    const box = el('div');
+    box.style.marginTop = '14px';
+    box.append(el('div', 'meta', title + ' · 총 ' + fmt(total) + '명'));
+    const bar = el('div', 'ratio');
+    const legend = el('div', 'meta');
+    legend.textContent = Object.entries(counts).map(([k, v]) => (GENDER[k] || k) + ' ' + fmt(v) + ' (' + pct(v, total) + ')').join(' · ');
+    Object.entries(counts).forEach(([k, v]) => {
+      if (!v) return;
+      const seg = el('div', 'g-' + k);
+      seg.style.width = (v / total * 100) + '%';
+      bar.append(seg);
+    });
+    box.append(bar, legend);
+    return box;
+  }
+
+  function renderStats() {
+    if (!stats) return;
+    const { saju, compatibility, dating } = stats;
+    const r = dating.requestsByStatus;
+    const responded = r.ACCEPTED + r.REJECTED;
+    $('statsSaju').replaceChildren(...seriesBlock('사주 결과', saju.results, breakdown(saju.byGender, GENDER)));
+    $('statsCompat').replaceChildren(...seriesBlock('궁합', compatibility.created,
+        breakdown(compatibility.byTier, TIER)));
+    $('statsDating').replaceChildren(...seriesBlock('소개팅 프로필 등록', dating.profiles, [cells([
+      ['인증 완료', fmt(dating.verifiedProfiles)],
+      ['지금 비활성', fmt(dating.deactivatedProfiles)],
+      ['추천 받아본 회원', fmt(dating.recommendationViewers)]]),
+      ratio('성비 — 축제 중 등록', dating.profilesByGender),
+      ratio('성비 — 지금 추천 풀 (축제 전 등록 포함, 비활성 제외)', dating.poolByGender)]));
+    $('statsRequests').replaceChildren(...seriesBlock('소개팅 요청', dating.requests, [cells([
+      ...Object.entries(r).map(([k, v]) => [REQUEST[k] || k, fmt(v)]),
+      ['수락률 (수락÷응답)', pct(r.ACCEPTED, responded)]]),
+      cells(Object.entries(dating.requestsBySenderGender).map(([k, o]) => [
+        (GENDER[k] || k) + ' 발신 · 수락 ' + fmt(o.accepted) + ' · 거절 ' + fmt(o.rejected) + ' · 대기 ' + fmt(o.pending)
+          + ' · 수락률 ' + pct(o.accepted, o.accepted + o.rejected), fmt(o.sent)]))]));
+    $('statsAccepted').replaceChildren(...seriesBlock('매칭 성사 (수락 시각 기준)', dating.accepted, cells([
+      ['매칭된 사람 (양쪽 합, 중복 제거)', fmt(dating.acceptedMembers)]])));
+    $('statsMeta').textContent = dayLabel(stats.from) + '–' + dayLabel(stats.to) + ' KST 기준 · '
+        + new Date(stats.generatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) + ' 집계. 상태(인증·비활성·요청 상태)는 지금 값입니다.';
+    STATS_SECTIONS.forEach(id => show(id, true));
+  }
+
+  $('statsRefresh').onclick = () => run(async () => {
+    status('statsStatus', '불러오는 중…');
+    try {
+      stats = await api('GET', '/stats');
+      const select = $('statsDay');
+      if (!select.options.length) {
+        stats.saju.results.days.forEach(d => select.append(new Option(dayLabel(d.date) + ' 시간대별', d.date)));
+        const today = kstToday();
+        if (stats.saju.results.days.some(d => d.date === today)) select.value = today;
+        show('statsDay', true);
+      }
+      renderStats();
+      status('statsStatus', '');
+    } catch (e) { status('statsStatus', e.message, 'err'); }
+  });
+  $('statsDay').onchange = renderStats;
+
+  // ---- 탭 ----
+  let tab = 'manage';
+  function selectTab(name) {
+    tab = name;
+    show('manage', name === 'manage'); show('stats', name === 'stats');
+    $('tab-manage').classList.toggle('on', name === 'manage');
+    $('tab-stats').classList.toggle('on', name === 'stats');
+    if (name === 'stats' && !stats) $('statsRefresh').click();
+  }
+  function showApp() { show('gate', false); show('tabs', true); selectTab(tab); }
+  $('tab-manage').onclick = () => selectTab('manage');
+  $('tab-stats').onclick = () => selectTab('stats');
+
+  if (token) showApp();
 })();
 </script>
 </body>

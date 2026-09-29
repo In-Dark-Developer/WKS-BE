@@ -20,6 +20,8 @@
 - 토큰은 `sessionStorage` 에만 둔다 — 탭 닫으면 사라진다. 401 이 오면 토큰 화면으로 돌아간다.
 - 이메일로 찾기 → 카드(사진·전 필드·활성 상태) → 수정 저장 / 비활성화·활성화 / 사진 교체 / 삭제.
 - 삭제 버튼은 이메일을 다시 입력해 일치해야 켜진다. 되돌릴 수 없다.
+- 요청이 하나 나가 있는 동안에는 동작 버튼(찾기·저장·활성화 토글·사진·삭제·토큰 지우기·통계 새로고침)이 전부 잠긴다. 연타로 사진이 두 번 올라가거나 요청끼리 겹치지 않게.
+- 탭 두 개: "소개팅 프로필"(위 기능) / "축제 통계"(아래 `GET /api/admin/stats`). 통계 탭은 처음 열 때 한 번 불러오고 이후엔 새로고침 버튼으로만.
 - 사진 교체는 브라우저가 S3 presigned URL 에 직접 PUT 한다. **버킷 CORS 에 api 오리진이 있어야 한다**(2026-09-29 `api.`·`api-dev.` 등록 완료). 로컬 `localhost:8080` 은 없어서 로컬에서는 사진만 안 된다.
 
 ## 엔드포인트
@@ -38,6 +40,38 @@
 | DELETE | `/{profileId}` | 프로필 삭제 | 404 |
 
 응답 `data`: `profileId, memberId, email, name, contactMethod, contactValue, department, mbti, bio, photoId, photoUrl(서명 URL, 10분), verifiedAt, deactivatedAt, createdAt`. 운영자용이라 잠긴 필드 없이 전부 내린다.
+
+## 축제 통계 `GET /api/admin/stats`
+
+`admin.html` 의 "축제 통계" 탭이 부른다. 같은 `X-Admin-Token`. 파라미터 없음 — 기간은 코드에 고정(`AdminStatsService.FESTIVAL_FIRST_DAY`, 3일).
+기획 결정은 `plan.md` §1.5. 관련 코드: `admin/AdminStatsController`·`AdminStatsService`·`dto/AdminStatsResponse`.
+
+- **범위**: `created_at` 이 2026-09-29 00:00 ~ 10-02 00:00 **KST** 인 행. 날짜·시(0~23) 버킷도 KST.
+- **시간대**: 운영 EC2·컨테이너·DB 세션 시간대가 KST 가 아니다. 그래서 기본값에 기대지 않는다 — 경계는 Java 에서 KST 절대 시각으로 만들어 넘기고, 버킷은 SQL `AT TIME ZONE 'Asia/Seoul'` 로 자른다. 테스트(`AdminStatsFlowTest`)는 JVM 시간대를 `America/Los_Angeles` 로 바꿔 놓고 경계(23:59:59 / 00:00)를 확인한다.
+- **상태 값은 조회 시점**: 인증·비활성·요청 status 는 "기간 안에 만들어진 행의 지금 상태"다. 운영자가 삭제한 프로필은 수에서 빠진다(hard delete).
+- 인덱스 없이 COUNT 로 센다. 축제 규모(수만 행 이하)에서는 문제없고, 자동 갱신이 없어 부하도 버튼 누를 때뿐이다.
+
+응답 `data`:
+
+| 필드 | 뜻 |
+|---|---|
+| `timezone`·`from`·`to`·`generatedAt` | `Asia/Seoul`, `2026-09-29`, `2026-10-01`, 집계 시각(UTC Instant) |
+| `saju.results` | 사주 결과(`result`) 생성 수. `{total, days:[{date, count, hourly[24]}]}` — 이하 "시리즈" |
+| `saju.byGender` | `MALE`·`FEMALE` |
+| `compatibility.created` | 궁합(`compatibility`) 생성 시리즈 |
+| `compatibility.byTier` | `GUIIN`·`CHALTTEOK`·`BEOT`·`SEUCHIM` |
+| `dating.profiles` | 소개팅 프로필 등록 시리즈 |
+| `dating.verifiedProfiles`·`deactivatedProfiles` | 그중 학교메일 인증 완료 / 지금 비활성 |
+| `dating.recommendationViewers` | 기간 안에 추천 카드를 한 번이라도 받은 회원 수(중복 제거) |
+| `dating.requests`·`requestsByStatus` | 소개팅 요청 시리즈, `PENDING`·`ACCEPTED`·`REJECTED`·`CANCELLED` |
+| `dating.profilesByGender` | 기간 안에 등록한 프로필의 성비 |
+| `dating.poolByGender` | **기간 무관** 지금 추천 풀(인증 완료·비활성 아님) 성비. 축제 전 사전 등록자도 추천에 나오므로 불균형은 풀 전체로 본다 |
+| `dating.requestsBySenderGender` | 기간 안에 만든 요청을 보낸 쪽 성별로: `{sent, accepted, rejected, pending}` |
+| `dating.accepted` | 매칭 성사 시리즈 — **수락 시각(`responded_at`)** 기준. 요청은 축제 전에 왔어도 기간 안에 수락되면 센다 |
+| `dating.acceptedMembers` | 그 성사 건의 양쪽 프로필 수(중복 제거) |
+
+분포 맵은 0 인 키도 항상 채운다. 수락률(수락 ÷ (수락+거절))은 페이지가 계산한다.
+성별은 프로필에 없어서 회원의 사주 결과(`result.gender`, `member_id` 로 조인)에서 가져온다. 추천 로직과 같은 출처다. 결과가 없는 회원은 `UNKNOWN` 으로 세고, 그 키는 있을 때만 생긴다.
 
 ## 비활성화가 미치는 곳
 
@@ -64,6 +98,7 @@
 read -s ADMIN_TOKEN   # 히스토리에 안 남게
 H="X-Admin-Token: $ADMIN_TOKEN"; B=https://api.threadoffate.site/api/admin/dating/profiles
 curl -s -H "$H" "$B?email=student@dgu.ac.kr"
+curl -s -H "$H" https://api.threadoffate.site/api/admin/stats
 curl -s -X POST -H "$H" "$B/<profileId>/deactivate"
 curl -s -X PATCH -H "$H" -H 'Content-Type: application/json' -d '{"name":"새이름"}' "$B/<profileId>"
 curl -s -X DELETE -H "$H" "$B/<profileId>"
