@@ -24,7 +24,7 @@
 | `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
 | Flyway 최신 버전 | V24 (`dev` 기준, 2026-09-28 확인). V25 는 #123 PR 대기. V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
-| 실(재화) | ✅ 원장·자동지급 3종·소개팅 해금 `dev` 머지 완료(#97). 🔧 2026-09-27 리롤 구현(TBD-6 종료, 미커밋). 🔧 2026-09-27 해금을 여러 필드 묶음 요청으로 변경(전체 해금 포함, 미커밋). 제휴처 보상(`PARTNER`)은 미구현 |
+| 실(재화) | ✅ 원장·자동지급 3종·소개팅 해금 `dev` 머지 완료(#97). 🔧 2026-09-27 리롤 구현(TBD-6 종료, 미커밋). 🔧 2026-09-27 해금을 여러 필드 묶음 요청으로 변경(전체 해금 포함, 미커밋). 🔧 2026-09-29 #144 친구 보상을 로그인 친구 1명당 2실로(PR 대기) |
 | api-spec 프론트 전달 | ❌ 미전달 |
 | CORS localhost:3000 허용 | ✅ 기본값 (`CORS_ALLOWED_ORIGINS` 로 덮어씀). 프론트 배포 도메인은 미반영 |
 
@@ -117,6 +117,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-29 | #144 궁합지도 친구 등록 보상 **5명마다 3실 → 로그인 친구 1명당 2실.** 익명 결과로 등록한 친구는 안 센다. API 형식 변경 없음. **프론트 확인 요청**: 로그인 상태인 친구가 공유 링크에서 새 결과를 만들면 계정에 이미 결과가 있을 때 익명으로 남아 보상이 안 붙는다 — 로그인 상태면 계정 결과(`GET /api/me/result`)로 `POST /api/compatibilities/{shareId}` 를 부르는 게 맞다. 비로그인 친구에게는 "로그인하면 공유자에게 실이 간다" 안내 문구 검토. `api-spec.md` §12 | ❌ |
 | 2026-09-29 | **리롤 비용 5실 → 20실** (하루 1회 무료는 그대로). 응답 `rerollCost` 가 무료분을 다 쓰면 `20` 으로 온다 — 버튼 문구를 하드코딩했다면 `rerollCost` 값으로 표시. 잔액 20 미만이면 402. `api-spec.md` §10.4·§10.4.1·§12 | ❌ |
 | 2026-09-29 | 궁합지도 친구 등록 보상 **1명당 3실 → 서로 다른 친구 5명마다 3실**. API 형식 변경 없음, 안내 문구만 수정. `api-spec.md` §12 | ❌ |
 | 2026-09-28 | `GET /api/dating/requests?box=sent`에서 `ACCEPTED` 요청은 사진·이름·학과·궁합 까닭을 실 차감 없이 모두 `locked:false`로 반환한다. 궁합 까닭은 수락 후 비동기 생성이라 잠시 `value:null`일 수 있으며 목록 재조회가 재시도한다. `PENDING`·`REJECTED`·`CANCELLED`는 기존 해금 상태 유지. 필드 형식 변경 없음. `api-spec.md` §11.1 | ❌ |
@@ -184,6 +185,34 @@
 
 ## 기록
 
+### 2026-09-29 (화) · 차은호 · compatibility/ 친구 보상을 로그인 친구 1명당 2실로 (#144) · Claude Code
+
+**한 일**
+- 어뷰징 경로 확인: `MAP_FRIEND` 가 친구를 팔자·성별 해시로 구분해서, 공유 링크에서 생년월일·시간·성별을 바꿔 익명 결과를 만들 때마다 새 친구로 셌다(하루 날짜 하나로 26명). WAF `rate-all`(5분 6,000건)로는 못 막는다. 운영 원장 확인 결과 악용 계정은 아직 없음(최대 친구 11명·6실).
+- `MapFriendRewardService`: **친구 결과가 로그인 계정에 연결된 경우만** 1명당 +2. `ref_id = m:<친구 memberId>`. 계정당 결과가 하나(`uq_result_member`)라 같은 계정은 같은 궁합이 돌아와 애초에 두 번 안 생기고, 원장 UNIQUE 는 이중 방어.
+- `ResultLinkedEvent` 를 공유자 방향(`findAllByOriginIdWithResults`)에 더해 친구 방향(`findAllByGuestIdWithResults`, 신규)으로도 훑는다 — 친구가 나중에 로그인해도 공유자에게 소급.
+- `WalletService.creditEveryNth`·`ThreadLedgerRepository.countByMemberIdAndReason` 삭제(호출처가 이것뿐이었다).
+- 옛 `p:` 해시 행·그 전 compatibility id 행은 그대로 둔다(잔액 유지). 익명 친구는 이제 안 센다.
+
+**건드린 파일/패키지**
+- `compatibility/MapFriendRewardService`, `compatibility/CompatibilityRepository`, `compatibility/CompatibilityService`(주석), `wallet/WalletService`, `wallet/ThreadLedgerRepository`, `MapFriendRewardFlowTest`, `CompatibilityServiceTest`, plan.md §5.8·§9.4, api-spec §12, architecture.md, backend-requirements FR-TH-04
+- **`compatibility/`(최선우)·`wallet/`(곽도윤) 수정 — 팀 채널 공지 필요**
+
+**다음 사람이 알아야 할 것**
+- 보상이 안 붙는 경우는 시점이 아니라 "친구 결과가 계정에 연결됐는가"다. 친구 계정에 결과가 이미 있는데 공유 링크에서 새 결과를 만들면 익명으로 남아 영영 안 붙는다(위 프론트 공지). 다른 기기에서 로그인해 그 결과가 연결 안 돼도 마찬가지. BE 에서 구제 못 한다.
+- 이제 남은 파밍 경로는 카카오 계정 수 = +2 뿐.
+- **결정(2026-09-29, 차은호): 로그인 후 만든 새 결과로 계정 결과를 교체하는 안(#118 1번 제안)은 폐기.** 계정에 이미 있는 결과가 본인 데이터다(plan §1.1 계정 우선 유지). 그래서 로그인 상태의 친구는 공유 링크에서 새로 입력하지 말고 계정 결과로 등록해야 보상이 붙는다 — FE 몫.
+
+**막힌 것 / 넘기는 것**
+- 없음
+
+**문서 변경**
+- 위 목록
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 표 2026-09-29 #144 행
+
+---
 ### 2026-09-29 (화) · hairyung2002 · 인프라 CloudFront + WAF 도입, nginx 요청 제한 제거 (#139) · Claude Code
 
 **한 일**

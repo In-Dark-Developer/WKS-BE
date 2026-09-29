@@ -58,7 +58,7 @@ public class CompatibilityService {
                 (short) score,
                 CompatibilityTier.fromScore(score)
         ));
-        // 공유자(origin)의 궁합지도에 친구가 등록됐다 — 같은 사람은 한 번만, 로그인 계정일 때만(MapFriendRewardService)
+        // 공유자(origin)의 궁합지도에 친구가 등록됐다 — 둘 다 로그인 계정일 때만, 같은 계정은 한 번만(MapFriendRewardService)
         mapFriendRewardService.rewardNew(compatibility);
         return new CreationResult(CompatibilityResponse.from(compatibility, origin, guest), true);
     }
