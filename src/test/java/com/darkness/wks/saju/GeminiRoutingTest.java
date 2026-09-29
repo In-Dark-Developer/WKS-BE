@@ -32,19 +32,75 @@ class GeminiRoutingTest {
 
     @Test
     void roundRobinSkipsCooledAndExhaustedProjects() {
-        var a = endpoint("a", null, 1, 100);
-        var b = endpoint("b", null, 2, 100);
-        var c = endpoint("c", null, 2, 100);
+        // 하루 한도로 소진시킨다 — 429 쿨다운(60초)이 지나도 분당 창처럼 되살아나지 않게
+        var a = endpoint("a", null, 100, 1);
+        var b = endpoint("b", null, 100, 2);
+        var c = endpoint("c", null, 100, 2);
         var pool = new GeminiClientPool(List.of(a, b, c), null, clock);
         assertThat(pool.acquireFree()).isSameAs(a);
         assertThat(pool.acquireFree()).isSameAs(b);
-        pool.failed(b, new ApiException(503, "UNAVAILABLE", "ignored"));
+        pool.failed(b, new ApiException(429, "RESOURCE_EXHAUSTED", "no details")); // 프로젝트 한도: 그 키만 60초
         assertThat(pool.acquireFree()).isSameAs(c);
         assertThat(pool.acquireFree()).isSameAs(c);
         assertThat(pool.acquireFree()).isNull();
-        clock.now = clock.now.plusSeconds(30);
+        clock.now = clock.now.plusSeconds(60);
         assertThat(pool.acquireFree()).isSameAs(b);
         assertThat(pool.acquireFree()).isNull();
+    }
+
+    @Test
+    void fiveConsecutiveOverloadsPauseAllFreeWithBackoffUntilASuccess() {
+        var a = endpoint("a", null, 100, 1000);
+        var b = endpoint("b", null, 100, 1000);
+        var paid = endpoint("paid", null, 100, 1000);
+        var pool = new GeminiClientPool(List.of(a, b), paid, clock);
+        ApiException unavailable = new ApiException(503, "UNAVAILABLE", "ignored");
+        // 4회까지는 키별 제외도, 전체 제외도 없다 (간헐 503 하나로 유료가 튀지 않게)
+        pool.failed(a, unavailable);
+        pool.failed(b, unavailable);
+        pool.timedOut(a);
+        pool.failed(paid, unavailable); // 유료 실패는 세지 않는다
+        pool.failed(b, unavailable);
+        assertThat(pool.acquireFree()).isNotNull();
+        pool.timedOut(a); // 5회째
+        assertThat(pool.acquireFree()).isNull();
+        clock.now = clock.now.plusSeconds(29);
+        assertThat(pool.acquireFree()).isNull();
+        clock.now = clock.now.plusSeconds(1);
+        assertThat(pool.acquireFree()).isNotNull(); // 30초 뒤 한 요청이 찔러 본다
+        pool.failed(a, unavailable);               // 또 실패 → 60초
+        clock.now = clock.now.plusSeconds(59);
+        assertThat(pool.acquireFree()).isNull();
+        clock.now = clock.now.plusSeconds(1);
+        assertThat(pool.acquireFree()).isNotNull();
+        pool.succeeded(b);                          // 무료 성공 → 리셋
+        for (int i = 0; i < 4; i++) pool.failed(a, unavailable);
+        assertThat(pool.acquireFree()).isNotNull();
+        pool.failed(b, unavailable);
+        assertThat(pool.acquireFree()).isNull();
+        clock.now = clock.now.plusSeconds(30);      // 리셋됐으므로 다시 30초부터
+        assertThat(pool.acquireFree()).isNotNull();
+    }
+
+    @Test
+    void freeCooldownSendsRequestsStraightToPaidAndSuccessResets() throws Exception {
+        try (FakeGemini server = new FakeGemini(); Client free = server.client("free"); Client paid = server.client("paid")) {
+            var pool = new GeminiClientPool(List.of(endpoint("free", free, 100, 1000)),
+                    endpoint("paid", paid, 100, 1000), clock);
+            var json = new GeminiJson(pool, "model", 12_000, 25_000, System::nanoTime);
+            server.status.put("free", 503);
+            for (int i = 0; i < 5; i++) json.generate(LlmPurpose.SAJU, "system", "synthetic", List.of("why"));
+            assertThat(server.count("free")).isEqualTo(5);
+            assertThat(server.count("paid")).isEqualTo(5);
+            json.generate(LlmPurpose.SAJU, "system", "synthetic", List.of("why")); // 무료 쿨다운 중: 무료 안 부른다
+            assertThat(server.count("free")).isEqualTo(5);
+            assertThat(server.count("paid")).isEqualTo(6);
+            clock.now = clock.now.plusSeconds(30);
+            server.status.put("free", 200);
+            json.generate(LlmPurpose.SAJU, "system", "synthetic", List.of("why")); // 프로브 성공 → 리셋
+            assertThat(server.count("free")).isEqualTo(6);
+            assertThat(server.count("paid")).isEqualTo(6);
+        }
     }
 
     @Test

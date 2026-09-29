@@ -30,6 +30,16 @@ public final class GeminiClientPool implements AutoCloseable {
     private final Clock clock;
     private final List<Client> ownedClients = new ArrayList<>();
     private int cursor;
+    /**
+     * 503·타임아웃은 프로젝트가 아니라 모델 전체 신호라(28일 밤 무료 3키 동시 5시간 503) 무료 전체를 한 번에 쉰다 (#142).
+     * 단 간헐 503 하나로 전체를 세우면 유료가 튀므로(시뮬레이션 7% → 31%) 연속 {@value #FREE_FAILURE_THRESHOLD}회부터, 30초에서 배가.
+     * 무료 성공 1건이면 리셋. 429는 프로젝트 한도라 키별로 남긴다.
+     */
+    private static final int FREE_FAILURE_THRESHOLD = 5;
+    private static final int FREE_BACKOFF_MAX_SECONDS = 600;
+    private Instant freeBlockedUntil = Instant.MIN;
+    private int freeBackoffSeconds = 30;
+    private int consecutiveFreeFailures;
 
     public GeminiClientPool(GeminiProperties properties, Client primary) {
         clock = Clock.systemUTC();
@@ -73,6 +83,10 @@ public final class GeminiClientPool implements AutoCloseable {
     }
 
     synchronized Endpoint acquireFree() {
+        if (clock.instant().isBefore(freeBlockedUntil)) {
+            log.warn("gemini pool unavailable. kind=free reason=cooldown until={}", freeBlockedUntil);
+            return null;
+        }
         for (int i = 0; i < free.size(); i++) {
             int index = (cursor + i) % free.size();
             Endpoint endpoint = free.get(index);
@@ -102,13 +116,39 @@ public final class GeminiClientPool implements AutoCloseable {
     }
 
     synchronized void failed(Endpoint endpoint, ApiException error) {
-        if (error.code() == 401 || error.code() == 403) endpoint.disabled = true;
-        Instant until = switch (error.code()) {
-            case 503 -> clock.instant().plusSeconds(30);
-            case 429 -> quotaReset(error);
-            default -> clock.instant();
-        };
-        if (until.isAfter(endpoint.blockedUntil)) endpoint.blockedUntil = until;
+        if (error.code() == 401 || error.code() == 403) {
+            endpoint.disabled = true;
+            log.warn("gemini cooldown. project={} code={} until=restart", endpoint.alias, error.code());
+        } else if (error.code() == 429) {
+            Instant until = quotaReset(error);
+            if (until.isAfter(endpoint.blockedUntil)) endpoint.blockedUntil = until;
+            log.warn("gemini cooldown. project={} code=429 until={}", endpoint.alias, until);
+        } else if (error.code() == 503) {
+            overloaded(endpoint, "503");
+        }
+    }
+
+    /** SDK IO 예외(타임아웃·연결 실패). 503과 같은 과부하 신호로 센다 */
+    synchronized void timedOut(Endpoint endpoint) {
+        overloaded(endpoint, "timeout");
+    }
+
+    /** 무료 성공은 과부하가 끝났다는 뜻. 연속 실패 수와 배가를 되돌린다 */
+    synchronized void succeeded(Endpoint endpoint) {
+        if (endpoint != paid) {
+            consecutiveFreeFailures = 0;
+            freeBackoffSeconds = 30;
+        }
+    }
+
+    private void overloaded(Endpoint endpoint, String reason) {
+        if (endpoint == paid) return;
+        consecutiveFreeFailures++;
+        if (consecutiveFreeFailures < FREE_FAILURE_THRESHOLD) return;
+        freeBlockedUntil = clock.instant().plusSeconds(freeBackoffSeconds);
+        log.warn("gemini cooldown. scope=free reason={} consecutive={} seconds={} until={}", reason,
+                consecutiveFreeFailures, freeBackoffSeconds, freeBlockedUntil);
+        freeBackoffSeconds = Math.min(freeBackoffSeconds * 2, FREE_BACKOFF_MAX_SECONDS);
     }
 
     private Instant quotaReset(ApiException error) {

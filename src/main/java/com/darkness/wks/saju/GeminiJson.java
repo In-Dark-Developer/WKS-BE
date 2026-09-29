@@ -105,6 +105,7 @@ public class GeminiJson {
                         (int) Math.min(timeoutMillis, remainingMillis));
                 // 전체 시간 예산은 새 시도를 시작할지만 정한다. 이미 받은 정상 응답은 늦어도 쓴다.
                 Map<String, String> result = parse(response.text(), fields);
+                pool.succeeded(endpoint);
                 // 입력·출력 단가가 8배 넘게 달라서 유료 한도(원 → 호출 수) 환산에 둘을 나눠 남긴다. 출력에 사고 토큰 포함
                 var usage = response.usageMetadata();
                 log.info("gemini ok. purpose={} project={} attempt={} ms={} tokens={} in={} out={}", purpose,
@@ -119,6 +120,7 @@ public class GeminiJson {
                 log.warn("gemini failed. purpose={} project={} attempt={} code={} type={} ms={}", purpose, endpoint.alias, attempt,
                         code, error.getClass().getSimpleName(), (nanoTime.getAsLong() - started) / 1_000_000);
                 if (error instanceof ApiException api) pool.failed(endpoint, api);
+                else if (error instanceof GenAiIOException) pool.timedOut(endpoint);
                 // 무료 과부하(503)·한도(429)·무응답(IO, 운영 실패의 34%)만 유료로 넘긴다. 파싱·4xx 는 유료도 같다.
                 // 유료에서 실패하면 다시 시도하지 않는다 (요청당 HTTP 최대 2회)
                 if (!onPaid && (code == 503 || code == 429 || error instanceof GenAiIOException)
