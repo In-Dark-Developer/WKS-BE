@@ -8,7 +8,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -108,6 +111,15 @@ public class DatingPhotoService {
         byte[] thumbnail = blur(original, photo.getObjectKey().endsWith(".jpg") ? "JPEG" : "PNG");
         s3Client.putObject(PutObjectRequest.builder().bucket(bucket).key(thumbnailKey(photo))
                         .contentType("image/png").build(), RequestBody.fromBytes(thumbnail));
+    }
+
+    /** 원본과 블러 썸네일을 함께 지운다. 관리자 삭제·사진 교체 뒤에만 부른다 — 없는 키는 S3 가 조용히 넘긴다. */
+    public void deleteObjects(DatingPhoto photo) {
+        s3Client.deleteObjects(DeleteObjectsRequest.builder().bucket(bucket)
+                .delete(Delete.builder().objects(
+                        ObjectIdentifier.builder().key(photo.getObjectKey()).build(),
+                        ObjectIdentifier.builder().key(thumbnailKey(photo)).build()).build())
+                .build());
     }
 
     public String thumbnailUrl(DatingPhoto photo) {

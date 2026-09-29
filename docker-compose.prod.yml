@@ -89,6 +89,7 @@ services:
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       KAKAO_ALLOWED_REDIRECT_URIS: ${KAKAO_ALLOWED_REDIRECT_URIS:-}
       JWT_SECRET: ${JWT_SECRET:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       # Metaspace 128m 은 부족하다 — 개발 서버에서 소개팅 프로필 등록 중 OutOfMemoryError: Metaspace (2026-09-26)
       JAVA_TOOL_OPTIONS: "-Xmx300m -XX:MaxMetaspaceSize=200m"
     logging:

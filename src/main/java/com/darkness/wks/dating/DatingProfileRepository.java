@@ -16,6 +16,13 @@ public interface DatingProfileRepository extends JpaRepository<DatingProfile, UU
 
     boolean existsByEmailAndMemberIdNot(String email, Long memberId);
 
-    @Query("SELECT p FROM DatingProfile p WHERE p.verifiedAt IS NOT NULL")
+    @Query("SELECT p FROM DatingProfile p WHERE p.verifiedAt IS NOT NULL AND p.deactivatedAt IS NULL")
     List<DatingProfile> findEligible();
+
+    // 관리자 작업은 트랜잭션 밖에서 S3 를 만지므로 사진을 함께 가져와 LAZY 예외를 피한다 (DatingAdminService)
+    @Query("SELECT p FROM DatingProfile p JOIN FETCH p.photo WHERE p.id = :id")
+    Optional<DatingProfile> findWithPhotoById(UUID id);
+
+    @Query("SELECT p FROM DatingProfile p JOIN FETCH p.photo WHERE p.email = :email")
+    Optional<DatingProfile> findWithPhotoByEmail(String email);
 }
