@@ -22,7 +22,7 @@
 | 배포 상태 | ✅ 2026-09-26: `main` push → `deploy.yml` → 운영, `dev` push → `deploy-dev.yml` → 개발 서버, 둘 다 EC2 에서 동작. `dev` 의 로그인·소개팅 커밋은 아직 `main` 미릴리즈 — **릴리즈 전에 아래 "막혀 있는 것"의 운영 `.env` 항목부터** |
 | 개발 서버 (`api-dev.threadoffate.site`) | ✅ 2026-09-26 기동(`wks_dev` DB, Flyway V18). **단 `SPRING_PROFILES_ACTIVE: dev` 수정이 `dev` 에 머지되기 전에 누가 `dev` 에 push 하면 다시 죽는다** — 아래 2026-09-26 인프라 기록 |
 | `/api/health` (배포 도메인) | ✅ 운영·개발 둘 다 200 (2026-09-26 확인) |
-| Flyway 최신 버전 | V24 (`dev` 기준, 2026-09-28 확인). V25 는 #123 PR 대기. V12는 폐기(아래 예약 표) |
+| Flyway 최신 버전 | V24 (`dev` 기준, 2026-09-28 확인). V25 는 #123 PR 대기, V26 은 #147 PR 대기(V25 뒤). V12는 폐기(아래 예약 표) |
 | 카카오 로그인 | ✅ 백엔드 `dev` 머지 완료(V11). 🔧 **2026-09-25, 토큰 전달을 Bearer 헤더→HttpOnly 쿠키로 전환**(백엔드 `feat/cookie-based-auth`, PR 대기) — **프론트(WKS-FE) 대응 전까지는 로그인이 깨진다.** 아래 2026-09-25 기록의 "프론트에 알려야 할 것" 참고 |
 | 실(재화) | ✅ 원장·자동지급 3종·소개팅 해금 `dev` 머지 완료(#97). 🔧 2026-09-27 리롤 구현(TBD-6 종료, 미커밋). 🔧 2026-09-27 해금을 여러 필드 묶음 요청으로 변경(전체 해금 포함, 미커밋). 🔧 2026-09-29 #144 친구 보상을 로그인 친구 1명당 2실로(PR 대기) |
 | api-spec 프론트 전달 | ❌ 미전달 |
@@ -37,6 +37,7 @@
 | 개발 서버 별도 운영 여부 | 곽도윤 | ✅ 2026-09-26 EC2 에 띄워 동작 확인. 남은 것은 아래 세 줄 |
 | 운영 릴리즈 직후 CORS credentials 확인 | 곽도윤 | 운영 preflight 응답에 `access-control-allow-credentials: true` 가 생겼는지 (명령은 아래 2026-09-26 인프라 기록). 없으면 운영 쿠키 로그인이 CORS 에서 막힌다 |
 | **운영 릴리즈(`dev`→`main`) 전 `/opt/wks/.env` 채우기** | 곽도윤 | `docker-compose.prod.yml` 이 이제 `KAKAO_*`·`JWT_SECRET`·`DATING_VERIFY_REDIRECT_URL` 을 넘긴다(2026-09-26). EC2 의 운영 `.env` 에 `KAKAO_ALLOWED_REDIRECT_URIS`·`JWT_SECRET`(32바이트 이상, 개발과 다른 값)·`DATING_VERIFY_REDIRECT_URL`·`REAPPLY_URL`·`BACKEND_BASE_URL`·`AWS_*` 가 없으면(운영 compose 는 `${VAR}` 로 넘겨서 없으면 빈 값이 앱 기본값을 덮는다) 로그인·메일 링크·사진 업로드가 조용히 꺼진다. compose 명령마다 뜨던 `BACKEND_BASE_URL`·`AWS_*` "not set" 경고가 이것 |
+| **개발 `.env` 에 `ADMIN_TOKEN` 없음** (#147) | 차은호·곽도윤 | 운영 `/opt/wks/.env` 에는 2026-09-29 넣었다. 개발 `/opt/wks-dev/.env` 에 **다른 값**으로 넣어야 개발 서버에서 `admin.html` 사진 교체까지 기획자와 검증할 수 있다. 없으면 관리자 API 만 401 이고 나머지는 정상 |
 | 개발 서버 Gemini 키가 운영과 같다 | 곽도윤 | `/opt/wks-dev/.env` 의 `GOOGLE_API_KEY` 가 `.env.prod.example` 값과 같다. 운영도 그 키면 dev 호출이 운영 하루 한도(1600)를 깎는다. 축제 전에 dev 용 키 발급 후 교체 |
 | `nginx/api-dev.conf` resolver 변경 EC2 반영 | 곽도윤 | `main` 릴리즈 후 `docs/runbook-dev-server.md` 11단계. 반영 전까지는 **dev 앱이 꺼진 채로 운영 배포(`restart nginx`)·재부팅이 일어나면 운영 nginx 도 못 뜬다** — dev 를 내릴 일이 있으면 운영 배포와 겹치지 않게 |
 | SMTP 발송 계정 | 곽도윤 | 발송 한도 확인 필요 |
@@ -57,6 +58,7 @@
 
 | 번호  | 예약자 | 내용 | 상태 |
 |-----|---|---|---|
+| V26 | 차은호 | #147 `dating_profile` 에 `deactivated_at TIMESTAMPTZ` (운영자 비활성화). **V25(#123) 뒤에 머지** | PR |
 | V25 | 차은호 | #123 `dating_request` 에 `recipient_reason TEXT` (받은 사람 기준 궁합 이유 캐시) | PR |
 | V24 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
 | V23 | 최선우 | #100 소개팅 요청 `CANCELLED` 상태 및 취소 후 재요청 허용을 위한 부분 UNIQUE 인덱스 | dev 머지 완료 (PR #101) |
@@ -184,6 +186,39 @@
 ---
 
 ## 기록
+
+### 2026-09-29 (화) · 차은호 · admin/·dating/ 소개팅 관리자 API + admin.html (#147) · Claude Code
+
+**한 일**
+- `/api/admin/dating/profiles` — 이메일 조회·부분 수정·비활성화/활성화·사진 교체(presigned URL 재사용)·프로필 삭제. 인증은 `ADMIN_TOKEN` 환경변수 + `X-Admin-Token` 헤더 + 인터셉터(`admin/AdminAuthInterceptor`). Spring Security·새 라이브러리 없음. 토큰 비면 관리자 API 만 401.
+- `static/admin.html` — 빌드 없는 운영자 페이지 한 장(기획자용). 토큰은 sessionStorage, 삭제는 이메일 재입력 확인, 사진은 브라우저가 S3 에 직접 PUT.
+- V26 `dating_profile.deactivated_at`. `DatingProfile.isEligible()` 을 `verified && !deactivated` 로 바꿔 추천 풀·기존 카드 내림·수락 차단에 한 번에 반영.
+- 삭제는 hard delete. FK cascade 로 추천(후보 측)·요청·메일 인증이 같이 지워지고, 사진 행·S3 원본·썸네일은 서비스가 따로 지운다. `thread_ledger` 는 안 건드린다.
+- S3 버킷 CORS 에 `https://api.threadoffate.site`·`https://api-dev.threadoffate.site` PUT 추가(콘솔, 차은호). 프론트 오리진(`threadoffate.site`·`www`·`dev`·netlify·vercel·localhost)은 이미 있었다 — 2026-09-26 기록의 "버킷 CORS 아직 안 함"은 이제 낡은 내용. 운영 `.env` `ADMIN_TOKEN` 등록 완료.
+- 테스트: `AdminAuthInterceptorTest`, `DatingAdminFlowTest`(Testcontainers·S3 목킹). 전체 335개 통과.
+
+**건드린 파일/패키지**
+- 신규 `admin/`(인터셉터·WebConfig·컨트롤러·dto 3), `dating/DatingAdminService`, `static/admin.html`, `V26`, `docs/admin-api.md`
+- 수정 `dating/entity/DatingProfile`(deactivatedAt·edit·changePhoto), `DatingProfileRepository`(findEligible 조건·fetch join 조회 2), `DatingPhotoService.deleteObjects`, `DatingProfileService`(검증 3개 package-private), `application.yml`(`app.admin.token`), `application-local.yml.example`, `docker-compose.prod.yml`·`.env.*.example`(`ADMIN_TOKEN`), `architecture.md` §2 Spring Security 행
+
+**다음 사람이 알아야 할 것**
+- 관리자 API 는 `api-spec.md` 에 안 넣었다(프론트 계약 아님). Swagger 에서도 `@Hidden`. 사용법은 `docs/admin-api.md`.
+- ErrorCode 추가 없음 — `UNAUTHENTICATED`·`DATING_PROFILE_NOT_FOUND`·`DATING_PROFILE_CONFLICT`·`INVALID_INPUT`·`INVALID_EMAIL_DOMAIN` 재사용.
+- 운영자 이메일 수정은 학교메일 **코드 인증을 다시 안 거친다**(도메인·중복만). 의도한 것.
+- 비활성 회원 본인은 `/api/dating/**` 를 계속 쓸 수 있다. 본인 추천 조회까지 막을지는 미결.
+- `member` 삭제 API 는 만들지 않았다 — `thread_ledger` 까지 cascade 되므로 팀 결정 후.
+- 토큰 1개라 누가 처리했는지 추적 불가. 관리자 여럿·축제 후 지속이면 `member.role`.
+- 운영·개발이 같은 버킷(`wks-s3-bucket`)을 쓴다. 키가 랜덤 UUID 라 충돌은 없지만 dev 테스트 사진이 운영 버킷에 쌓인다.
+
+**막힌 것 / 넘기는 것**
+- 개발 `.env` `ADMIN_TOKEN` (위 "막혀 있는 것" 표). 넣은 뒤 개발 서버에서 기획자와 5개 시나리오(검색·수정·비활성·사진·삭제) 수동 검증.
+- 팀 채널 공지(`dating/`·`admin/`·V26·compose·`application.yml`) **아직 안 함** — PR 전에.
+
+**문서 변경**
+- `docs/admin-api.md` 신설, `architecture.md` §2 Spring Security 행, 이 파일(V26 예약·막힌 것)
+
+**프론트에 알려야 할 것**
+- 없음 (프론트 API 변경 없음)
 
 ### 2026-09-29 (화) · 차은호 · saju/ 503·타임아웃 쿨다운을 무료 전체 단위로 (#142) · Claude Code
 
