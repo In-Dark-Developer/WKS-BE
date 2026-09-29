@@ -47,6 +47,16 @@ public interface CompatibilityRepository extends JpaRepository<Compatibility, Lo
             """)
     List<Compatibility> findAllByOriginIdWithResults(@Param("resultId") UUID resultId);
 
+    /** 이 결과가 친구(guest)인 궁합 — 친구가 로그인하면 공유자에게 보상을 소급 지급하기 위함 */
+    @Query("""
+            SELECT compatibility
+            FROM Compatibility compatibility
+            JOIN FETCH compatibility.origin
+            JOIN FETCH compatibility.guest
+            WHERE compatibility.guest.id = :resultId
+            """)
+    List<Compatibility> findAllByGuestIdWithResults(@Param("resultId") UUID resultId);
+
     @Query("""
             SELECT compatibility
             FROM Compatibility compatibility
