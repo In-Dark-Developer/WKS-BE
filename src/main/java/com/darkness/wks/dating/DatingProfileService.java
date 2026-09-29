@@ -128,13 +128,17 @@ public class DatingProfileService {
 
     private void validate(Long memberId, DatingProfileRequest request) {
         validateEmail(memberId, normalize(request.email()));
-        if (request.contactMethod() == ContactMethod.PHONE
-                && !PHONE_PATTERN.matcher(request.contactValue()).matches()) {
+        validateContact(request.contactMethod(), request.contactValue());
+    }
+
+    // 아래 셋은 관리자 수정(DatingAdminService)이 같은 규칙을 쓰도록 패키지에 연다
+    static void validateContact(ContactMethod contactMethod, String contactValue) {
+        if (contactMethod == ContactMethod.PHONE && !PHONE_PATTERN.matcher(contactValue).matches()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
     }
 
-    private void validateEmail(Long memberId, String email) {
+    void validateEmail(Long memberId, String email) {
         String domain = email.substring(email.lastIndexOf('@') + 1);
         Set<String> allowed = Arrays.stream(allowedDomainsRaw.split(","))
                 .map(String::trim).map(value -> value.toLowerCase(Locale.ROOT))
@@ -150,7 +154,7 @@ public class DatingProfileService {
         }
     }
 
-    private static String normalize(String email) {
+    static String normalize(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 }

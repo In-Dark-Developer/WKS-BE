@@ -117,6 +117,10 @@ app:
       mode: ${REAPPLY_CAMPAIGN_MODE:off}
   dating:
     email-verification-ttl-minutes: 30
+  admin:
+    # 소개팅 관리자 API(/api/admin/**)·/admin.html 의 토큰. 비어 있으면 관리자 API 만 전부 401 (admin/AdminAuthInterceptor).
+    # openssl rand -hex 32 로 생성, 운영·개발 다른 값
+    token: ${ADMIN_TOKEN:}
   aws:
     region: ${AWS_REGION:ap-northeast-2}
     s3:

@@ -25,6 +25,9 @@ gemini:
 # 카카오 로그인 — 값을 안 채우면 로그인 API 만 KAKAO_UNAVAILABLE 로 비활성화되고 나머지는 그대로 기동한다.
 # redirectUri 는 프론트가 실제로 쓰는 콜백 주소와 정확히 같아야 한다 (예: http://localhost:5173/dev/kakao-callback).
 app:
+  # 소개팅 관리자 API·/admin.html (docs/admin-api.md). 로컬에서 써 볼 때만 아무 값이나 넣는다. 비면 관리자 API 만 401.
+  admin:
+    token: ${ADMIN_TOKEN:}
   auth:
     allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS:http://localhost:5173/dev/kakao-callback}
     # HTTPS 가 아니라서 false — 안 그러면 브라우저가 로그인 쿠키를 저장하지 않는다.
