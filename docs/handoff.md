@@ -58,6 +58,7 @@
 
 | 번호  | 예약자 | 내용 | 상태 |
 |-----|---|---|---|
+| V27 | hairyung2002 | `result` 에 `claimed_member_id BIGINT` (결과를 만든 계정 — 친구 보상 로그인 순서 무관, 2026-09-30). **V26(#147) 뒤에 머지** | PR |
 | V26 | 차은호 | #147 `dating_profile` 에 `deactivated_at TIMESTAMPTZ` (운영자 비활성화). **V25(#123) 뒤에 머지** | PR |
 | V25 | 차은호 | #123 `dating_request` 에 `recipient_reason TEXT` (받은 사람 기준 궁합 이유 캐시) | PR |
 | V24 | 곽도윤 | `dating_email_code` (소개팅 학교메일 **6자리 코드** 인증, 프로필 등록 전에 인증. 회원당 1행). V21 매직링크 흐름을 대체 | 구현 완료, PR 대기 |
@@ -119,6 +120,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-09-30 | **[실 지급 로그인 순서 무관, 프론트 대응 필요]** ① `POST /api/auth/kakao` 요청에 `resultIds: string[]`(선택) 추가 — 로그인 전에 이 브라우저가 만든 결과들. 보내면 그 결과로 남긴 궁합지도 별의 친구 보상을 소급 ② `GET /api/wallet` 응답에 `partnerRewards: string[]` 추가 ③ 회원이 없는 토큰은 인증 API 에서 401 + 쿠키 삭제(이전 `/api/me` 200·지갑 쓰기 500). 필드 추가만이라 기존 FE 그대로 동작. FE 할 일(`ref` localStorage·5xx 에서 안 지우기·결과 목록 보관·지급 완료 표시)은 FE 요청 문서로 전달. `api-spec.md` §9·§12 | ❌ |
 | 2026-09-29 | #144 궁합지도 친구 등록 보상 **5명마다 3실 → 로그인 친구 1명당 2실.** 익명 결과로 등록한 친구는 안 센다. API 형식 변경 없음. **프론트 확인 요청**: 로그인 상태인 친구가 공유 링크에서 새 결과를 만들면 계정에 이미 결과가 있을 때 익명으로 남아 보상이 안 붙는다 — 로그인 상태면 계정 결과(`GET /api/me/result`)로 `POST /api/compatibilities/{shareId}` 를 부르는 게 맞다. 비로그인 친구에게는 "로그인하면 공유자에게 실이 간다" 안내 문구 검토. `api-spec.md` §12 | ❌ |
 | 2026-09-29 | **리롤 비용 5실 → 20실** (하루 1회 무료는 그대로). 응답 `rerollCost` 가 무료분을 다 쓰면 `20` 으로 온다 — 버튼 문구를 하드코딩했다면 `rerollCost` 값으로 표시. 잔액 20 미만이면 402. `api-spec.md` §10.4·§10.4.1·§12 | ❌ |
 | 2026-09-29 | 궁합지도 친구 등록 보상 **1명당 3실 → 서로 다른 친구 5명마다 3실**. API 형식 변경 없음, 안내 문구만 수정. `api-spec.md` §12 | ❌ |
@@ -186,6 +188,37 @@
 ---
 
 ## 기록
+
+### 2026-09-30 (수) · hairyung2002 · result/·compatibility/·member/·auth/·wallet/·common/ 실 지급 로그인 순서 무관 + 죽은 토큰 401 (이슈 없음) · Claude Code
+
+**한 일**
+- 친구 보상(+2)을 로그인 순서와 무관하게 만들었다. `result.claimed_member_id`(V27)에 "결과를 만든 계정"을 기록하고, 보상 주인은 `member_id ?? claimed_member_id`(`Result.getOwnerMemberId`)로 본다. 기록 시점 셋: 로그인한 채 결과 생성(`ResultSaver`, 계정에 대표 결과가 이미 있을 때), 로그인한 채 주인 없는 결과로 별(`CompatibilityService`, `@OptionalMember`), 로그인하며 브라우저 결과 제시(`MemberService.loginAndLink` 의 `resultId`·새 `resultIds`, 계정에 결과가 있어도). 주인이 정해지면 그 결과가 낀 궁합을 전부 다시 평가한다(`MapFriendRewardService.rewardAllOf`).
+- `JwtAuthInterceptor`·`OptionalMemberArgumentResolver` 가 회원 행 존재도 확인한다(`common/auth/MemberExistence`, 구현은 `member/MemberExistenceChecker`). 인증 경로는 401 + 쿠키 삭제, 선택 경로는 비로그인 취급.
+- `GET /api/wallet` 에 `partnerRewards`(받은 제휴 코드 목록).
+- 테스트: `MapFriendRewardFlowTest` 시나리오 6개 추가(계정 결과 있는 친구가 익명 별 → 로그인, 로그인 친구의 비대표 결과, 결과 여러 개 제시, 공유자 나중 로그인, 자기 지도, 주인 덮어쓰기 방지), `WalletFlowTest` 신규(partnerRewards, 죽은 토큰 401), `ResultCreateFlowTest` 2건 보강.
+
+**건드린 파일/패키지**
+- 신규 `db/migration/V27__add_result_claimed_member_id.sql`, `common/auth/MemberExistence`, `member/MemberExistenceChecker`, `test/.../wallet/WalletFlowTest`
+- 수정 `result/entity/Result`·`ResultSaver`, `compatibility/CompatibilityService`·`CompatibilityController`·`MapFriendRewardService`, `member/MemberService`, `auth/AuthService`·`dto/KakaoLoginRequest`, `common/auth/JwtAuthInterceptor`·`OptionalMemberArgumentResolver`, `wallet/WalletController`·`WalletService`·`ThreadLedgerRepository`·`dto/WalletResponse`
+
+**다음 사람이 알아야 할 것**
+- **`claimed_member_id` 는 보상 판단 전용이다.** 대표 결과(`member_id`, 계정당 1개)·복원(`restoredResultId`)·`/api/me/result`·소개팅은 그대로 `member_id` 만 본다. 계정 우선(plan §1.1)은 바뀌지 않았다.
+- 이미 주인(`member_id` 또는 `claimed_member_id`)이 있는 결과는 덮어쓰지 않는다. 로그인 시 claim 은 대표 연결(`REQUIRES_NEW`) 뒤에 `findAllByIdForUpdate` 로 새로 읽는다 — 순서를 바꾸면 방금 연결된 결과를 옛 상태로 보고 claim 한다. 소급 지급(`ResultLinkedEvent`)은 결과 행을 다 잠근 **뒤에** 발행한다 — 궁합 생성과 잠금 순서(결과 행 → 원장 advisory lock)를 맞춰 교착을 피한다.
+- `@OptionalMember` 가 이제 회원 존재를 확인하느라 쿠키가 있는 사주·궁합 요청마다 PK 조회가 하나 늘었다.
+- `resultIds` 는 앞 20개만 본다(`MemberService.MAX_CLAIMED_RESULTS`). 길이 초과로 로그인을 막지 않는다.
+- plan §5.8 의 "로그인 유저 중복 **등록** 방지"(TBD-14)는 여전히 미정이다. 이번 건은 **지급** 중복만 친구 계정당 1회로 막는다.
+
+**막힌 것 / 넘기는 것**
+- `common/`(곽도윤)·`compatibility/`·`result/`(최선우) 수정 — 팀 채널 공지 필요. `db/migration/` V27 도 공지.
+- FE 대응(아래)이 있어야 "로그인 전에 결과를 여러 개 만든 경우"와 축제 `ref` 탭 유실까지 해결된다.
+
+**문서 변경**
+- `plan.md` §1.4 표(친구 +2·제휴), §5.8 실 지급, TBD-14 주석
+- `architecture.md` 설계 원칙 1, 스키마(V27)
+- `api-spec.md` §9 요청 `resultIds`·인증 규칙, §12 획득 표·`GET /api/wallet`
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 2026-09-30 행. FE 할 일: `wks:partner-ref` localStorage 로, `claimPendingPartnerRef` 는 성공·`INVALID_INPUT` 에서만 삭제, 로그인 전 만든 결과 id 를 `wks:my-results` 로 모아 로그인 요청 `resultIds` 로 보내고 성공·로그아웃 시 삭제, 실 현황 모달 "지급 완료"는 `partnerRewards`.
 
 ### 2026-09-29 (화) · hairyung2002 · admin/ 축제 통계 + admin.html 버튼 잠금 (이슈 없음) · Claude Code
 
