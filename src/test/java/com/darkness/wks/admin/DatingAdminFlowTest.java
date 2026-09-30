@@ -9,6 +9,7 @@ import com.darkness.wks.dating.DatingProfileRepository;
 import com.darkness.wks.dating.DatingRecommendationRepository;
 import com.darkness.wks.dating.DatingReasonGenerator;
 import com.darkness.wks.dating.DatingRequestRepository;
+import com.darkness.wks.dating.dto.DatingPhotoUploadResponse;
 import com.darkness.wks.dating.entity.DatingPhoto;
 import com.darkness.wks.dating.entity.DatingProfile;
 import com.darkness.wks.dating.entity.DatingRecommendation;
@@ -206,6 +207,27 @@ class DatingAdminFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.deactivatedAt").isEmpty());
         assertThat(profileRepository.findEligible()).extracting(DatingProfile::getId).contains(target.getId());
+    }
+
+    @Test
+    void 사진_업로드_URL_발급은_사진_행을_실제로_남긴다() throws Exception {
+        // 운영에서 readOnly 트랜잭션이 INSERT 를 버려 photoId 만 나가고 행이 없던 사고의 회귀 테스트.
+        // 서비스는 목이라 실제 save 경로를 흉내 낸다 — 바깥 트랜잭션이 readOnly 면 이 save 가 사라진다
+        DatingProfile target = profile(9302, Gender.FEMALE, "target-upload@dgu.ac.kr");
+        when(photoService.createUploadUrl(eq(target.getMemberId()), eq("image/jpeg"))).thenAnswer(invocation -> {
+            DatingPhoto photo = photoRepository.save(
+                    new DatingPhoto(target.getMemberId(), "dating-photos/" + target.getMemberId() + "/issued.jpg"));
+            return new DatingPhotoUploadResponse("https://s3/put", photo.getId(), 600);
+        });
+
+        String body = mvc().perform(post("/api/admin/dating/profiles/" + target.getId() + "/photo-upload-url")
+                        .header("X-Admin-Token", TOKEN).contentType("application/json")
+                        .content("{\"contentType\":\"image/jpeg\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        UUID photoId = UUID.fromString(body.replaceAll(".*\"photoId\":\"([^\"]+)\".*", "$1"));
+
+        assertThat(photoRepository.findById(photoId)).isPresent();
     }
 
     @Test
