@@ -1,6 +1,7 @@
 package com.darkness.wks.dating.dto;
 
 import com.darkness.wks.common.ContactMethod;
+import com.darkness.wks.dating.DatingUnlockField;
 import com.darkness.wks.dating.dto.DatingRecommendationResponse.LockedField;
 import com.darkness.wks.dating.entity.DatingProfile;
 import com.darkness.wks.dating.entity.DatingRecommendation;
@@ -28,13 +29,16 @@ public record DatingRequestListResponse(
         boolean freeToView = received || accepted;
         DatingProfile other = received ? request.getSender() : request.getRecipient();
         DatingRequestResponse base = DatingRequestResponse.from(request, viewerMemberId);
-        LockedField photo = field(freeToView || recommendation.isPhotoUnlocked(), 10, originalPhotoUrl);
-        LockedField name = field(freeToView || recommendation.isNameUnlocked(), 7, other.getName());
-        LockedField department = field(freeToView || recommendation.isDepartmentUnlocked(), 5,
-                other.getDepartment());
+        LockedField photo = field(freeToView || recommendation.isPhotoUnlocked(),
+                DatingUnlockField.PHOTO.cost(), originalPhotoUrl);
+        LockedField name = field(freeToView || recommendation.isNameUnlocked(),
+                DatingUnlockField.NAME.cost(), other.getName());
+        LockedField department = field(freeToView || recommendation.isDepartmentUnlocked(),
+                DatingUnlockField.DEPARTMENT.cost(), other.getDepartment());
         // 받은 목록은 받은 사람 시점 문장. 보낸 목록은 수락 후 무료로, 그전에는 카드 해금 상태대로 보여준다.
         LockedField reason = received ? LockedField.unlocked(request.getRecipientReason())
-                : field(freeToView || recommendation.isReasonUnlocked(), 3, recommendation.getReasonContent());
+                : field(freeToView || recommendation.isReasonUnlocked(), DatingUnlockField.REASON.cost(),
+                        recommendation.getReasonContent());
         Counterpart counterpart = new Counterpart(recommendation.getScore(), age, other.getMbti(), other.getBio(),
                 blurredPhotoUrl, new ProfileFields(photo, name, department, reason));
         return new DatingRequestListResponse(base.requestId(), base.candidateId(), base.status(),

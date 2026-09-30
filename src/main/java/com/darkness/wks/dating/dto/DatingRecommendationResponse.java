@@ -1,5 +1,6 @@
 package com.darkness.wks.dating.dto;
 
+import com.darkness.wks.dating.DatingUnlockField;
 import com.darkness.wks.dating.entity.DatingRecommendation;
 
 import java.util.List;
@@ -25,10 +26,12 @@ public record DatingRecommendationResponse(List<CandidateCard> candidates, int r
                                           String blurredPhotoUrl, String unlockedPhotoUrl) {
             var profile = recommendation.getCandidate();
             CandidateFields fields = new CandidateFields(
-                    field(recommendation.isPhotoUnlocked(), 10, unlockedPhotoUrl),
-                    field(recommendation.isNameUnlocked(), 7, profile.getName()),
-                    field(recommendation.isDepartmentUnlocked(), 5, profile.getDepartment()),
-                    field(recommendation.isReasonUnlocked(), 3, recommendation.getReasonContent()));
+                    field(recommendation.isPhotoUnlocked(), DatingUnlockField.PHOTO.cost(), unlockedPhotoUrl),
+                    field(recommendation.isNameUnlocked(), DatingUnlockField.NAME.cost(), profile.getName()),
+                    field(recommendation.isDepartmentUnlocked(), DatingUnlockField.DEPARTMENT.cost(),
+                            profile.getDepartment()),
+                    field(recommendation.isReasonUnlocked(), DatingUnlockField.REASON.cost(),
+                            recommendation.getReasonContent()));
             return new CandidateCard(rank, profile.getId(), recommendation.getScore(), age,
                     profile.getMbti(), profile.getBio(), blurredPhotoUrl, fields);
         }
