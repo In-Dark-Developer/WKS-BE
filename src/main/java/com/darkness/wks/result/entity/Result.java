@@ -91,6 +91,13 @@ public class Result {
     @Column(name = "member_id")
     private Long memberId;
 
+    /**
+     * 이 결과를 만든(또는 로그인하며 제시한) 계정 (V27, 2026-09-30). {@link #memberId} 와 달리 계정당 여러 개다 —
+     * 계정에 대표 결과가 이미 있어 연결되지 않는 결과도 친구 보상의 주인을 알 수 있게 둔다. 보상 판단 외에는 쓰지 않는다.
+     */
+    @Column(name = "claimed_member_id")
+    private Long claimedMemberId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -109,6 +116,25 @@ public class Result {
      */
     public void linkMember(Long memberId) {
         this.memberId = memberId;
+    }
+
+    /** 친구 보상(+2)을 판단할 계정. 대표 결과면 그 계정, 아니면 만든 계정. 둘 다 없으면 익명(null) */
+    public Long getOwnerMemberId() {
+        return memberId != null ? memberId : claimedMemberId;
+    }
+
+    /**
+     * 아직 주인이 없는 결과를 이 계정이 만들었다고 기록한다. 이미 주인이 있으면 덮어쓰지 않는다 — 결과 id 를 쥔
+     * 다른 브라우저가 남의 결과를 가로채지 못하게.
+     *
+     * @return 이번 호출로 주인이 정해졌으면 true
+     */
+    public boolean claimBy(Long memberId) {
+        if (getOwnerMemberId() != null) {
+            return false;
+        }
+        this.claimedMemberId = memberId;
+        return true;
     }
 
     public Result(String nickname, LocalDate birthDate, LocalTime birthTime, String birthRegion,

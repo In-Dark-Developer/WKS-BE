@@ -68,7 +68,8 @@ class CompatibilityServiceTest {
 
         CompatibilityService.CreationResult result = compatibilityService.createCompatibility(
                 origin.getShareId().toString(),
-                new CreateCompatibilityRequest(guest.getId().toString())
+                new CreateCompatibilityRequest(guest.getId().toString()),
+                null
         );
 
         assertThat(result.created()).isTrue();
@@ -101,7 +102,7 @@ class CompatibilityServiceTest {
         });
 
         compatibilityService.createCompatibility(
-                origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()));
+                origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()), null);
 
         // ref_id 는 친구의 memberId — 같은 계정이 결과를 새로 만들어 다시 등록해도 한 번만
         verify(walletService).credit(42L, LedgerReason.MAP_FRIEND, "m:43", 2);
@@ -118,7 +119,7 @@ class CompatibilityServiceTest {
         when(compatibilityRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         compatibilityService.createCompatibility(
-                origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()));
+                origin.getShareId().toString(), new CreateCompatibilityRequest(guest.getId().toString()), null);
 
         verifyNoInteractions(walletService);
     }
@@ -134,7 +135,8 @@ class CompatibilityServiceTest {
 
         CompatibilityService.CreationResult result = compatibilityService.createCompatibility(
                 origin.getShareId().toString(),
-                new CreateCompatibilityRequest(guest.getId().toString())
+                new CreateCompatibilityRequest(guest.getId().toString()),
+                null
         );
 
         assertThat(result.created()).isFalse();
@@ -152,7 +154,8 @@ class CompatibilityServiceTest {
 
         assertThatThrownBy(() -> compatibilityService.createCompatibility(
                 origin.getShareId().toString(),
-                new CreateCompatibilityRequest(origin.getId().toString())
+                new CreateCompatibilityRequest(origin.getId().toString()),
+                null
         )).isInstanceOfSatisfying(BusinessException.class,
                 exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SELF_COMPATIBILITY));
 
@@ -167,7 +170,8 @@ class CompatibilityServiceTest {
 
         assertThatThrownBy(() -> compatibilityService.createCompatibility(
                 shareId.toString(),
-                new CreateCompatibilityRequest(guestId.toString())
+                new CreateCompatibilityRequest(guestId.toString()),
+                null
         )).isInstanceOfSatisfying(BusinessException.class,
                 exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESULT_NOT_FOUND));
 
@@ -178,7 +182,8 @@ class CompatibilityServiceTest {
     void rejectsMalformedResultId() {
         assertThatThrownBy(() -> compatibilityService.createCompatibility(
                 "not-a-uuid",
-                new CreateCompatibilityRequest(UUID.randomUUID().toString())
+                new CreateCompatibilityRequest(UUID.randomUUID().toString()),
+                null
         )).isInstanceOfSatisfying(BusinessException.class,
                 exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
 
