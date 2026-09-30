@@ -1,5 +1,6 @@
 package com.darkness.wks.compatibility;
 
+import com.darkness.wks.common.auth.OptionalMember;
 import com.darkness.wks.common.response.ApiResponse;
 import com.darkness.wks.common.response.ErrorResponse;
 import com.darkness.wks.compatibility.dto.CompatibilityResponse;
@@ -60,9 +61,11 @@ public class CompatibilityController {
     public ResponseEntity<ApiResponse<CompatibilityResponse>> createCompatibility(
             @Parameter(description = "공유 링크 UUID v4 ID", schema = @Schema(type = "string", format = "uuid"))
             @PathVariable String shareId,
-            @Valid @RequestBody CreateCompatibilityRequest request
+            @Valid @RequestBody CreateCompatibilityRequest request,
+            // 로그인 없이 동작한다. 쿠키가 있으면 친구 보상 판단에만 쓴다(없거나 틀려도 null)
+            @Parameter(hidden = true) @OptionalMember Long memberId
     ) {
-        CompatibilityService.CreationResult result = compatibilityService.createCompatibility(shareId, request);
+        CompatibilityService.CreationResult result = compatibilityService.createCompatibility(shareId, request, memberId);
         HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(ApiResponse.success(result.response()));
     }

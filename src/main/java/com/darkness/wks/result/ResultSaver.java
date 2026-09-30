@@ -24,13 +24,17 @@ class ResultSaver {
 
     /**
      * @param memberId 로그인했으면 회원 id. 계정에 결과가 없을 때만 새 결과를 연결한다(계정 우선, TBD-14 중 결과 생성 부분).
-     *                 회원 행 잠금은 해석이 끝난 이 시점에만 잡는다 — 잠근 채로 LLM 을 기다리지 않게
+     *                 회원 행 잠금은 해석이 끝난 이 시점에만 잡는다 — 잠근 채로 LLM 을 기다리지 않게.
+     *                 계정 결과가 이미 있으면 연결은 안 하고 만든 계정만 남긴다 — 이 결과로 남긴 별도 친구 보상에 세게(V27)
      */
     @Transactional
     ResultResponse save(Result result, ResultAnalysisPort.AnalysisResult analysis, int version, Long memberId) {
-        if (memberId != null && resultRepository.lockMember(memberId).isPresent()
-                && !resultRepository.existsByMemberId(memberId)) {
-            result.linkMember(memberId);
+        if (memberId != null && resultRepository.lockMember(memberId).isPresent()) {
+            if (resultRepository.existsByMemberId(memberId)) {
+                result.claimBy(memberId);
+            } else {
+                result.linkMember(memberId);
+            }
         }
         Result saved = resultRepository.save(result);
 

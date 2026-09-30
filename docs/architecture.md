@@ -244,7 +244,7 @@ wallet  →  (다른 도메인)  금지 (원장이 가장 아래)
 
 **설계 원칙**
 
-1. **사주는 로그인을 요구하지 않는다.** JWT 검증은 인증 경로에만 건다. 사주·궁합·공유 API 는 쿠키를 읽지 않는다. 익명 API 가 회원을 알아야 하는 경우(plan §5.8 중복 등록 방지)는 `TBD-14` 결정 전까지 구현하지 않는다.
+1. **사주는 로그인을 요구하지 않는다.** JWT 검증은 인증 경로에만 건다. 사주 결과 생성·궁합 생성은 `@OptionalMember` 로 쿠키를 **선택적으로만** 읽는다 — 없거나 틀리거나 회원 행이 없는 토큰이면 비로그인과 똑같이 동작하고 401 을 내지 않는다. 읽은 회원은 계정 연결(plan §1.1)과 친구 보상의 주인 기록(`result.claimed_member_id`, plan §5.8, 2026-09-30)에만 쓴다. 인증 경로(`JwtAuthInterceptor`)와 `@OptionalMember` 는 서명·만료에 더해 **회원 행이 남아 있는지**도 확인한다(2026-09-30 — DB 에서 지워진 회원의 토큰이 원장 FK 위반 500 을 냈다). 인증 경로면 401 과 쿠키 삭제, 선택 경로면 비로그인으로 본다.
 2. **결과와 계정은 `result.member_id` 로 연결한다.** nullable, 계정당 결과 1개(부분 unique). 연결 규칙은 plan §1.1(계정 결과 우선, 브라우저 결과는 삭제·병합하지 않음)이고, 로그인 요청에 `resultId` 가 실렸을 때만 연결한다. `Result` 는 `Long memberId` 만 가지며 `member` 패키지를 참조하지 않는다. 로그인한 클라이언트는 `resultId` 를 저장해 두지 않아도 `GET /api/me/result` 로 내 결과를 받는다.
 3. **카카오 프로필을 저장하지 않는다.** 동의항목 없이 `id` 만 쓰고 `member` 는 `kakao_id` 만 가진다. `kakao_id` UNIQUE 가 중복 계정·중복 신청을 막는다.
 4. **JWT.** HS256, 서명키는 환경변수, 알고리즘을 고정하고(헤더의 `alg` 를 믿지 않는다), 클레임은 `sub`(memberId)·`iat`·`exp` 만 담는다. 만료 15일·갱신 없음(2026-09-21 결정, 2026-09-23 30일→15일로 조정)이고 만료되면 재로그인한다. **서버 쪽 토큰 폐기·기기 관리는 하지 않는다(2026-09-21 결정 유지).** 로그아웃은 `POST /api/auth/logout` 이 쿠키를 지운다(2026-09-25, 이전엔 프론트가 로컬 토큰을 지우는 방식뿐이었다) — 그 전에 탈취된 사본은 만료까지 그대로 유효하다. 서명키를 바꾸면 전원이 로그아웃된다. **토큰은 HttpOnly 쿠키로 내려가 JS 가 값을 읽을 수 없다(2026-09-25, XSS 노출 완화) — CSRF 는 `SameSite=Lax` + 상태변경 API 는 전부 POST/PATCH 로 막는다(별도 CSRF 토큰 없음).**
@@ -346,6 +346,10 @@ CREATE TABLE member (
 -- 계정과 결과 연결 (plan §1.1). 계정당 결과 1개. 회원이 없어지면 결과는 익명으로 남는다
 ALTER TABLE result ADD COLUMN member_id BIGINT REFERENCES member(id) ON DELETE SET NULL;
 CREATE UNIQUE INDEX uq_result_member ON result(member_id) WHERE member_id IS NOT NULL;
+
+-- 결과를 만든(또는 로그인하며 제시한) 계정 (V27, 2026-09-30). member_id(대표 결과, 계정당 1개)와 달리 계정당 여러 개.
+-- 친구 보상 판단(COALESCE(member_id, claimed_member_id))에만 쓰고, 대표 결과·복원·소개팅은 member_id 만 본다 (plan §5.8)
+ALTER TABLE result ADD COLUMN claimed_member_id BIGINT REFERENCES member(id) ON DELETE SET NULL;
 
 -- 실 원장 (plan §1.4·§9.4, V12 예약 — 소개팅 BE 와 함께). 모든 증감을 기록하고 잔액은 합계로 계산한다
 CREATE TABLE thread_ledger (

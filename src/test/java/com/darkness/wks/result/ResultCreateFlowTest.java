@@ -114,10 +114,26 @@ class ResultCreateFlowTest {
         mvc.perform(post("/api/results").cookie(cookie).contentType("application/json").content(body("2001-01-02")))
                 .andExpect(status().isCreated());
 
-        // 계정당 결과 1개 — 두 번째 결과는 익명으로 남는다
+        // 계정당 결과 1개 — 두 번째 결과는 대표 결과가 아니지만, 친구 보상용으로 만든 계정은 남긴다(V27)
         assertThat(resultRepository.findByMemberId(member.getId())).get()
                 .extracting(r -> r.getBirthDate().toString()).isEqualTo("2001-01-01");
         assertThat(resultRepository.findAll()).filteredOn(r -> r.getGender() == Gender.MALE
-                && "2001-01-02".equals(r.getBirthDate().toString())).allMatch(r -> r.getMemberId() == null);
+                && "2001-01-02".equals(r.getBirthDate().toString()))
+                .allMatch(r -> r.getMemberId() == null && member.getId().equals(r.getClaimedMemberId()));
+    }
+
+    @Test
+    void tokenOfDeletedMemberCreatesAnonymousResult() throws Exception {
+        // 서명은 맞지만 회원 행이 없는 토큰 — 계정을 기록하면 FK 위반 500 이라, 비로그인처럼 만들어져야 한다
+        Cookie cookie = new Cookie("wks_token", jwtProvider.issue(Long.MAX_VALUE));
+
+        String response = mvc.perform(post("/api/results").cookie(cookie).contentType("application/json")
+                        .content(body("2001-01-03")))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID resultId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(response, "$.data.resultId"));
+        assertThat(resultRepository.findById(resultId)).get()
+                .satisfies(r -> assertThat(r.getOwnerMemberId()).isNull());
     }
 }

@@ -542,7 +542,8 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
   "code": "카카오가 준 인가 코드",
   "redirectUri": "https://threadoffate.site/auth/kakao/callback",
   "resultId": "3f2a9c1e-....",
-  "ref": "PARTNER01"
+  "ref": "PARTNER01",
+  "resultIds": ["3f2a9c1e-....", "8b1d0f2a-...."]
 }
 ```
 
@@ -552,6 +553,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `redirectUri` | string | ✅ | 인가 요청에 쓴 것과 **같은 값**. 서버에 등록된 주소만 허용한다. 아니면 `INVALID_INPUT` 400 |
 | `resultId` | string \| `null` | 선택 | 브라우저에 저장된 사주 결과 id. 있으면 아래 표대로 계정에 연결·복원한다. 없거나 형식이 틀리거나 존재하지 않아도 **로그인은 성공**한다 (연결만 생략) |
 | `ref` | string \| `null` | 선택 | 제휴 코드(축제 사이트는 `FESTIVAL`, 대소문자 무관). 등록된 코드면 계정당 1회 보상(§12). 모르는 값은 조용히 무시하고 로그인은 성공한다 |
+| `resultIds` | string[] \| `null` | 선택 (2026-09-30 추가) | 이 브라우저가 **로그인 전에** 만든 결과 id 들(`resultId` 포함해도 된다). 대표 결과 연결(아래 표)과는 별개로, 어느 계정에도 속하지 않은 결과는 이 계정이 만든 것으로 기록해 그 결과로 남긴 궁합지도 별의 친구 보상을 소급한다(§12). 앞에서부터 20개만 본다. 형식이 틀리거나 없거나 이미 주인이 있는 id 는 조용히 무시하고 로그인은 성공한다. 로그인한 뒤 만든 결과는 서버가 바로 기록하므로 보낼 필요 없다 |
 
 **Response 200**
 
@@ -644,7 +646,8 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
 
 ### 인증 규칙
 
-- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 소개팅(`/api/dating/**`), 이후 실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 쿠키 없이 동작하고, 보내도 무시된다**
+- 인증이 필요한 API: `GET /api/me`, `GET /api/me/result`, 소개팅(`/api/dating/**`), 이후 실(`/api/wallet/**`). **사주·궁합·공유·사전등록 API 는 쿠키 없이 동작한다.** 사주 결과 생성(`POST /api/results`)·궁합 생성(`POST /api/shares/{shareId}/compatibility`)은 쿠키가 있으면 계정 연결·친구 보상 판단에만 쓰고, 없거나 틀려도 비로그인과 똑같이 응답한다(401 없음)
+- 서명·만료가 유효해도 **회원이 없는 토큰**(DB 에서 지워진 계정)은 인증 API 에서 `401 UNAUTHENTICATED` 와 쿠키 삭제(`Max-Age=0`)로 응답한다 (2026-09-30, 이전엔 `/api/me` 200·지갑 쓰기 500)
 - 인증이 필요한 API 는 반드시 `credentials: 'include'`(axios는 `withCredentials: true`) 로 호출한다 — 안 그러면 브라우저가 쿠키를 안 실어 보내 401 이 난다
 - `401 UNAUTHENTICATED` 를 받으면 로그인 화면으로 보낸다 (프론트가 지울 토큰은 없다 — 쿠키는 서버가 관리)
 - 토큰을 URL 쿼리에 넣지 않는다. `Authorization` 헤더도 쓰지 않는다 — **쿠키 하나로만 인증한다** (2026-09-25 전환)
@@ -1049,8 +1052,8 @@ V1에서 만드는 건 잔액 조회·출석 체크·제휴처 유입 보상·�
 |---|---|---|
 | 가입 | 10 | 카카오 최초 로그인 성공 시 자동(계정당 1회) |
 | 출석 체크 | 5 | `POST /api/wallet/check-in` 호출, KST 날짜 기준 1일 1회 |
-| 친구 궁합지도 등록 | 로그인 친구 1명당 2 | 내 공유 링크로 친구가 궁합을 생성할 때 자동. **친구의 결과가 로그인 계정에 연결된 경우만** 센다(2026-09-29, "5명마다 3"에서 변경 — 익명 결과 반복 생성 악용 차단). 같은 친구 계정은 한 번, 내 계정은 제외. 나·친구 어느 쪽이든 로그인 전이면 나중에 로그인해 결과가 계정에 연결될 때 소급 지급 |
-| 제휴처 배너 유입 | 축제 사이트(`FESTIVAL`) 10 | 제휴 링크(`?ref=FESTIVAL`)로 들어와 로그인하면 `POST /api/auth/kakao` 의 `ref` 로, 이미 로그인 상태면 `POST /api/wallet/partner-rewards` 로. 계정당 코드별 1회, 가입 시점 무관 (2026-09-28) |
+| 친구 궁합지도 등록 | 로그인 친구 1명당 2 | 내 공유 링크로 친구가 궁합을 생성할 때 자동. **별을 남긴 친구의 계정이 확인된 경우만** 센다(2026-09-29, "5명마다 3"에서 변경 — 익명 결과 반복 생성 악용 차단). 같은 친구 계정은 한 번, 내 계정은 제외. **로그인 순서와 무관하다**(2026-09-30): 친구가 로그인한 채 별을 남기면 바로, 별을 남긴 뒤 로그인하면 그때(로그인 요청의 `resultId`·`resultIds`, §9), 내가 나중에 로그인해도 그때 소급 지급. 친구 계정에 결과가 이미 있어도 된다 |
+| 제휴처 배너 유입 | 축제 사이트(`FESTIVAL`) 10 | 제휴 링크(`?ref=FESTIVAL`)로 들어와 로그인하면 `POST /api/auth/kakao` 의 `ref` 로, 이미 로그인 상태면 `POST /api/wallet/partner-rewards` 로. 계정당 코드별 1회, 가입 시점 무관 (2026-09-28). 프론트는 `ref` 를 로그인 완료나 지급 성공까지 보관한다 (2026-09-30) |
 
 | 소모 (정보 해금, §10.5) | 양 |
 |---|---|
@@ -1070,8 +1073,10 @@ V1에서 만드는 건 잔액 조회·출석 체크·제휴처 유입 보상·�
 **응답 200**
 
 ```json
-{ "success": true, "data": { "balance": 18, "canCheckInToday": true } }
+{ "success": true, "data": { "balance": 18, "canCheckInToday": true, "partnerRewards": ["FESTIVAL"] } }
 ```
+
+- `partnerRewards` (2026-09-30 추가): 이 계정이 받은 제휴 코드 목록(대문자). 받은 게 없으면 `[]`. 실 현황의 "지급 완료" 표시에 쓴다
 
 ### `POST /api/wallet/check-in`
 

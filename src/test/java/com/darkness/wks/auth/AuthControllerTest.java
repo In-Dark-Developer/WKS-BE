@@ -37,7 +37,7 @@ class AuthControllerTest {
 
     @Test
     void 로그인_성공시_Set_Cookie로_토큰을_내려주고_바디에는_안_담는다() {
-        KakaoLoginRequest request = new KakaoLoginRequest("code", "https://redirect", null, null);
+        KakaoLoginRequest request = new KakaoLoginRequest("code", "https://redirect", null, null, null);
         KakaoLoginResponse body = new KakaoLoginResponse(true, null, null);
         when(authService.login(request)).thenReturn(new AuthService.LoginOutcome("jwt-value", body));
         MockHttpServletResponse response = new MockHttpServletResponse();

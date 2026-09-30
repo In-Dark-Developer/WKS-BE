@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 
 @Tag(name = "Wallet", description = "실(재화) 잔액·출석. 로그인 쿠키(wks_token) 필요")
 @SecurityRequirement(name = "cookieAuth")
@@ -36,12 +37,15 @@ public class WalletController {
         this.partnerRewardService = partnerRewardService;
     }
 
-    @Operation(summary = "실 잔액", description = "잔액과 오늘 출석 가능 여부를 돌려준다 (plan.md §8.7).")
+    @Operation(summary = "실 잔액", description = """
+            잔액, 오늘 출석 가능 여부, 받은 제휴 코드 목록(partnerRewards, 예: ["FESTIVAL"])을 돌려준다 (plan.md §8.7).
+            """)
     @GetMapping
     public ApiResponse<WalletResponse> wallet(@CurrentMember Long memberId) {
         int balance = walletService.getBalance(memberId);
         boolean canCheckIn = !walletService.hasCredited(LedgerReason.CHECK_IN, memberId, today());
-        return ApiResponse.success(new WalletResponse(balance, canCheckIn));
+        List<String> partnerRewards = walletService.creditedRefIds(memberId, LedgerReason.PARTNER);
+        return ApiResponse.success(new WalletResponse(balance, canCheckIn, partnerRewards));
     }
 
     @Operation(summary = "출석 체크", description = """
