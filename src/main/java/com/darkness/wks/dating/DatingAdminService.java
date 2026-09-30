@@ -95,7 +95,10 @@ public class DatingAdminService {
         return response(profile);
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * readOnly 트랜잭션으로 감싸면 안 된다 — 안에서 사진 행을 INSERT 하는데 readOnly 는 flush 를 버려
+     * photoId 만 응답에 나가고 행은 남지 않는다(2026-09-30 운영에서 교체가 전부 INVALID_INPUT 으로 실패한 원인).
+     */
     public DatingPhotoUploadResponse createPhotoUploadUrl(UUID profileId, String contentType) {
         // 사진 행은 그 회원 소유로 만든다 — 교체 시 verifyOwnedPhoto 가 같은 규칙으로 검사한다
         return photoService.createUploadUrl(load(profileId).getMemberId(), contentType);
