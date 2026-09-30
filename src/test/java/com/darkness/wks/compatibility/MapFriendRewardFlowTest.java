@@ -20,6 +20,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,7 +71,7 @@ class MapFriendRewardFlowTest {
 
     private void register(Result origin, Result guest) {
         compatibilityService.createCompatibility(origin.getShareId().toString(),
-                new CreateCompatibilityRequest(guest.getId().toString()));
+                new CreateCompatibilityRequest(guest.getId().toString()), null);
     }
 
     private long newMember() {
@@ -129,5 +130,100 @@ class MapFriendRewardFlowTest {
         // 친구가 나중에 로그인해 그 결과를 계정에 연결 → 공유자에게 +2
         memberService.loginAndLink(kakaoId(), guest.getId().toString());
         assertThat(walletService.getBalance(memberId)).isEqualTo(2);
+    }
+
+    // ---- 로그인 순서와 무관하게 같은 결과 (2026-09-30, V27 claimed_member_id) ----
+
+    private void register(Result origin, Result guest, Long requesterMemberId) {
+        compatibilityService.createCompatibility(origin.getShareId().toString(),
+                new CreateCompatibilityRequest(guest.getId().toString()), requesterMemberId);
+    }
+
+    private Member memberWithResult() {
+        Member member = memberRepository.saveAndFlush(new Member(kakaoId()));
+        result("무진", Gender.FEMALE, member.getId());
+        return member;
+    }
+
+    @Test
+    void friendWhoseAccountHasResultStarsAnonymouslyThenLogsIn() {
+        long owner = newMember();
+        Result origin = result("갑자", Gender.MALE, owner);
+        Member friend = memberWithResult();
+
+        // 인앱 브라우저 등 비로그인으로 새 결과를 만들어 별을 남긴다 — 이때는 누구 별인지 모른다
+        Result anonymous = result("을축", Gender.FEMALE, null);
+        register(origin, anonymous);
+        assertThat(walletService.getBalance(owner)).isZero();
+
+        // 로그인하면 계정 결과가 복원돼 대표 결과로는 연결되지 않지만, 이 계정이 만든 결과로 기록돼 소급 지급된다
+        MemberService.LoginResult login = memberService.loginAndLink(friend.getKakaoId(), anonymous.getId().toString());
+        assertThat(login.restoredResultId()).isNotEqualTo(anonymous.getId().toString());
+        assertThat(walletService.getBalance(owner)).isEqualTo(2);
+        assertThat(resultRepository.findById(anonymous.getId()).orElseThrow().getMemberId()).isNull();
+    }
+
+    @Test
+    void loggedInFriendStarsWithResultThatIsNotTheAccountResult() {
+        long owner = newMember();
+        Result origin = result("갑자", Gender.MALE, owner);
+        Member friend = memberWithResult();
+
+        register(origin, result("을축", Gender.FEMALE, null), friend.getId());
+        assertThat(walletService.getBalance(owner)).isEqualTo(2);
+    }
+
+    @Test
+    void allResultsMadeBeforeLoginCountWhenPresentedAtLogin() {
+        long ownerA = newMember();
+        long ownerC = newMember();
+        Result mapA = result("갑자", Gender.MALE, ownerA);
+        Result mapC = result("병인", Gender.MALE, ownerC);
+        Member friend = memberWithResult();
+
+        // 링크마다 '새로 작성하기' — 브라우저 세션은 마지막 결과만 기억한다
+        Result first = result("을축", Gender.FEMALE, null);
+        Result second = result("정묘", Gender.FEMALE, null);
+        register(mapA, first);
+        register(mapC, second);
+
+        memberService.loginAndLink(friend.getKakaoId(), second.getId().toString(),
+                List.of(first.getId().toString(), second.getId().toString()));
+        assertThat(walletService.getBalance(ownerA)).isEqualTo(2);
+        assertThat(walletService.getBalance(ownerC)).isEqualTo(2);
+    }
+
+    @Test
+    void ownerWhoseAccountHasResultSharesAnonymousMapThenLogsIn() {
+        Member owner = memberWithResult();
+        Result anonymousMap = result("갑자", Gender.MALE, null);
+        register(anonymousMap, result("을축", Gender.FEMALE, newMember()));
+
+        memberService.loginAndLink(owner.getKakaoId(), null, List.of(anonymousMap.getId().toString()));
+        assertThat(walletService.getBalance(owner.getId())).isEqualTo(2);
+    }
+
+    @Test
+    void starOnOwnMapFromAnotherResultPaysNothing() {
+        long owner = newMember();
+        Result origin = result("갑자", Gender.MALE, owner);
+
+        register(origin, result("을축", Gender.FEMALE, null), owner);
+        assertThat(walletService.getBalance(owner)).isZero();
+    }
+
+    @Test
+    void resultAlreadyClaimedIsNotTakenOverByAnotherAccount() {
+        long owner = newMember();
+        Result origin = result("갑자", Gender.MALE, owner);
+        Member friend = memberWithResult();
+        Result guest = result("을축", Gender.FEMALE, null);
+        register(origin, guest, friend.getId());
+
+        // 같은 결과 id 를 쥔 다른 계정이 로그인하며 제시해도 주인이 바뀌지 않고, 보상도 두 번 나가지 않는다
+        Member other = memberWithResult();
+        memberService.loginAndLink(other.getKakaoId(), null, List.of(guest.getId().toString()));
+        assertThat(resultRepository.findById(guest.getId()).orElseThrow().getOwnerMemberId()).isEqualTo(friend.getId());
+        assertThat(walletService.getBalance(owner)).isEqualTo(2);
     }
 }

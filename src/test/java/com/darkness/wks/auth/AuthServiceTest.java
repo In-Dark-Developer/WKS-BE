@@ -38,7 +38,7 @@ class AuthServiceTest {
         Member member = new Member(123L);
         ReflectionTestUtils.setField(member, "id", 7L);
         when(kakaoClient.fetchKakaoId("code", REDIRECT)).thenReturn(123L);
-        when(memberService.loginAndLink(123L, null)).thenReturn(new MemberService.LoginResult(member, false, null));
+        when(memberService.loginAndLink(123L, null, null)).thenReturn(new MemberService.LoginResult(member, false, null));
         when(jwtProvider.issue(7L)).thenReturn("jwt");
     }
 
@@ -47,7 +47,7 @@ class AuthServiceTest {
         when(partnerRewardService.grant(7L, "FESTIVAL"))
                 .thenReturn(Optional.of(new PartnerRewardService.Granted("동국대 축제", 10)));
 
-        AuthService.LoginOutcome outcome = authService.login(new KakaoLoginRequest("code", REDIRECT, null, "FESTIVAL"));
+        AuthService.LoginOutcome outcome = authService.login(new KakaoLoginRequest("code", REDIRECT, null, "FESTIVAL", null));
 
         assertThat(outcome.body().rewardGranted()).isEqualTo(new KakaoLoginResponse.RewardGranted("동국대 축제", 10));
     }
@@ -56,7 +56,7 @@ class AuthServiceTest {
     void alreadyRewardedOrUnknownRefStillLogsIn() {
         when(partnerRewardService.grant(7L, "WRONG")).thenReturn(Optional.empty());
 
-        AuthService.LoginOutcome outcome = authService.login(new KakaoLoginRequest("code", REDIRECT, null, "WRONG"));
+        AuthService.LoginOutcome outcome = authService.login(new KakaoLoginRequest("code", REDIRECT, null, "WRONG", null));
 
         assertThat(outcome.token()).isEqualTo("jwt");
         assertThat(outcome.body().rewardGranted()).isNull();

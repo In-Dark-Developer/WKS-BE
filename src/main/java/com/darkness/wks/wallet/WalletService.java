@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * 실(재화) 원장 하나로 지급·차감·잔액을 전부 다룬다 (plan.md §9.4). 다른 도메인을 참조하지 않는다
  * (architecture.md §3 — wallet 이 가장 아래) — 호출부(compatibility·dating·member)가 memberId 만
@@ -27,6 +29,12 @@ public class WalletService {
     @Transactional(readOnly = true)
     public boolean hasCredited(LedgerReason reason, Long memberId, String refId) {
         return ledgerRepository.existsByMemberIdAndReasonAndRefId(memberId, reason, refId);
+    }
+
+    /** 이 사유로 받은 원장 행의 {@code ref_id} 들. 제휴 보상이면 받은 제휴 코드 목록이다(계정당 코드별 1행) */
+    @Transactional(readOnly = true)
+    public List<String> creditedRefIds(Long memberId, LedgerReason reason) {
+        return ledgerRepository.findRefIds(memberId, reason);
     }
 
     /**

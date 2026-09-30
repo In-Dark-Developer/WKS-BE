@@ -5,12 +5,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface ThreadLedgerRepository extends JpaRepository<ThreadLedger, Long> {
 
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ThreadLedger t WHERE t.memberId = :memberId")
     int sumAmountByMemberId(@Param("memberId") Long memberId);
 
     boolean existsByMemberIdAndReasonAndRefId(Long memberId, LedgerReason reason, String refId);
+
+    @Query("SELECT t.refId FROM ThreadLedger t WHERE t.memberId = :memberId AND t.reason = :reason ORDER BY t.id")
+    List<String> findRefIds(@Param("memberId") Long memberId, @Param("reason") LedgerReason reason);
 
     long countByMemberIdAndReasonAndRefIdStartingWith(Long memberId, LedgerReason reason, String refIdPrefix);
 

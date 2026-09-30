@@ -29,10 +29,10 @@ class CompatibilityControllerTest {
         String shareId = UUID.randomUUID().toString();
         CreateCompatibilityRequest request = new CreateCompatibilityRequest(UUID.randomUUID().toString());
         CompatibilityResponse response = new CompatibilityResponse(12L, 92, CompatibilityTier.GUIIN, "서연", "민수");
-        when(compatibilityService.createCompatibility(shareId, request))
+        when(compatibilityService.createCompatibility(shareId, request, null))
                 .thenReturn(new CompatibilityService.CreationResult(response, true));
 
-        var result = compatibilityController.createCompatibility(shareId, request);
+        var result = compatibilityController.createCompatibility(shareId, request, null);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(result.getBody()).isNotNull();
@@ -45,10 +45,10 @@ class CompatibilityControllerTest {
         String shareId = UUID.randomUUID().toString();
         CreateCompatibilityRequest request = new CreateCompatibilityRequest(UUID.randomUUID().toString());
         CompatibilityResponse response = new CompatibilityResponse(12L, 82, CompatibilityTier.CHALTTEOK, "서연", "민수");
-        when(compatibilityService.createCompatibility(shareId, request))
+        when(compatibilityService.createCompatibility(shareId, request, null))
                 .thenReturn(new CompatibilityService.CreationResult(response, false));
 
-        var result = compatibilityController.createCompatibility(shareId, request);
+        var result = compatibilityController.createCompatibility(shareId, request, null);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
     }

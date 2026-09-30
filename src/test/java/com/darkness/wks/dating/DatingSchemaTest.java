@@ -53,6 +53,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @SpringBootTest(properties = {"gemini.api-key=test-key",
         "app.auth.jwt.secret=dating-test-secret-0123456789-abcdef", "app.auth.jwt.ttl-days=15"})
@@ -150,8 +151,14 @@ class DatingSchemaTest {
     void datingRouteRequiresLoginCookie() throws Exception {
         var mvc = MockMvcBuilders.webAppContextSetup(webContext).build();
         mvc.perform(get("/api/dating/profile/me")).andExpect(status().isUnauthorized());
+        // 회원 행이 없는 토큰은 인증 단계에서 막힌다(2026-09-30) — 프로필 없음(404)은 실제 회원으로 확인한다
         mvc.perform(get("/api/dating/profile/me")
                         .cookie(new Cookie("wks_token", jwtProvider.issue(999L))))
+                .andExpect(status().isUnauthorized());
+        Member member = memberRepository.saveAndFlush(
+                new Member(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE)));
+        mvc.perform(get("/api/dating/profile/me")
+                        .cookie(new Cookie("wks_token", jwtProvider.issue(member.getId()))))
                 .andExpect(status().isNotFound());
     }
 

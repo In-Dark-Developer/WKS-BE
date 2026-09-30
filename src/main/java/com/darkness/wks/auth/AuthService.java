@@ -35,7 +35,8 @@ public class AuthService {
         }
         redirectUriPolicy.validate(request.redirectUri());
         long kakaoId = kakaoClient.fetchKakaoId(request.code(), request.redirectUri());
-        MemberService.LoginResult result = memberService.loginAndLink(kakaoId, request.resultId());
+        MemberService.LoginResult result =
+                memberService.loginAndLink(kakaoId, request.resultId(), request.resultIds());
         Long memberId = result.member().getId();
         // 제휴처(축제 사이트) 링크로 들어와 로그인하면 계정당 1회 보상. 모르는 ref 는 조용히 무시한다(plan.md §8.1)
         KakaoLoginResponse.RewardGranted reward = partnerRewardService.grant(memberId, request.ref())

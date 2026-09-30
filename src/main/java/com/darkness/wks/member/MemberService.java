@@ -11,7 +11,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -24,6 +27,8 @@ import java.util.UUID;
 public class MemberService {
 
     private static final int SIGNUP_BONUS_AMOUNT = 10;
+    /** 로그인 요청의 resultIds 상한. 한 브라우저가 로그인 전에 이만큼 넘게 만들 일은 없다 — 요청 하나가 DB 를 오래 잡지 않게 */
+    static final int MAX_CLAIMED_RESULTS = 20;
 
     private final MemberRepository memberRepository;
     private final ResultRepository resultRepository;
@@ -36,6 +41,16 @@ public class MemberService {
 
     @Transactional
     public LoginResult loginAndLink(long kakaoId, String browserResultId) {
+        return loginAndLink(kakaoId, browserResultId, List.of());
+    }
+
+    /**
+     * @param browserResultIds 이 브라우저가 로그인 전에 만든 결과들(최대 {@value #MAX_CLAIMED_RESULTS}개만 본다).
+     *                         대표 결과 연결과 별개로, 주인이 없는 것은 이 계정이 만든 것으로 기록해 그 결과로 남긴
+     *                         궁합지도 별의 보상을 소급한다(V27). 형식이 틀리거나 없는 id 는 조용히 무시한다
+     */
+    @Transactional
+    public LoginResult loginAndLink(long kakaoId, String browserResultId, List<String> browserResultIds) {
         Member member;
         boolean isNewUser;
 
@@ -63,21 +78,46 @@ public class MemberService {
             }
         }
 
-        // 계정에 이미 저장된 결과가 있으면 그걸 복원한다. 브라우저 결과는 건드리지 않는다(plan §1.1 — 계정 우선).
+        // 계정에 이미 저장된 결과가 있으면 그걸 복원한다. 브라우저 결과는 대표 결과로 연결하지 않는다(plan §1.1 — 계정 우선).
         Optional<Result> ownedResult = resultRepository.findByMemberId(member.getId());
-        if (ownedResult.isPresent()) {
-            return new LoginResult(member, isNewUser, ownedResult.get().getId().toString());
+        String restoredResultId = ownedResult.map(result -> result.getId().toString()).orElse(null);
+        Set<UUID> settled = new LinkedHashSet<>();
+        if (ownedResult.isEmpty()) {
+            // resultId 가 없거나 형식이 틀리거나(이미 다른 회원 것 포함) 없어도 로그인은 그대로 성공한다(FR-AU-06·07).
+            parseUuidV4(browserResultId)
+                    .filter(id -> raceOps.linkResultIfUnowned(id, member.getId()))
+                    .ifPresent(settled::add);
         }
+        settled.addAll(claimBrowserResults(member.getId(), browserResultId, browserResultIds));
+        // 주인이 정해진 결과마다 로그인 전에 쌓인 궁합지도 별의 실을 소급 지급한다 (2026-09-28·30 결정).
+        // 동기 리스너라 로그인 트랜잭션에서 함께 커밋된다. 결과 행 잠금(위)을 다 잡은 뒤에 지급해야 궁합 생성과
+        // 잠금 순서(결과 → 원장 advisory lock)가 같아 교착이 나지 않는다
+        settled.forEach(id -> eventPublisher.publishEvent(new ResultLinkedEvent(id, member.getId())));
+        return new LoginResult(member, isNewUser, restoredResultId);
+    }
 
-        // resultId 가 없거나 형식이 틀리거나(이미 다른 회원 것 포함) 없어도 로그인은 그대로 성공한다(FR-AU-06·07).
-        parseUuidV4(browserResultId).ifPresent(id -> {
-            if (raceOps.linkResultIfUnowned(id, member.getId())) {
-                // 로그인 전에 이 결과의 궁합지도에 등록된 친구들의 실(+3)을 소급 지급한다 (2026-09-28 결정).
-                // 동기 리스너라 로그인 트랜잭션에서 함께 커밋된다
-                eventPublisher.publishEvent(new ResultLinkedEvent(id, member.getId()));
-            }
-        });
-        return new LoginResult(member, isNewUser, null);
+    /**
+     * 대표 결과로 연결되지 않은 브라우저 결과도 주인 없는 것은 이 계정이 만든 것으로 기록한다 (2026-09-30).
+     * 계정에 결과가 이미 있는 사람이 로그인 전에 새로 만든 결과로 남긴 별이, 로그인 순서 때문에 보상에서 영구히 빠지던
+     * 문제를 막는다. 대표 결과 연결(위)이 끝난 뒤 새로 읽어야 방금 연결된 결과를 다시 주인 없음으로 보지 않는다.
+     *
+     * @return 이번 호출로 주인이 정해진 결과 id
+     */
+    private List<UUID> claimBrowserResults(Long memberId, String browserResultId, List<String> browserResultIds) {
+        Set<UUID> ids = new LinkedHashSet<>();
+        parseUuidV4(browserResultId).ifPresent(ids::add);
+        if (browserResultIds != null) {
+            browserResultIds.stream().limit(MAX_CLAIMED_RESULTS)
+                    .map(this::parseUuidV4).flatMap(Optional::stream).forEach(ids::add);
+        }
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        // 같은 결과를 두 계정이 동시에 제시하면 먼저 잠근 쪽만 주인이 된다
+        return resultRepository.findAllByIdForUpdate(List.copyOf(ids)).stream()
+                .filter(result -> result.claimBy(memberId))
+                .map(Result::getId)
+                .toList();
     }
 
     private Optional<UUID> parseUuidV4(String value) {
