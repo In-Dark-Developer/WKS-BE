@@ -13,9 +13,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,7 +51,35 @@ class DatingProfileServiceTest {
         DatingProfileService service = new DatingProfileService(profileRepository, resultRepository, photoService,
                 emailVerificationService, emailCodeService);
         ReflectionTestUtils.setField(service, "allowedDomainsRaw", "dgu.ac.kr");
+        // 아래 등록 테스트는 신청 기간 안을 가정한다. 마감은 closedService() 로 따로 본다
+        ReflectionTestUtils.setField(service, "registrationClosesAtRaw", "2099-01-01T00:00:00+09:00");
         return service;
+    }
+
+    private DatingProfileService closedService() {
+        DatingProfileService service = service();
+        ReflectionTestUtils.setField(service, "registrationClosesAtRaw",
+                OffsetDateTime.now(ZoneOffset.ofHours(9)).minusSeconds(1).toString());
+        return service;
+    }
+
+    @Test
+    void createAfterRegistrationClosesIsRejectedBeforeAnyCheck() {
+        assertThatThrownBy(() -> closedService().create(MEMBER_ID, request()))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DATING_REGISTRATION_CLOSED));
+
+        verifyNoInteractions(profileRepository, resultRepository, photoService, emailCodeService);
+    }
+
+    @Test
+    void defaultRegistrationCloseIsOctoberSecondTwoAmKst() throws Exception {
+        // 운영은 설정 없이 @Value 기본값을 쓴다. 스프링 없이는 주입되지 않으므로 어노테이션 문자열을 직접 확인한다
+        String placeholder = DatingProfileService.class.getDeclaredField("registrationClosesAtRaw")
+                .getAnnotation(Value.class).value();
+        String defaultValue = placeholder.substring(placeholder.indexOf(':') + 1, placeholder.length() - 1);
+
+        assertThat(OffsetDateTime.parse(defaultValue).toInstant()).isEqualTo(Instant.parse("2026-10-01T17:00:00Z"));
     }
 
     private DatingProfileRequest request() {
