@@ -58,6 +58,7 @@
 
 | 번호  | 예약자 | 내용 | 상태 |
 |-----|---|---|---|
+| V28 | hairyung2002 | #159 `dating_notice_mail` (일괄 안내 메일 수신자별 발송 기록, `(campaign_key, profile_id)` UNIQUE, 2026-10-01). **V27 뒤에 머지** | PR |
 | V27 | hairyung2002 | `result` 에 `claimed_member_id BIGINT` (결과를 만든 계정 — 친구 보상 로그인 순서 무관, 2026-09-30). **V26(#147) 뒤에 머지** | PR |
 | V26 | 차은호 | #147 `dating_profile` 에 `deactivated_at TIMESTAMPTZ` (운영자 비활성화). **V25(#123) 뒤에 머지** | PR |
 | V25 | 차은호 | #123 `dating_request` 에 `recipient_reason TEXT` (받은 사람 기준 궁합 이유 캐시) | PR |
@@ -189,6 +190,35 @@
 ---
 
 ## 기록
+
+### 2026-10-01 (목) · hairyung2002 · admin/·dating/ 소개팅 프로필 보유자 일괄 안내 메일 (#159) · Claude Code
+
+**한 일**
+- 2026-10-02 오전 정보 전달 메일을 위해 관리자 API `POST /api/admin/notice-mails`(`DRY_RUN`·`TEST`·`SEND`)·`GET /api/admin/notice-mails/{campaignKey}` 추가
+- 대상은 비활성 아닌 `dating_profile` 전부(약 120명). 문구는 요청 본문으로 받는다
+- SEND 는 202 로 바로 돌아오고 `applicationTaskExecutor` 에서 건당 200ms 간격으로 보낸다. 수신자마다 `dating_notice_mail` 에 `INSERT ... ON CONFLICT` 로 선점해 두 번 눌러도·재실행해도 한 번만 간다. 실패는 `FAILED` 로 남고 같은 키로 다시 SEND 하면 그 사람만 간다
+- 테스트 `admin/NoticeMailFlowTest`: 비활성 제외, 한 명 실패가 나머지를 안 막음, 같은 키 재실행은 실패자만, 연달아 두 번 SEND 해도 1회, TEST 는 기록 없음·실패 시 503, 토큰 없으면 401·키 형식 400
+
+**건드린 파일/패키지**
+- 신규 `admin/AdminNoticeMailController`, `admin/dto/AdminNoticeMail{Request,Response,StatusResponse}`, `dating/DatingNoticeMailService`·`DatingNoticeMailRepository`·`entity/DatingNoticeMail`, `db/migration/V28__add_dating_notice_mail.sql`, 테스트 `admin/NoticeMailFlowTest`
+- 수정 `dating/DatingProfileRepository`(`findByDeactivatedAtIsNull`)
+
+**다음 사람이 알아야 할 것**
+- cron 이 아니라 사람이 실행한다 — 실행 시각에 앱이 재기동 중이면 cron 은 그대로 놓치고, 발송 전 `TEST` 로 받아 볼 수 없어서
+- 발송 도중 재기동으로 `SENDING` 에 남은 행은 자동 재발송하지 않는다(실제 발송 여부를 모름). GET 의 `sending` 으로 확인
+- 새 환경변수 없음. 간격은 `app.notice-mail.interval-ms`(기본 200, `application.yml` 에 안 적었다 — 테스트만 0)
+- 메일 경로는 기존 `JavaMailSender`(운영은 SES, 보조 계정 비어 있음) 그대로
+- 사용법·curl 은 `docs/admin-api.md` "일괄 안내 메일"
+
+**막힌 것 / 넘기는 것**
+- 팀 채널 공지 필요: `db/migration/` V28, `admin/`(차은호)·`dating/`(담당 미정)
+- 메일 제목·본문은 미정 — 발송 요청 때 넣는다
+
+**문서 변경**
+- `docs/admin-api.md` 일괄 안내 메일 절, `architecture.md` 스키마(V28), 이 파일(V28 예약)
+
+**프론트에 알려야 할 것**
+- 없음 (관리자 API)
 
 ### 2026-10-01 (목) · hairyung2002 · dating/ 마지막 날 50% 할인 (이슈 없음) · Claude Code
 
