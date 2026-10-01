@@ -2,6 +2,7 @@ package com.darkness.wks.admin;
 
 import com.darkness.wks.common.ContactMethod;
 import com.darkness.wks.common.Gender;
+import com.darkness.wks.dating.DatingNoticeMailService;
 import com.darkness.wks.dating.DatingPhotoRepository;
 import com.darkness.wks.dating.DatingProfileRepository;
 import com.darkness.wks.dating.entity.DatingPhoto;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -31,6 +33,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -38,11 +42,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -53,7 +59,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 프로필은 클래스 안에서 공유되므로 대상 수를 보는 검증은 한 테스트에 모았다.
  */
 @SpringBootTest(properties = {"gemini.api-key=test-key", "app.admin.token=" + NoticeMailFlowTest.TOKEN,
-        "app.auth.jwt.secret=notice-mail-test-secret-0123456789-abcdef", "app.notice-mail.interval-ms=0"})
+        "app.auth.jwt.secret=notice-mail-test-secret-0123456789-abcdef", "app.notice-mail.interval-ms=0",
+        "app.notice-mail.poll-ms=3600000"})
 @Testcontainers
 class NoticeMailFlowTest {
 
@@ -84,18 +91,27 @@ class NoticeMailFlowTest {
     @Autowired
     WebApplicationContext webContext;
 
+    @Autowired
+    DatingNoticeMailService noticeMailService;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
     private final List<String> recipients = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> subjects = Collections.synchronizedList(new ArrayList<>());
     private final Set<String> failingRecipients = ConcurrentHashMap.newKeySet();
 
     @BeforeEach
     void stubMail() throws Exception {
         when(mailSender.createMimeMessage()).thenAnswer(invocation -> new MimeMessage(Session.getInstance(new Properties())));
         doAnswer(invocation -> {
-            String to = ((MimeMessage) invocation.getArgument(0)).getAllRecipients()[0].toString();
+            MimeMessage message = invocation.getArgument(0);
+            String to = message.getAllRecipients()[0].toString();
             if (failingRecipients.contains(to)) {
                 throw new MailSendException("smtp down");
             }
             recipients.add(to);
+            subjects.add(message.getSubject());
             return null;
         }).when(mailSender).send(any(MimeMessage.class));
     }
@@ -151,33 +167,123 @@ class NoticeMailFlowTest {
         DatingProfile hidden = profile(9503, "hidden@dgu.ac.kr");
         hidden.deactivate(Instant.now());
         profileRepository.saveAndFlush(hidden);
+        // 다른 테스트가 만든 프로필도 같은 DB 에 있으므로 기대 대상은 DB 에서 센다
+        Set<String> alive = profileRepository.findByDeactivatedAtIsNull().stream()
+                .map(DatingProfile::getEmail).collect(Collectors.toSet());
+        assertThat(alive).contains("alive@dgu.ac.kr", "flaky@dgu.ac.kr").doesNotContain("hidden@dgu.ac.kr");
+        int total = alive.size();
 
         request("first", "DRY_RUN", null)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.targets").value(2));
+                .andExpect(jsonPath("$.data.targets").value(total));
         assertThat(recipients).isEmpty();
 
         // 한 사람 실패가 나머지를 막지 않는다
         failingRecipients.add("flaky@dgu.ac.kr");
         request("first", "SEND", null)
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.data.targets").value(2));
-        awaitCounts("first", 1, 1);
-        assertThat(recipients).containsExactly("alive@dgu.ac.kr");
+                .andExpect(jsonPath("$.data.targets").value(total));
+        awaitCounts("first", total - 1, 1);
+        assertThat(recipients).hasSize(total - 1).contains("alive@dgu.ac.kr").doesNotContain("flaky@dgu.ac.kr");
 
         // 같은 키로 다시 보내면 실패한 사람에게만 간다
+        recipients.clear();
         failingRecipients.clear();
         request("first", "SEND", null).andExpect(status().isAccepted());
-        awaitCounts("first", 2, 0);
-        assertThat(recipients).containsExactlyInAnyOrder("alive@dgu.ac.kr", "flaky@dgu.ac.kr");
+        awaitCounts("first", total, 0);
+        assertThat(recipients).containsExactly("flaky@dgu.ac.kr");
 
         // 연달아 두 번 눌러도 수신자마다 한 번이다
         recipients.clear();
         request("second", "SEND", null).andExpect(status().isAccepted());
         request("second", "SEND", null).andExpect(status().isAccepted());
-        awaitCounts("second", 2, 0);
+        awaitCounts("second", total, 0);
         Thread.sleep(300); // 늦게 시작한 두 번째 루프가 남은 선점을 끝내도록 둔다
-        assertThat(recipients).containsExactlyInAnyOrder("alive@dgu.ac.kr", "flaky@dgu.ac.kr");
+        assertThat(recipients).containsExactlyInAnyOrderElementsOf(alive);
+    }
+
+    private ResultActions schedule(String campaignKey, String subject, String sendAt) throws Exception {
+        return mvc().perform(post("/api/admin/notice-mails").header("X-Admin-Token", TOKEN)
+                .contentType("application/json")
+                .content("""
+                        {"campaignKey":"%s","subject":"%s","body":"내용","mode":"SCHEDULE","sendAt":"%s"}
+                        """.formatted(campaignKey, subject, sendAt)));
+    }
+
+    // 예약 시각을 기다릴 수 없으니 DB 의 send_at 을 직접 옮긴다. 스케줄러 주기는 테스트에서 1시간이라 직접 부른다
+    private void moveSendAt(String campaignKey, String interval) {
+        jdbcTemplate.update("UPDATE dating_notice_campaign SET send_at = now() - CAST(? AS INTERVAL) "
+                + "WHERE campaign_key = ?", interval, campaignKey);
+    }
+
+    private String future() {
+        return OffsetDateTime.now(ZoneOffset.ofHours(9)).plusHours(1).toString();
+    }
+
+    @Test
+    void 예약은_시각이_지나면_한번만_보내고_시작한_예약은_고칠_수_없다() throws Exception {
+        profile(9601, "scheduled@dgu.ac.kr");
+        Set<String> alive = profileRepository.findByDeactivatedAtIsNull().stream()
+                .map(DatingProfile::getEmail).collect(Collectors.toSet());
+
+        schedule("timed", "처음 제목", future()).andExpect(status().isOk());
+        // 시작 전에는 같은 키로 다시 보내 문구를 고친다
+        schedule("timed", "고친 제목", future()).andExpect(status().isOk());
+        mvc().perform(get("/api/admin/notice-mails/timed").header("X-Admin-Token", TOKEN))
+                .andExpect(jsonPath("$.data.state").value("SCHEDULED"))
+                .andExpect(jsonPath("$.data.sendAt").isNotEmpty());
+
+        // 아직 시각 전이면 아무것도 안 나간다
+        noticeMailService.runDueCampaigns();
+        assertThat(recipients).isEmpty();
+
+        moveSendAt("timed", "1 minute");
+        noticeMailService.runDueCampaigns();
+        assertThat(recipients).containsExactlyInAnyOrderElementsOf(alive);
+        assertThat(subjects).containsOnly("고친 제목");
+        mvc().perform(get("/api/admin/notice-mails/timed").header("X-Admin-Token", TOKEN))
+                .andExpect(jsonPath("$.data.state").value("STARTED"))
+                .andExpect(jsonPath("$.data.sent").value(alive.size()));
+
+        // 다시 확인해도 두 번 가지 않는다
+        noticeMailService.runDueCampaigns();
+        assertThat(recipients).hasSize(alive.size());
+
+        schedule("timed", "또 고친 제목", future())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+        mvc().perform(delete("/api/admin/notice-mails/timed/schedule").header("X-Admin-Token", TOKEN))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 한시간_넘게_늦은_예약은_보내지_않는다_취소한_예약도() throws Exception {
+        profile(9701, "late@dgu.ac.kr");
+
+        schedule("late", "제목", future()).andExpect(status().isOk());
+        moveSendAt("late", "61 minutes");
+        schedule("cancelled", "제목", future()).andExpect(status().isOk());
+        mvc().perform(delete("/api/admin/notice-mails/cancelled/schedule").header("X-Admin-Token", TOKEN))
+                .andExpect(status().isOk());
+        moveSendAt("cancelled", "1 minute"); // 지워졌으니 아무 행도 안 바뀐다
+
+        noticeMailService.runDueCampaigns();
+        assertThat(recipients).isEmpty();
+        mvc().perform(get("/api/admin/notice-mails/late").header("X-Admin-Token", TOKEN))
+                .andExpect(jsonPath("$.data.state").value("EXPIRED"))
+                .andExpect(jsonPath("$.data.sent").value(0));
+        mvc().perform(get("/api/admin/notice-mails/cancelled").header("X-Admin-Token", TOKEN))
+                .andExpect(jsonPath("$.data.state").isEmpty());
+    }
+
+    @Test
+    void 예약_시각이_없거나_지났으면_400() throws Exception {
+        schedule("past", "제목", OffsetDateTime.now(ZoneOffset.ofHours(9)).minusMinutes(1).toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+        request("no-time", "SCHEDULE", null)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
     }
 
     @Test
