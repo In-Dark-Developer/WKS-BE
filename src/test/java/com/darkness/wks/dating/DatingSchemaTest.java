@@ -16,6 +16,8 @@ import com.darkness.wks.result.ResultRepository;
 import com.darkness.wks.result.entity.Result;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -49,8 +51,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -59,6 +63,17 @@ import java.util.concurrent.ThreadLocalRandom;
         "app.auth.jwt.secret=dating-test-secret-0123456789-abcdef", "app.auth.jwt.ttl-days=15"})
 @Testcontainers
 class DatingSchemaTest {
+
+    // 아래 가격 단정은 정가 기준이다. 마지막 날 할인(DatingPrices) 시작 전으로 시각을 고정한다.
+    @BeforeEach
+    void pinPricesBeforeSale() {
+        DatingPrices.clock = Clock.fixed(DatingPrices.FINAL_DAY_SALE_START.minusSeconds(1), ZoneOffset.UTC);
+    }
+
+    @AfterEach
+    void restorePriceClock() {
+        DatingPrices.clock = Clock.systemUTC();
+    }
 
     @Container
     @ServiceConnection
@@ -262,6 +277,20 @@ class DatingSchemaTest {
         unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId,
                 EnumSet.of(DatingUnlockField.NAME));
         assertThat(walletService.getBalance(viewer.getMemberId())).isEqualTo(3); // 이미 해금 — 추가 차감 없음
+    }
+
+    @Test
+    void unlockChargesSalePriceFromFinalDaySaleStart() {
+        DatingPrices.clock = Clock.fixed(DatingPrices.FINAL_DAY_SALE_START, ZoneOffset.UTC);
+        DatingProfile viewer = profile(960009L, Gender.MALE, "갑자", "을축", "병인");
+        UUID candidateId = directRecommendation(viewer, 960010L, Gender.FEMALE);
+        walletService.credit(viewer.getMemberId(), com.darkness.wks.wallet.LedgerReason.SIGNUP_BONUS,
+                viewer.getMemberId().toString(), 11);
+
+        // 할인가 5+3+2+1 = 11 — 정가(25)였다면 402
+        unlockChargeService.chargeAndMarkUnlocked(viewer.getMemberId(), candidateId,
+                EnumSet.allOf(DatingUnlockField.class));
+        assertThat(walletService.getBalance(viewer.getMemberId())).isZero();
     }
 
     @Test

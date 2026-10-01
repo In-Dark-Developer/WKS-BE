@@ -120,6 +120,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-10-01 | **[마지막 날 할인]** 10/1 10:00 KST 부터 `rerollCost`(유료) `20→10`, 해금 `fields.*.cost` 사진 `5`·이름 `3`·학과 `2`·궁합 까닭 `1`. API 형식 변경 없음 — 가격을 하드코딩했다면 응답 값으로 표시해야 할인가가 보인다. `api-spec.md` §10.4·§10.5 | ❌ |
 | 2026-09-30 | **[실 지급 로그인 순서 무관, 프론트 대응 필요]** ① `POST /api/auth/kakao` 요청에 `resultIds: string[]`(선택) 추가 — 로그인 전에 이 브라우저가 만든 결과들. 보내면 그 결과로 남긴 궁합지도 별의 친구 보상을 소급 ② `GET /api/wallet` 응답에 `partnerRewards: string[]` 추가 ③ 회원이 없는 토큰은 인증 API 에서 401 + 쿠키 삭제(이전 `/api/me` 200·지갑 쓰기 500). 필드 추가만이라 기존 FE 그대로 동작. FE 할 일(`ref` localStorage·5xx 에서 안 지우기·결과 목록 보관·지급 완료 표시)은 FE 요청 문서로 전달. `api-spec.md` §9·§12 | ❌ |
 | 2026-09-29 | #144 궁합지도 친구 등록 보상 **5명마다 3실 → 로그인 친구 1명당 2실.** 익명 결과로 등록한 친구는 안 센다. API 형식 변경 없음. **프론트 확인 요청**: 로그인 상태인 친구가 공유 링크에서 새 결과를 만들면 계정에 이미 결과가 있을 때 익명으로 남아 보상이 안 붙는다 — 로그인 상태면 계정 결과(`GET /api/me/result`)로 `POST /api/compatibilities/{shareId}` 를 부르는 게 맞다. 비로그인 친구에게는 "로그인하면 공유자에게 실이 간다" 안내 문구 검토. `api-spec.md` §12 | ❌ |
 | 2026-09-29 | **리롤 비용 5실 → 20실** (하루 1회 무료는 그대로). 응답 `rerollCost` 가 무료분을 다 쓰면 `20` 으로 온다 — 버튼 문구를 하드코딩했다면 `rerollCost` 값으로 표시. 잔액 20 미만이면 402. `api-spec.md` §10.4·§10.4.1·§12 | ❌ |
@@ -188,6 +189,32 @@
 ---
 
 ## 기록
+
+### 2026-10-01 (목) · hairyung2002 · dating/ 마지막 날 50% 할인 (이슈 없음) · Claude Code
+
+**한 일**
+- **2026-10-01 10:00 KST 부터** 리롤 20→10, 해금 사진 10→5·이름 7→3·학과 5→2·궁합 까닭 3→1 (사용자 결정, 실험·홍보용). 하루 1회 무료 리롤은 그대로
+- 흩어져 있던 가격(`REROLL_COST`, `DatingUnlockField` 비용, 두 DTO 의 하드코딩 10·7·5·3)을 `dating/DatingPrices` 한 곳으로 모았다. 응답 표시와 차감이 같은 값을 본다
+- 테스트: `DatingPricesTest`(시작 1초 전 정가 / 시작 시각 할인가), `DatingSchemaTest` 할인가 전체 해금 1건. 기존 가격 단정은 시각을 할인 전으로 고정
+
+**건드린 파일/패키지**
+- `dating/` — 신규 `DatingPrices`, 수정 `DatingUnlockField`·`DatingRecommendationService`·`dto/DatingRecommendationResponse`·`dto/DatingRequestListResponse`
+- 테스트 `DatingPricesTest`(신규)·`DatingSchemaTest`
+
+**다음 사람이 알아야 할 것**
+- 전환은 **배포 시각이 아니라 서버 시각**이다. 10시 전에 배포해 두면 10시에 저절로 바뀐다. 종료 시각은 없다(축제 마지막 날)
+- 되돌리려면 `DatingPrices.onSale()` 을 `false` 로 두거나 `FINAL_DAY_SALE_START` 를 미룬다
+- `DatingPrices.clock` 은 테스트가 시각을 고정하려고 쓰는 static 필드다. 운영 코드에서 바꾸지 않는다
+- 10시 직전에 받은 카드의 표시가(정가)와 실제 차감(할인가)이 다를 수 있다 — 사용자에게 유리한 쪽이라 그대로 뒀다
+
+**막힌 것 / 넘기는 것**
+- `dating/` 담당 미정 — 팀 채널 공지 필요
+
+**문서 변경**
+- `plan.md` §1.4 할인 메모, `api-spec.md` §10.4·§10.4.1·§10.5·§12
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 2026-10-01 행
 
 ### 2026-09-30 (수) · hairyung2002 · result/·compatibility/·member/·auth/·wallet/·common/ 실 지급 로그인 순서 무관 + 죽은 토큰 401 (이슈 없음) · Claude Code
 
