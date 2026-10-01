@@ -17,6 +17,7 @@ public enum ErrorCode {
     DATING_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "소개팅 프로필을 찾을 수 없습니다."),
     DATING_PROFILE_CONFLICT(HttpStatus.CONFLICT, "이미 등록된 소개팅 프로필 또는 이메일입니다."),
     DATING_NOT_VERIFIED(HttpStatus.FORBIDDEN, "학교 이메일 인증이 필요합니다."),
+    DATING_REGISTRATION_CLOSED(HttpStatus.FORBIDDEN, "소개팅 신규 신청이 마감되었습니다."),
     INVALID_EMAIL_CODE(HttpStatus.BAD_REQUEST, "인증 코드가 올바르지 않거나 만료되었습니다."),
     EMAIL_CODE_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "잠시 후 다시 시도해 주세요."),
     MAIL_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "메일을 보낼 수 없습니다. 잠시 후 다시 시도해 주세요."),
