@@ -45,7 +45,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 남는지(noRollbackFor)와 행 잠금 쿼리는 목킹으로는 확인할 수 없다.
  */
 @SpringBootTest(properties = {"gemini.api-key=test-key",
-        "app.auth.jwt.secret=email-code-test-secret-0123456789-abcdef"})
+        "app.auth.jwt.secret=email-code-test-secret-0123456789-abcdef",
+        // 등록 흐름을 보는 테스트라 신청 마감(DatingProfileService) 전으로 둔다
+        "app.dating.registration-closes-at=2099-01-01T00:00:00+09:00"})
 @Testcontainers
 class DatingEmailCodeFlowTest {
 

@@ -396,6 +396,28 @@ CREATE TABLE signup_reapply_invite (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
+-- 소개팅 프로필 보유자 일괄 안내 메일의 수신자별 발송 기록 (V28, #159). UNIQUE 가 중복 발송을 막는다 —
+-- 발송 직전 SENDING 으로 선점(INSERT ... ON CONFLICT), 결과로 SENT/FAILED. FAILED 만 다시 선점된다 (docs/admin-api.md)
+CREATE TABLE dating_notice_mail (
+    id              BIGSERIAL    PRIMARY KEY,
+    campaign_key    VARCHAR(50)  NOT NULL,
+    profile_id      UUID         NOT NULL REFERENCES dating_profile(id) ON DELETE CASCADE,
+    status          VARCHAR(10)  NOT NULL,           -- SENDING | SENT | FAILED
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    UNIQUE (campaign_key, profile_id)
+);
+
+-- 안내 메일 예약 (V28). 앱이 1분마다 send_at 이 지난 SCHEDULED 를 조건부 UPDATE 로 잡아 STARTED(1시간 넘게 늦었으면 EXPIRED)
+CREATE TABLE dating_notice_campaign (
+    campaign_key    VARCHAR(50)  PRIMARY KEY,
+    subject         VARCHAR(200) NOT NULL,
+    body            TEXT         NOT NULL,
+    send_at         TIMESTAMPTZ  NOT NULL,
+    state           VARCHAR(10)  NOT NULL,           -- SCHEDULED | STARTED | EXPIRED
+    started_at      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
 -- 소개팅 프로필·추천·요청은 V15~V17, 소개팅 궁합 이유 캐시는 V18에 추가한다. 해금·실 원장은 후속 작업이다 (plan.md §7)
 
 -- V23: dating_request 에 CANCELLED 상태를 추가하고, 두 프로필 간 UNIQUE 인덱스를

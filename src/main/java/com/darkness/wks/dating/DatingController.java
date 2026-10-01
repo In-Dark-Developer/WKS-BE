@@ -147,7 +147,8 @@ public class DatingController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHENTICATED — 로그인 쿠키 없음·만료·위조",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "DATING_NOT_VERIFIED — email 을 이 계정으로 코드 인증하지 않음",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = """
+                    DATING_REGISTRATION_CLOSED — 신규 신청 마감(2026-10-02 02:00 KST 부터) /                     DATING_NOT_VERIFIED — email 을 이 계정으로 코드 인증하지 않음""",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "RESULT_NOT_FOUND — 계정에 연결된 사주 결과 없음",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),

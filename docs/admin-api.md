@@ -73,6 +73,49 @@
 분포 맵은 0 인 키도 항상 채운다. 수락률(수락 ÷ (수락+거절))은 페이지가 계산한다.
 성별은 프로필에 없어서 회원의 사주 결과(`result.gender`, `member_id` 로 조인)에서 가져온다. 추천 로직과 같은 출처다. 결과가 없는 회원은 `UNKNOWN` 으로 세고, 그 키는 있을 때만 생긴다.
 
+## 일괄 안내 메일 `/api/admin/notice-mails` (#159)
+
+소개팅 프로필 보유자 전원(비활성 제외)에게 같은 메일을 한 번 보낸다. 2026-10-02 오전 정보 전달 메일용으로 만들었다.
+관련 코드: `admin/AdminNoticeMailController`, `dating/DatingNoticeMailService`·`DatingNoticeMailScheduler`·`DatingNoticeMailRepository`·`DatingNoticeCampaignRepository`, V28 `dating_notice_mail`·`dating_notice_campaign`.
+`admin.html` 에는 버튼이 없다 — curl 로만 쓴다.
+
+| 메서드 | 경로 | 동작 |
+|---|---|---|
+| POST | `/api/admin/notice-mails` | 바디 `{campaignKey, subject, body, mode, testTo, sendAt}`. 응답 `{campaignKey, mode, targets}` |
+| GET | `/api/admin/notice-mails/{campaignKey}` | 진행 상황 `{campaignKey, targets, sent, failed, sending, state, sendAt, startedAt}` |
+| DELETE | `/api/admin/notice-mails/{campaignKey}/schedule` | 시작 전 예약 취소. 없거나 이미 시작했으면 400 `INVALID_INPUT` |
+
+- `mode`
+  - `DRY_RUN`: 대상 수만 센다. 보내지도 기록하지도 않는다. 200
+  - `TEST`: `testTo` 한 주소로만 보낸다(기록 없음). 실패하면 503 `MAIL_UNAVAILABLE`, `testTo` 가 없으면 400 `INVALID_INPUT`. 200
+  - `SEND`: 대상을 세고 **202 로 바로 돌아온 뒤** 백그라운드로 보낸다(건당 200ms 간격). 결과는 GET 으로 본다
+  - `SCHEDULE`: `sendAt`(오프셋 필수, 예: `2026-10-02T09:00:00+09:00`)에 보낸다. 200
+    - 앱이 **1분마다** 시각이 지난 예약을 확인해 보낸다. 그래서 실제 시작은 `sendAt` 뒤 최대 1분이다
+    - 그 시각에 앱이 재기동 중이었어도 뜬 뒤 다음 확인에서 보낸다. **1시간 넘게 늦었으면 보내지 않고** `state=EXPIRED` 로 둔다
+    - 시작 전(`state=SCHEDULED`)에는 같은 키로 다시 `SCHEDULE` 해서 제목·본문·시각을 고친다. 시작 뒤에는 400
+    - `sendAt` 이 없거나 지금보다 이전이면 400 `INVALID_INPUT` — 즉시 발송은 `SEND`
+    - 발송 기록은 `SEND` 와 같은 표를 같은 키로 쓴다. 예약 발송에서 실패한 사람은 같은 키로 `SEND` 하면 그 사람에게만 간다
+- 대상: `dating_profile.deactivated_at IS NULL` 전부. 수신 주소는 프로필의 학교메일
+- `campaignKey`: 소문자·숫자·`-`, 50자 이하. **중복 방지 단위다.** 같은 키로 다시 `SEND` 하면 아직 안 간 사람·`FAILED` 인 사람에게만 간다. 연달아 두 번 눌러도 수신자마다 한 번
+- 본문은 plain text 로 그대로 보낸다. 문구를 요청으로 받는 건 발송 직전 오타를 재배포 없이 고치고 `TEST` 로 먼저 받아 보기 위해서다
+- **`sending` 이 0 이 아닌 채로 멈춰 있으면** 발송 도중 앱이 재기동된 것이다. 그 사람들은 실제로 나갔는지 알 수 없어 자동 재발송하지 않는다 — 필요하면 DB 에서 `status` 를 `FAILED` 로 바꾸고 같은 키로 `SEND`
+- 발송 중에는 배포(`dev`·`main` push)하지 않는다. 120명 기준 1분 안쪽이다. 예약해 둔 뒤의 배포는 괜찮다(예약은 DB 에 있다)
+- 정보 전달 메일 전용이다. 할인·이벤트 홍보가 섞이면 광고성 정보라 제목 `(광고)`·수신거부 방법이 필요해진다(정보통신망법 §50) — 이 API 는 그걸 지원하지 않는다
+
+```bash
+read -s ADMIN_TOKEN
+H="X-Admin-Token: $ADMIN_TOKEN"; B=https://api.threadoffate.site/api/admin/notice-mails
+J='Content-Type: application/json'
+curl -s -X POST -H "$H" -H "$J" "$B" -d '{"campaignKey":"1002-notice","subject":"제목","body":"내용","mode":"DRY_RUN"}'
+curl -s -X POST -H "$H" -H "$J" "$B" -d '{"campaignKey":"1002-notice","subject":"제목","body":"내용","mode":"TEST","testTo":"me@example.com"}'
+curl -s -X POST -H "$H" -H "$J" "$B" -d '{"campaignKey":"1002-notice","subject":"제목","body":"내용","mode":"SCHEDULE","sendAt":"2026-10-02T09:00:00+09:00"}'
+curl -s -H "$H" "$B/1002-notice"                      # state=SCHEDULED 확인
+curl -s -X DELETE -H "$H" "$B/1002-notice/schedule"   # 취소
+curl -s -X POST -H "$H" -H "$J" "$B" -d '{"campaignKey":"1002-notice","subject":"제목","body":"내용","mode":"SEND"}'   # 지금 보내기·실패자 재발송
+```
+
+본문 줄바꿈은 JSON 문자열 안에서 `\n`. 길면 `-d @mail.json` 으로 파일을 넘긴다(UTF-8 로 저장).
+
 ## 비활성화가 미치는 곳
 
 `dating_profile.deactivated_at`(V26). `DatingProfile.isEligible()` 이 `verified_at IS NOT NULL AND deactivated_at IS NULL` 로 바뀌어 아래 셋에 한 번에 적용된다.

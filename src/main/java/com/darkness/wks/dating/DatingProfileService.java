@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
@@ -41,6 +42,11 @@ public class DatingProfileService {
     @Value("${app.signup.allowed-email-domains:}")
     private String allowedDomainsRaw;
 
+    // 신규 소개팅 신청 마감 (2026-10-02 결정). 프론트가 페이지를 막았지만 API 를 직접 부르는 경우까지 서버가 막는다.
+    // 배포 시각과 무관하게 이 시각부터 막히도록 시각으로 판정한다. 테스트만 값을 덮어쓴다
+    @Value("${app.dating.registration-closes-at:2026-10-02T02:00:00+09:00}")
+    private String registrationClosesAtRaw;
+
     public DatingProfileService(DatingProfileRepository profileRepository, ResultRepository resultRepository,
                                 DatingPhotoService photoService, DatingEmailVerificationService emailVerificationService,
                                 DatingEmailCodeService emailCodeService) {
@@ -55,6 +61,10 @@ public class DatingProfileService {
     // 붙잡는다. 검사는 각 조회의 짧은 트랜잭션으로, 저장은 saveAndFlush 한 번으로 끝낸다 — 중복 등록은 UNIQUE 가 막는다
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public DatingProfileResponse create(Long memberId, DatingProfileRequest request) {
+        // 마감 뒤에는 다른 검사·S3 작업 전에 끊는다. 기존 프로필 보유자의 추천·요청·해금은 이 경로를 타지 않는다
+        if (!Instant.now().isBefore(OffsetDateTime.parse(registrationClosesAtRaw).toInstant())) {
+            throw new BusinessException(ErrorCode.DATING_REGISTRATION_CLOSED);
+        }
         if (profileRepository.existsByMemberId(memberId)) {
             throw new BusinessException(ErrorCode.DATING_PROFILE_CONFLICT);
         }

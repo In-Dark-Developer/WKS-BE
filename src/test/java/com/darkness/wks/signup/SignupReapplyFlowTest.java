@@ -57,7 +57,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 엉뚱한 사람에게 대량 메일이 나가므로 목킹만으로 끝내지 않는다.
  */
 @SpringBootTest(properties = {"gemini.api-key=test-key",
-        "app.auth.jwt.secret=reapply-test-secret-0123456789-abcdef"})
+        "app.auth.jwt.secret=reapply-test-secret-0123456789-abcdef",
+        // 등록 흐름을 보는 테스트라 신청 마감(DatingProfileService) 전으로 둔다
+        "app.dating.registration-closes-at=2099-01-01T00:00:00+09:00"})
 @Testcontainers
 class SignupReapplyFlowTest {
 

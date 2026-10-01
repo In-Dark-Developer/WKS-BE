@@ -49,6 +49,7 @@ Base URL: `/api` · Swagger UI: `/swagger-ui.html` · OpenAPI JSON: `/v3/api-doc
 | `DATING_PROFILE_NOT_FOUND` | 404 | 내 소개팅 프로필 없음 |
 | `DATING_PROFILE_CONFLICT` | 409 | 프로필 또는 학교 이메일 중복 |
 | `DATING_NOT_VERIFIED` | 403 | 학교 이메일 인증 전 후보 조회, 코드 인증 안 한 이메일로 프로필 등록 |
+| `DATING_REGISTRATION_CLOSED` | 403 | 신규 소개팅 신청 마감(2026-10-02 02:00 KST 부터) 뒤 프로필 등록 |
 | `INVALID_EMAIL_CODE` | 400 | 학교 이메일 인증 코드 불일치·만료·5회 실패 초과·발송받은 이메일과 다름 |
 | `EMAIL_CODE_RATE_LIMITED` | 429 | 인증 코드 재발송 60초 쿨다운 중, 또는 24시간 10회 한도 초과 |
 | `MAIL_UNAVAILABLE` | 503 | 인증 코드 메일 발송 실패. 바로 다시 시도할 수 있다 |
@@ -720,6 +721,8 @@ HttpOnly라 프론트 JS가 값을 읽을 수 없고, 읽을 필요도 없다 �
   "photoId": "f1c4832a-0000-4000-8000-000000000002"
 }
 ```
+
+> **신규 신청 마감 (2026-10-02 02:00 KST 부터)**: 이 시각 이후 등록은 다른 검사보다 먼저 `DATING_REGISTRATION_CLOSED` 403 이다. 이미 등록한 사람의 조회·추천·리롤·해금·요청·수락은 그대로 동작한다. 카카오 로그인·신규 가입·사주·궁합도 영향 없다.
 
 모든 필드가 필수다. **`email`은 이 계정으로 코드 인증(§10.7)을 마친 학교 이메일이어야 한다** — 아니면 `DATING_NOT_VERIFIED` 403(2026-09-26 변경. 그래서 등록된 프로필은 항상 `emailVerified: true`이고 인증 메일은 더 이상 발송되지 않는다). `contactValue`는 문자열이며 `PHONE`이면 전화번호, `INSTAGRAM`이면 인스타그램 아이디(예: `my_insta_id`)를 넣는다. `photoId`는 **로그인한 회원에게 발급됐고 S3에 파일 업로드가 완료된 사진**이어야 한다. 계정에 연결된 사주 결과가 없으면 `RESULT_NOT_FOUND` 404다.
 

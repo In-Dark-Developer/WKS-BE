@@ -58,6 +58,7 @@
 
 | 번호  | 예약자 | 내용 | 상태 |
 |-----|---|---|---|
+| V28 | hairyung2002 | #159 `dating_notice_mail`(일괄 안내 메일 수신자별 발송 기록, `(campaign_key, profile_id)` UNIQUE)·`dating_notice_campaign`(예약 발송), 2026-10-01. **V27 뒤에 머지** | PR |
 | V27 | hairyung2002 | `result` 에 `claimed_member_id BIGINT` (결과를 만든 계정 — 친구 보상 로그인 순서 무관, 2026-09-30). **V26(#147) 뒤에 머지** | PR |
 | V26 | 차은호 | #147 `dating_profile` 에 `deactivated_at TIMESTAMPTZ` (운영자 비활성화). **V25(#123) 뒤에 머지** | PR |
 | V25 | 차은호 | #123 `dating_request` 에 `recipient_reason TEXT` (받은 사람 기준 궁합 이유 캐시) | PR |
@@ -106,6 +107,7 @@
 | `DATING_PROFILE_NOT_FOUND` (404) | 최선우 (소개팅 프로필) | ✅ §1·§10 |
 | `DATING_PROFILE_CONFLICT` (409) | 최선우 (중복 프로필·이메일) | ✅ §1·§10 |
 | `DATING_NOT_VERIFIED` (403) | 최선우 (학교 메일 미인증) | ✅ §1·§10 |
+| `DATING_REGISTRATION_CLOSED` (403) | hairyung2002 (2026-10-02, 신규 소개팅 신청 마감) | ✅ §1·§10.2 |
 | `DATING_REQUEST_NOT_FOUND` (404) | 최선우 (#86) | ✅ §1·§11 |
 | `DATING_REQUEST_CONFLICT` (409) | 최선우 (#86) | ✅ §1·§11 |
 | `METHOD_NOT_ALLOWED` (405) | 최선우 (#89, 사용자 직접 요청) | ✅ §1·§10.3 |
@@ -120,6 +122,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-10-02 | **[신규 소개팅 신청 마감]** 2026-10-02 02:00 KST 부터 `POST /api/dating/profile` 은 `DATING_REGISTRATION_CLOSED` 403. 프론트는 이미 신청 페이지를 막았다 — API 를 직접 부르면 이 에러가 온다. 그 외 API 변경 없음. `api-spec.md` §1·§10.2 | ❌ |
 | 2026-10-01 | **[마지막 날 할인]** 10/1 10:00 KST 부터 `rerollCost`(유료) `20→10`, 해금 `fields.*.cost` 사진 `5`·이름 `3`·학과 `2`·궁합 까닭 `1`. API 형식 변경 없음 — 가격을 하드코딩했다면 응답 값으로 표시해야 할인가가 보인다. `api-spec.md` §10.4·§10.5 | ❌ |
 | 2026-09-30 | **[실 지급 로그인 순서 무관, 프론트 대응 필요]** ① `POST /api/auth/kakao` 요청에 `resultIds: string[]`(선택) 추가 — 로그인 전에 이 브라우저가 만든 결과들. 보내면 그 결과로 남긴 궁합지도 별의 친구 보상을 소급 ② `GET /api/wallet` 응답에 `partnerRewards: string[]` 추가 ③ 회원이 없는 토큰은 인증 API 에서 401 + 쿠키 삭제(이전 `/api/me` 200·지갑 쓰기 500). 필드 추가만이라 기존 FE 그대로 동작. FE 할 일(`ref` localStorage·5xx 에서 안 지우기·결과 목록 보관·지급 완료 표시)은 FE 요청 문서로 전달. `api-spec.md` §9·§12 | ❌ |
 | 2026-09-29 | #144 궁합지도 친구 등록 보상 **5명마다 3실 → 로그인 친구 1명당 2실.** 익명 결과로 등록한 친구는 안 센다. API 형식 변경 없음. **프론트 확인 요청**: 로그인 상태인 친구가 공유 링크에서 새 결과를 만들면 계정에 이미 결과가 있을 때 익명으로 남아 보상이 안 붙는다 — 로그인 상태면 계정 결과(`GET /api/me/result`)로 `POST /api/compatibilities/{shareId}` 를 부르는 게 맞다. 비로그인 친구에게는 "로그인하면 공유자에게 실이 간다" 안내 문구 검토. `api-spec.md` §12 | ❌ |
@@ -189,6 +192,62 @@
 ---
 
 ## 기록
+
+### 2026-10-02 (금) · hairyung2002 · dating/·common/ 신규 소개팅 신청 마감 (#159 브랜치에 이어서) · Claude Code
+
+**한 일**
+- 2026-10-02 02:00 KST 부터 `POST /api/dating/profile` 을 `DATING_REGISTRATION_CLOSED` 403 으로 막았다(사용자 결정). 프론트는 페이지를 막았고, API 직접 호출 대비로 서버도 막는다
+- 검사는 `DatingProfileService.create` 맨 앞 — 중복·도메인·코드 인증·S3 작업보다 먼저 끊는다
+- 카카오 로그인·신규 가입, 기존 프로필 보유자의 조회·추천·리롤·해금·요청·수락, 사주·궁합은 손대지 않았다
+- 테스트: `DatingProfileServiceTest`(마감 뒤 다른 의존성 안 건드리고 403, 기본값이 10/2 02:00 KST), `DatingRegistrationClosedFlowTest`(운영 기본값 그대로 — 새 등록 403, 기존 프로필 조회 200). 등록 흐름을 보는 `DatingEmailCodeFlowTest`·`SignupReapplyFlowTest` 는 마감 시각을 2099 로 덮어썼다
+
+**건드린 파일/패키지**
+- `common/exception/ErrorCode`(`DATING_REGISTRATION_CLOSED`), `dating/DatingProfileService`·`DatingController`(Swagger 403 설명)
+- 테스트 `DatingProfileServiceTest`·`DatingRegistrationClosedFlowTest`(신규)·`DatingEmailCodeFlowTest`·`signup/SignupReapplyFlowTest`
+
+**다음 사람이 알아야 할 것**
+- 마감 시각은 `app.dating.registration-closes-at`(기본 `2026-10-02T02:00:00+09:00`, `application.yml` 에 안 적었다). 다시 열려면 이 값을 미래로 주거나 기본값을 바꿔 배포한다. 운영 compose 에는 넘기지 않으므로 환경변수로는 못 바꾼다
+- 학교메일 코드 발송(`POST /api/dating/email-codes`)·사진 업로드 URL 발급은 막지 않았다 — 요청 범위가 프로필 생성이고, 프론트가 페이지를 막아 호출될 일이 없다. 막아야 하면 같은 검사를 넣으면 된다
+
+**막힌 것 / 넘기는 것**
+- 팀 채널 공지 필요: `ErrorCode`·`common/`(곽도윤)·`dating/`
+
+**문서 변경**
+- `api-spec.md` §1 에러 표·§10.2, `plan.md` §8.3, 이 파일(ErrorCode 표·프론트 공지 표)
+
+**프론트에 알려야 할 것**
+- 위 "프론트에 공지한 API 변경" 2026-10-02 행
+
+### 2026-10-01 (목) · hairyung2002 · admin/·dating/ 소개팅 프로필 보유자 일괄 안내 메일 (#159) · Claude Code
+
+**한 일**
+- 2026-10-02 오전 정보 전달 메일을 위해 관리자 API `POST /api/admin/notice-mails`(`DRY_RUN`·`TEST`·`SEND`·`SCHEDULE`)·`GET /api/admin/notice-mails/{campaignKey}`·`DELETE …/{campaignKey}/schedule` 추가
+- 대상은 비활성 아닌 `dating_profile` 전부(약 120명). 문구는 요청 본문으로 받는다
+- SEND 는 202 로 바로 돌아오고 `applicationTaskExecutor` 에서 건당 200ms 간격으로 보낸다. 수신자마다 `dating_notice_mail` 에 `INSERT ... ON CONFLICT` 로 선점해 두 번 눌러도·재실행해도 한 번만 간다. 실패는 `FAILED` 로 남고 같은 키로 다시 SEND 하면 그 사람만 간다
+- 예약 발송: `SCHEDULE` + `sendAt` 을 `dating_notice_campaign` 에 저장하고, `DatingNoticeMailScheduler`(이 앱의 첫 `@Scheduled`·`@EnableScheduling`)가 1분마다 시각이 지난 예약을 조건부 UPDATE 로 잡아 보낸다. 1시간 넘게 늦으면 `EXPIRED` 로 두고 안 보낸다. 시작 전에는 같은 키로 문구·시각 수정, 취소 가능
+- 테스트 `admin/NoticeMailFlowTest`: 예약은 시각 전엔 안 나가고 지나면 한 번만 나감·시작 후 수정/취소 400·1시간 넘게 늦으면 EXPIRED·취소한 예약은 안 나감·과거 시각 400, 비활성 제외, 한 명 실패가 나머지를 안 막음, 같은 키 재실행은 실패자만, 연달아 두 번 SEND 해도 1회, TEST 는 기록 없음·실패 시 503, 토큰 없으면 401·키 형식 400
+
+**건드린 파일/패키지**
+- 신규 `admin/AdminNoticeMailController`, `admin/dto/AdminNoticeMail{Request,Response,StatusResponse}`, `dating/DatingNoticeMailService`·`DatingNoticeMailScheduler`·`DatingNoticeMailRepository`·`DatingNoticeCampaignRepository`·`entity/DatingNoticeMail`·`entity/DatingNoticeCampaign`, `db/migration/V28__add_dating_notice_mail.sql`, 테스트 `admin/NoticeMailFlowTest`
+- 수정 `dating/DatingProfileRepository`(`findByDeactivatedAtIsNull`)
+
+**다음 사람이 알아야 할 것**
+- 고정 cron 이 아니라 DB 예약 + 1분 확인이다 — cron 은 그 시각에 앱이 재기동 중이면 놓치지만, 이건 뜬 뒤 다음 확인에서 보낸다. 시각 비교는 DB `now()` 라 컨테이너 시간대와 무관
+- `@EnableScheduling` 을 `DatingNoticeMailScheduler` 에 붙였다. 다른 기능이 스케줄링을 쓰게 되면 common 설정으로 옮길 것
+- 발송 도중 재기동으로 `SENDING` 에 남은 행은 자동 재발송하지 않는다(실제 발송 여부를 모름). GET 의 `sending` 으로 확인
+- 새 환경변수 없음. 발송 간격 `app.notice-mail.interval-ms`(기본 200)·확인 주기 `app.notice-mail.poll-ms`(기본 60000)는 `application.yml` 에 안 적었다 — 테스트만 바꾼다
+- 메일 경로는 기존 `JavaMailSender`(운영은 SES, 보조 계정 비어 있음) 그대로
+- 사용법·curl 은 `docs/admin-api.md` "일괄 안내 메일"
+
+**막힌 것 / 넘기는 것**
+- 팀 채널 공지 필요: `db/migration/` V28, `admin/`(차은호)·`dating/`(담당 미정)
+- 메일 제목·본문은 미정 — 발송 요청 때 넣는다
+
+**문서 변경**
+- `docs/admin-api.md` 일괄 안내 메일 절, `architecture.md` 스키마(V28), 이 파일(V28 예약)
+
+**프론트에 알려야 할 것**
+- 없음 (관리자 API)
 
 ### 2026-10-01 (목) · hairyung2002 · dating/ 마지막 날 50% 할인 (이슈 없음) · Claude Code
 
