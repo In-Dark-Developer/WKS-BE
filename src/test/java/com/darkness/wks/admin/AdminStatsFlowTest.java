@@ -142,13 +142,13 @@ class AdminStatsFlowTest {
     }
 
     @Test
-    void 축제_3일을_KST_날짜와_시로_센다() throws Exception {
-        // KST = UTC+9. 경계: 09-29 00:00 KST = 09-28T15:00Z, 10-02 00:00 KST = 10-01T15:00Z
+    void 축제_기간_5일을_KST_날짜와_시로_센다() throws Exception {
+        // KST = UTC+9. 경계: 09-29 00:00 KST = 09-28T15:00Z, 10-04 00:00 KST = 10-03T15:00Z
         UUID r1 = result("MALE", "2026-09-28T15:00:00Z");      // 09-29 00시 — 첫 칸
         UUID r2 = result("FEMALE", "2026-09-29T15:30:00Z");    // 09-30 00시 — UTC 로는 아직 09-29
-        UUID r3 = result("FEMALE", "2026-10-01T14:59:59Z");    // 10-01 23시 — 마지막 칸
+        UUID r3 = result("FEMALE", "2026-10-01T14:59:59Z");    // 10-01 23시
         result("FEMALE", "2026-09-28T14:59:59Z");              // 09-28 23:59 KST — 제외
-        result("MALE", "2026-10-01T15:00:00Z");                // 10-02 00:00 KST — 제외
+        result("MALE", "2026-10-03T15:00:00Z");                // 10-04 00:00 KST — 제외
 
         compatibility(r1, r2, "GUIIN", "2026-09-29T03:00:00Z"); // 09-29 12시
         compatibility(r1, r3, "BEOT", "2026-09-30T05:00:00Z");  // 09-30 14시
@@ -178,10 +178,10 @@ class AdminStatsFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.timezone").value("Asia/Seoul"))
                 .andExpect(jsonPath("$.data.from").value("2026-09-29"))
-                .andExpect(jsonPath("$.data.to").value("2026-10-01"))
+                .andExpect(jsonPath("$.data.to").value("2026-10-03"))
 
                 .andExpect(jsonPath("$.data.saju.results.total").value(3))
-                .andExpect(jsonPath("$.data.saju.results.days.length()").value(3))
+                .andExpect(jsonPath("$.data.saju.results.days.length()").value(5))
                 .andExpect(jsonPath("$.data.saju.results.days[0].date").value("2026-09-29"))
                 .andExpect(jsonPath("$.data.saju.results.days[0].count").value(1))
                 .andExpect(jsonPath("$.data.saju.results.days[0].hourly.length()").value(24))

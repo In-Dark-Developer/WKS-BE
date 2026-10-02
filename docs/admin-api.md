@@ -43,10 +43,10 @@
 
 ## 축제 통계 `GET /api/admin/stats`
 
-`admin.html` 의 "축제 통계" 탭이 부른다. 같은 `X-Admin-Token`. 파라미터 없음 — 기간은 코드에 고정(`AdminStatsService.FESTIVAL_FIRST_DAY`, 3일).
+`admin.html` 의 "축제 통계" 탭이 부른다. 같은 `X-Admin-Token`. 파라미터 없음 — 기간은 코드에 고정(`AdminStatsService.FESTIVAL_FIRST_DAY`, 5일 — 축제 3일 + 10-02·10-03, 2026-10-02 연장).
 기획 결정은 `plan.md` §1.5. 관련 코드: `admin/AdminStatsController`·`AdminStatsService`·`dto/AdminStatsResponse`.
 
-- **범위**: `created_at` 이 2026-09-29 00:00 ~ 10-02 00:00 **KST** 인 행. 날짜·시(0~23) 버킷도 KST.
+- **범위**: `created_at` 이 2026-09-29 00:00 ~ 10-04 00:00 **KST** 인 행. 날짜·시(0~23) 버킷도 KST.
 - **시간대**: 운영 EC2·컨테이너·DB 세션 시간대가 KST 가 아니다. 그래서 기본값에 기대지 않는다 — 경계는 Java 에서 KST 절대 시각으로 만들어 넘기고, 버킷은 SQL `AT TIME ZONE 'Asia/Seoul'` 로 자른다. 테스트(`AdminStatsFlowTest`)는 JVM 시간대를 `America/Los_Angeles` 로 바꿔 놓고 경계(23:59:59 / 00:00)를 확인한다.
 - **상태 값은 조회 시점**: 인증·비활성·요청 status 는 "기간 안에 만들어진 행의 지금 상태"다. 운영자가 삭제한 프로필은 수에서 빠진다(hard delete).
 - 인덱스 없이 COUNT 로 센다. 축제 규모(수만 행 이하)에서는 문제없고, 자동 갱신이 없어 부하도 버튼 누를 때뿐이다.
@@ -55,7 +55,7 @@
 
 | 필드 | 뜻 |
 |---|---|
-| `timezone`·`from`·`to`·`generatedAt` | `Asia/Seoul`, `2026-09-29`, `2026-10-01`, 집계 시각(UTC Instant) |
+| `timezone`·`from`·`to`·`generatedAt` | `Asia/Seoul`, `2026-09-29`, `2026-10-03`, 집계 시각(UTC Instant) |
 | `saju.results` | 사주 결과(`result`) 생성 수. `{total, days:[{date, count, hourly[24]}]}` — 이하 "시리즈" |
 | `saju.byGender` | `MALE`·`FEMALE` |
 | `compatibility.created` | 궁합(`compatibility`) 생성 시리즈 |
