@@ -33,9 +33,10 @@ import java.util.Map;
 public class AdminStatsService {
 
     static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    // 축제 3일(2026-09-29 ~ 10-01, AGENTS.md). 통계는 이 기간만 본다(2026-09-29 결정)
+    // 축제 3일(2026-09-29 ~ 10-01, AGENTS.md) + 축제 뒤 이틀(10-02·10-03). 소개팅이 축제 뒤에도 이어져
+    // 그 추이도 보려고 늘렸다(2026-10-02). 통계는 이 기간만 본다(2026-09-29 결정)
     static final LocalDate FESTIVAL_FIRST_DAY = LocalDate.of(2026, 9, 29);
-    static final int FESTIVAL_DAYS = 3;
+    static final int FESTIVAL_DAYS = 5;
 
     // 테이블·컬럼 이름은 아래 상수에서만 온다 — 사용자 입력이 SQL 문자열에 들어가지 않는다
     private static final String SERIES_SQL = """
