@@ -58,6 +58,7 @@
 
 | 번호  | 예약자 | 내용 | 상태 |
 |-----|---|---|---|
+| V29 | 최선우 | #164 `feedback` (익명 피드백 내용·제출 시각). V28 뒤에 머지, 팀 공지 완료(2026-10-03) | 구현·PostgreSQL 검증 완료, PR 대기 |
 | V28 | hairyung2002 | #159 `dating_notice_mail`(일괄 안내 메일 수신자별 발송 기록, `(campaign_key, profile_id)` UNIQUE)·`dating_notice_campaign`(예약 발송), 2026-10-01. **V27 뒤에 머지** | PR |
 | V27 | hairyung2002 | `result` 에 `claimed_member_id BIGINT` (결과를 만든 계정 — 친구 보상 로그인 순서 무관, 2026-09-30). **V26(#147) 뒤에 머지** | PR |
 | V26 | 차은호 | #147 `dating_profile` 에 `deactivated_at TIMESTAMPTZ` (운영자 비활성화). **V25(#123) 뒤에 머지** | PR |
@@ -122,6 +123,7 @@
 
 | 날짜 | 변경 내용 | 공지함 |
 |---|---|---|
+| 2026-10-03 | #164 `POST /api/feedbacks {content}` 추가. 로그인 불필요, 앞뒤 공백 제거 후 1~2,000자, 성공 201 + `data.message`, 입력 오류 400 `INVALID_INPUT`. 제출 중 버튼 비활성화·성공 안내 필요. `api-spec.md` §13 | ❌ |
 | 2026-10-02 | **[신규 소개팅 신청 마감]** 2026-10-02 02:00 KST 부터 `POST /api/dating/profile` 은 `DATING_REGISTRATION_CLOSED` 403. 프론트는 이미 신청 페이지를 막았다 — API 를 직접 부르면 이 에러가 온다. 그 외 API 변경 없음. `api-spec.md` §1·§10.2 | ❌ |
 | 2026-10-01 | **[마지막 날 할인]** 10/1 10:00 KST 부터 `rerollCost`(유료) `20→10`, 해금 `fields.*.cost` 사진 `5`·이름 `3`·학과 `2`·궁합 까닭 `1`. API 형식 변경 없음 — 가격을 하드코딩했다면 응답 값으로 표시해야 할인가가 보인다. `api-spec.md` §10.4·§10.5 | ❌ |
 | 2026-09-30 | **[실 지급 로그인 순서 무관, 프론트 대응 필요]** ① `POST /api/auth/kakao` 요청에 `resultIds: string[]`(선택) 추가 — 로그인 전에 이 브라우저가 만든 결과들. 보내면 그 결과로 남긴 궁합지도 별의 친구 보상을 소급 ② `GET /api/wallet` 응답에 `partnerRewards: string[]` 추가 ③ 회원이 없는 토큰은 인증 API 에서 401 + 쿠키 삭제(이전 `/api/me` 200·지갑 쓰기 500). 필드 추가만이라 기존 FE 그대로 동작. FE 할 일(`ref` localStorage·5xx 에서 안 지우기·결과 목록 보관·지급 완료 표시)은 FE 요청 문서로 전달. `api-spec.md` §9·§12 | ❌ |
@@ -192,6 +194,30 @@
 ---
 
 ## 기록
+
+### 2026-10-03 (토) · 최선우 · feedback/ 피드백 제출 (#164) · Codex
+
+**한 일**
+- 로그인 없이 의견을 받는 `POST /api/feedbacks` 구현. 앞뒤 공백 제거 후 1~2,000자 검증, DB 저장 후 201 접수 메시지 반환
+- 팀 공지·번호 예약 후 V29 `feedback` 테이블 추가
+- Java 17 전체 테스트 371건: 370건 성공·실제 Gemini 스모크 1건 스킵. PostgreSQL 16에서 저장·Flyway·JPA 검증 및 로컬 기동 확인
+
+**건드린 파일/패키지**
+- `feedback/`, V29 마이그레이션, 피드백 테스트·`support/PostgresIntegrationTest`, 아래 문서 4개
+
+**다음 사람이 알아야 할 것**
+- 회원·결과에 연결하지 않고 내용·UUIDv4·제출 시각만 저장. 공개 조회 API 없이 운영자가 DB 확인
+- 새 라이브러리·환경변수·ErrorCode 없음. V29 머지 전 번호 충돌 재확인
+
+**막힌 것 / 넘기는 것**
+- `feat/164-feedback-api`에 커밋·push 완료. PR 생성·리뷰·배포는 사용자 진행
+
+**문서 변경**
+- `plan.md` 피드백 정책, `architecture.md` 도메인·스키마, `api-spec.md` §13 계약, `handoff.md` 예약·기록·프론트 변경 표
+
+**프론트에 알려야 할 것**
+- `POST /api/feedbacks`, JSON `{ "content": "의견" }`. 성공 201 + `data.message`, 내용 누락·null·공백·2,000자 초과는 400 `INVALID_INPUT`
+- 제출 중 버튼 비활성화·성공 후 완료 안내. 서버 배포 후 연결
 
 ### 2026-10-02 (금) · hairyung2002 · dating/·common/ 신규 소개팅 신청 마감 (#159 브랜치에 이어서) · Claude Code
 
