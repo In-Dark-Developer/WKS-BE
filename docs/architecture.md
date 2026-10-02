@@ -435,6 +435,25 @@ CREATE TABLE dating_notice_campaign (
 
 ---
 
+### 축제 종료 후 피드백 (#164, V29)
+
+독립 도메인 `feedback/`에 Controller·Service·Repository·entity·dto를 둔다.
+`POST /api/feedbacks`는 익명이며 다른 도메인에 의존하지 않는다.
+
+```sql
+CREATE TABLE feedback (
+    id          UUID         PRIMARY KEY,
+    content     VARCHAR(2000) NOT NULL CHECK (char_length(content) BETWEEN 1 AND 2000),
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+```
+
+ID는 UUIDv4. 회원·결과·IP를 수집하지 않고 내용·제출 시각만 저장한다.
+앞뒤 공백 제거 후 빈 내용·2,000자 초과는 `INVALID_INPUT`으로 거부한다.
+공개 조회 API 없이 운영자가 DB에서 확인하며 본문은 로그에 남기지 않는다.
+
+---
+
 ## 6. 사주 계산 파이프라인
 
 ```
