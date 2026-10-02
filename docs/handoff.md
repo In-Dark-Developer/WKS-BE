@@ -195,77 +195,29 @@
 
 ## 기록
 
-### 2026-10-03 (토) · 최선우 · feedback/ 제출 준비 (#164) · Codex
-
-**한 일**
-- 사용자 요청으로 `feat/164-feedback-api` 커밋·push 단계 진행. 커밋 메시지는 사용자 작성 위임 확인
-- 최신 origin 확인: `dev` 추가 변경 없음, V29 번호 충돌 없음, 현재 `origin/main`과 `origin/dev` 파일 차이 없음
-- 전체 테스트 검증 결과는 아래 기록 참고(371건, 실패 0)
-
-**건드린 파일/패키지**
-- #164 피드백 기능·테스트·문서, `docs/handoff.md`
-
-**다음 사람이 알아야 할 것**
-- PR base는 `dev`, 리뷰어 1명 승인·CI 통과 후 squash merge. 개발 서버 검증 뒤 `dev` → `main` release PR은 merge commit
-- 운영 릴리즈는 리뷰어 1명 + 도윤 확인 필요(`docs/git-workflow.md`)
-
-**막힌 것 / 넘기는 것**
-- GitHub 브라우저 접근이 권한 거부로 차단되어 PR 생성·리뷰 확인·머지 불가. PR 생성 및 팀 리뷰 필요
-
-**문서 변경**
-- `handoff.md` V29 상태·제출 기록
-
-**프론트에 알려야 할 것**
-- 아직 서버 미배포. `api-spec.md` §13 참고
-
-### 2026-10-03 (토) · 최선우 · feedback/ PostgreSQL 연동 검증 (#164) · Codex
-
-**한 일**
-- Docker Desktop 실행 후 PostgreSQL 16 Testcontainers로 익명 제출 → HTTP 201 → 커밋된 내용·UUIDv4·제출 시각 조회 검증
-- V29 Flyway 적용 및 JPA `ddl-auto: validate` 통과
-- 로컬 `bootRun` 실패 원인은 PostgreSQL 컨테이너 미실행(`localhost:5432 Connection refused`). `docker compose up -d postgres` 후 `local` 프로필 기동 성공, 기존 로컬 DB V26~V29 적용 및 `/api/health` UP 확인. 앱은 localhost:8080에서 실행 중
-- Java 17 `./gradlew test` 성공: 전체 371건 중 370건 성공·실제 Gemini 호출 스모크 1건 스킵, 실패 0. 피드백 11건 통과
-
-**건드린 파일/패키지**
-- `src/test/java/com/darkness/wks/support/PostgresIntegrationTest.java`(공통 DB 통합 테스트 베이스), `feedback/FeedbackFlowTest.java`, `docs/handoff.md`
-
-**다음 사람이 알아야 할 것**
-- 실제 DB 검증은 임시 테스트 컨테이너에서 수행했다. 운영·개발 서버에는 아직 미배포
-- 공통 테스트 베이스는 PostgreSQL 16·Gemini 및 메일 목킹을 제공한다
-
-**막힌 것 / 넘기는 것**
-- 없음. 커밋·push·PR·배포는 미실행
-
-**문서 변경**
-- `handoff.md` V29 검증 상태 및 기록 갱신
-
-**프론트에 알려야 할 것**
-- 기존 #164 계약 그대로(`api-spec.md` §13), 배포 후 연결 가능
-
 ### 2026-10-03 (토) · 최선우 · feedback/ 피드백 제출 (#164) · Codex
 
 **한 일**
-- 기존 로컬 `docs/handoff.md` 변경 폐기 후 최신 `dev`(3a7ebd5) 갱신, `feat/164-feedback-api` 생성
-- 익명 `POST /api/feedbacks` 구현. 내용 앞뒤 공백 제거·필수·최대 2,000자 검증, DB 저장 후 201 접수 메시지
-- V29 번호 먼저 예약 후 `feedback` 테이블 추가. 사용자 팀 공지 완료 확인
-- Java 17로 `./gradlew test --tests 'com.darkness.wks.feedback.*'` 성공(10건), 전체 소스·테스트 컴파일 성공. `git diff --check` 통과
+- 로그인 없이 의견을 받는 `POST /api/feedbacks` 구현. 앞뒤 공백 제거 후 1~2,000자 검증, DB 저장 후 201 접수 메시지 반환
+- 팀 공지·번호 예약 후 V29 `feedback` 테이블 추가
+- Java 17 전체 테스트 371건: 370건 성공·실제 Gemini 스모크 1건 스킵. PostgreSQL 16에서 저장·Flyway·JPA 검증 및 로컬 기동 확인
 
 **건드린 파일/패키지**
-- `feedback/`, `src/test/java/com/darkness/wks/feedback/FeedbackControllerTest.java`, `db/migration/V29__add_feedback.sql`, 아래 문서 4개
+- `feedback/`, V29 마이그레이션, 피드백 테스트·`support/PostgresIntegrationTest`, 아래 문서 4개
 
 **다음 사람이 알아야 할 것**
-- 회원·결과 연결 없이 내용·UUIDv4·제출 시각만 저장. 공개 조회 API 없음, 운영자가 DB 확인
+- 회원·결과에 연결하지 않고 내용·UUIDv4·제출 시각만 저장. 공개 조회 API 없이 운영자가 DB 확인
 - 새 라이브러리·환경변수·ErrorCode 없음. V29 머지 전 번호 충돌 재확인
 
 **막힌 것 / 넘기는 것**
-- Docker 미실행으로 PostgreSQL·Flyway·JPA 실제 연동 및 전체 테스트 미검증. 커밋·push·PR·배포는 미실행
+- `feat/164-feedback-api`에 커밋·push 완료. PR 생성·리뷰·배포는 사용자 진행
 
 **문서 변경**
-- `plan.md` 종료 후 피드백 정책, `architecture.md` 스키마·도메인, `api-spec.md` §13 계약, `handoff.md` 예약·기록·프론트 변경 표
+- `plan.md` 피드백 정책, `architecture.md` 도메인·스키마, `api-spec.md` §13 계약, `handoff.md` 예약·기록·프론트 변경 표
 
 **프론트에 알려야 할 것**
-- `POST /api/feedbacks`, JSON `{ "content": "의견" }`. 성공 201 `{ "success": true, "data": { "message": "피드백이 접수되었습니다. 감사합니다." } }`
-- 내용 누락·null·공백·2,000자 초과는 400 `INVALID_INPUT`. 제출 중 버튼 비활성화, 성공 후 완료 안내
+- `POST /api/feedbacks`, JSON `{ "content": "의견" }`. 성공 201 + `data.message`, 내용 누락·null·공백·2,000자 초과는 400 `INVALID_INPUT`
+- 제출 중 버튼 비활성화·성공 후 완료 안내. 서버 배포 후 연결
 
 ### 2026-10-02 (금) · hairyung2002 · dating/·common/ 신규 소개팅 신청 마감 (#159 브랜치에 이어서) · Claude Code
 
